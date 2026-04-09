@@ -1,0 +1,12 @@
+{
+  "name": "@orgos/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo \"DB package build placeholder\"",
+    "test": "echo \"No tests yet\"",
+    "lint": "echo \"No lint config yet\"",
+    "typecheck": "echo \"No TypeScript files yet\""
+  }
+}

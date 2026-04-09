@@ -1,0 +1,25 @@
+{
+  "name": "orgos",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace @orgos/api run dev & npm --workspace @orgos/web run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "eslint": "^9.17.0",
+    "turbo": "^2.0.12",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.1"
+  }
+}
