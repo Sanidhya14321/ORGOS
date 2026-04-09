@@ -3,16 +3,15 @@ import { Worker, type Job } from "bullmq";
 import { synthesisAgent } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
-import { synthesizeQueue, redisConnection } from "../index.js";
+import { getRedisConnection, getSynthesizeQueue } from "../index.js";
 import { emitTaskReportSubmittedCascade } from "../../services/notifier.js";
 
 interface SynthesizeJobData {
   parentTaskId: string;
 }
 
-const env = readEnv();
-
 async function enqueueParentIfReady(parentTaskId: string): Promise<void> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
   const { data: parentTask } = await supabase
@@ -32,11 +31,12 @@ async function enqueueParentIfReady(parentTaskId: string): Promise<void> {
 
   const allDone = (siblings ?? []).every((sibling) => sibling.status === "completed");
   if (allDone) {
-    await synthesizeQueue.add("cascade_synthesize", { parentTaskId: parentTask.parent_id as string });
+    await getSynthesizeQueue().add("cascade_synthesize", { parentTaskId: parentTask.parent_id as string });
   }
 }
 
 export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise<void> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
   const { data: parentTask, error: parentError } = await supabase
@@ -135,12 +135,12 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
 
 export function startSynthesizeWorker(): Worker<SynthesizeJobData> {
   const worker = new Worker<SynthesizeJobData>(
-    synthesizeQueue.name,
+    getSynthesizeQueue().name,
     async (job) => {
       await processSynthesizeJob(job);
     },
     {
-      connection: redisConnection,
+      connection: getRedisConnection(),
       concurrency: 2
     }
   );

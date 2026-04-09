@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ReportSchema, type Report } from "@orgos/shared-types";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
-import { synthesizeQueue } from "../queue/index.js";
+import { getSynthesizeQueue } from "../queue/index.js";
 import { emitTaskReportSubmittedCascade } from "../services/notifier.js";
 
 const ReportCreateSchema = ReportSchema.omit({ id: true }).extend({
@@ -113,7 +113,7 @@ async function enqueueIfSiblingsDone(
 
   const allDone = (siblings ?? []).every((sibling) => sibling.status === "completed");
   if (allDone) {
-    await synthesizeQueue.add("report_synthesize", { parentTaskId: task.parent_id as string });
+    await getSynthesizeQueue().add("report_synthesize", { parentTaskId: task.parent_id as string });
   }
 }
 
@@ -236,7 +236,7 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    await synthesizeQueue.add("on_demand_summary", { parentTaskId: taskId });
+    await getSynthesizeQueue().add("on_demand_summary", { parentTaskId: taskId });
     return reply.status(202).send({ status: "generating" });
   });
 };

@@ -9,14 +9,13 @@ interface CandidateUser {
   skills: string[] | null;
 }
 
-const env = readEnv();
-
 function hasRequiredSkills(candidate: CandidateUser, requiredSkills: string[]): boolean {
   const candidateSkills = candidate.skills ?? [];
   return requiredSkills.every((skill) => candidateSkills.includes(skill));
 }
 
 export async function assignTask(task: Task): Promise<Task> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
   const { data: candidates, error: candidatesError } = await supabase

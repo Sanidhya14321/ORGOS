@@ -1,14 +1,4 @@
-import * as path from "path";
-import * as _dotenv from "dotenv";
-import { fileURLToPath } from "url";
 import { z } from "zod";
-
-// Load .env.local from monorepo root
-// __dirname would be /app/api/src, so we go up 3 levels toimport.meta.url
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const monorepoRoot = path.resolve(__dirname, "../../..");
-
-_dotenv.config({ path: path.join(monorepoRoot, ".env.local") });
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

@@ -4,15 +4,14 @@ import type { Task } from "@orgos/shared-types";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { emitAgentEscalated, emitAgentExecuting } from "../../services/notifier.js";
-import { synthesizeQueue, executeQueue, redisConnection } from "../index.js";
+import { getExecuteQueue, getRedisConnection, getSynthesizeQueue } from "../index.js";
 
 interface ExecuteJobData {
   taskId: string;
 }
 
-const env = readEnv();
-
 async function areAllSiblingsCompleted(taskId: string): Promise<{ allDone: boolean; parentTaskId: string | null }> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
   const { data: task, error: taskError } = await supabase
@@ -43,6 +42,7 @@ async function areAllSiblingsCompleted(taskId: string): Promise<{ allDone: boole
 }
 
 async function resolveManagerAssignee(taskId: string): Promise<string | null> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
   let cursor: string | null = taskId;
 
@@ -76,6 +76,7 @@ async function resolveManagerAssignee(taskId: string): Promise<string | null> {
 }
 
 export async function processExecuteJob(job: Job<ExecuteJobData>): Promise<void> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
   const { data: task, error: taskError } = await supabase
@@ -194,18 +195,18 @@ export async function processExecuteJob(job: Job<ExecuteJobData>): Promise<void>
 
   const siblingState = await areAllSiblingsCompleted(task.id as string);
   if (siblingState.allDone && siblingState.parentTaskId) {
-    await synthesizeQueue.add("sibling_synthesize", { parentTaskId: siblingState.parentTaskId });
+    await getSynthesizeQueue().add("sibling_synthesize", { parentTaskId: siblingState.parentTaskId });
   }
 }
 
 export function startExecuteWorker(): Worker<ExecuteJobData> {
   const worker = new Worker<ExecuteJobData>(
-    executeQueue.name,
+    getExecuteQueue().name,
     async (job) => {
       await processExecuteJob(job);
     },
     {
-      connection: redisConnection,
+      connection: getRedisConnection(),
       concurrency: 2
     }
   );

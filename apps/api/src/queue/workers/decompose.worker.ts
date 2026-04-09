@@ -5,15 +5,14 @@ import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { assignTask } from "../../services/assignmentEngine.js";
 import { emitGoalDecomposed } from "../../services/notifier.js";
-import { decomposeQueue, redisConnection } from "../index.js";
+import { getDecomposeQueue, getRedisConnection } from "../index.js";
 
 interface DecomposeJobData {
   goalId: string;
 }
 
-const env = readEnv();
-
 async function insertTasksWithRollback(goalId: string, tasks: Task[]): Promise<void> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
   const insertedIds: string[] = [];
 
@@ -61,6 +60,7 @@ function flattenRoleDirectives(goalStructure: GoalStructure): Array<{ role: stri
 }
 
 export async function processDecomposeJob(job: Job<DecomposeJobData>): Promise<void> {
+  const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
   const goalId = job.data.goalId;
 
@@ -135,12 +135,12 @@ export async function processDecomposeJob(job: Job<DecomposeJobData>): Promise<v
 
 export function startDecomposeWorker(): Worker<DecomposeJobData> {
   const worker = new Worker<DecomposeJobData>(
-    decomposeQueue.name,
+    getDecomposeQueue().name,
     async (job) => {
       await processDecomposeJob(job);
     },
     {
-      connection: redisConnection,
+      connection: getRedisConnection(),
       concurrency: 2
     }
   );

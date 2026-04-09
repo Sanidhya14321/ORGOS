@@ -15,6 +15,7 @@ import healthRoutes from "./routes/health.js";
 import meRoutes from "./routes/me.js";
 import reportsRoutes from "./routes/reports.js";
 import tasksRoutes from "./routes/tasks.js";
+import { initializeQueueForwarding } from "./queue/index.js";
 import { startDecomposeWorker } from "./queue/workers/decompose.worker.js";
 import { startExecuteWorker } from "./queue/workers/execute.worker.js";
 import { startSynthesizeWorker } from "./queue/workers/synthesize.worker.js";
@@ -113,9 +114,10 @@ export async function buildServer() {
   return fastify;
 }
 
-async function start() {
+export async function start() {
   const server = await buildServer();
   initializeNotifier(server);
+  initializeQueueForwarding();
 
   const workers = [
     startDecomposeWorker(),
@@ -129,11 +131,4 @@ async function start() {
 
   const port = server.env.API_PORT;
   await server.listen({ port, host: "0.0.0.0" });
-}
-
-if (process.env.NODE_ENV !== "test") {
-  start().catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
 }
