@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { sendApiError } from "../lib/errors.js";
+import { loadUserProfile } from "../lib/user-profile.js";
 
 const meRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/me", async (request, reply) => {
@@ -7,18 +8,9 @@ const meRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    const { data, error } = await fastify.supabaseService
-      .from("users")
-      .select("id, email, full_name, role, department, skills, agent_enabled, open_task_count")
-      .eq("id", request.user.id)
-      .maybeSingle();
+    const profile = await loadUserProfile(fastify, request.user);
 
-    if (error || !data) {
-      request.log.error({ err: error }, "Failed to load /me profile");
-      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Unable to load profile");
-    }
-
-    return reply.send(data);
+    return reply.send(profile);
   });
 };
 

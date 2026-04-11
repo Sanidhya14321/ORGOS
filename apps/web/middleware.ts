@@ -12,7 +12,7 @@ export function middleware(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const role = request.cookies.get(ROLE_COOKIE)?.value;
 
-  if (pathname === "/login" && accessToken && role) {
+  if ((pathname === "/login" || pathname === "/register") && accessToken && role) {
     return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
   }
 
@@ -34,5 +34,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"]
+  matcher: ["/dashboard/:path*", "/login", "/register"]
 };

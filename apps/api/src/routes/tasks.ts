@@ -126,7 +126,24 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data, error, count } = await query;
     if (error) {
-      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch tasks");
+      const missingTasksTable = error.code === "PGRST205" && error.message.includes("public.tasks");
+      if (missingTasksTable) {
+        request.log.warn({ err: error }, "Tasks table is unavailable in Supabase schema cache; returning empty task list");
+        return reply.send({ page, limit, total: 0, items: [] });
+      }
+
+      request.log.error({ err: error, userId, status, goalId, page, limit }, "Failed to fetch tasks");
+
+      const details = fastify.env.NODE_ENV === "production"
+        ? undefined
+        : {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint
+          };
+
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch tasks", details ? { details } : undefined);
     }
 
     return reply.send({ page, limit, total: count ?? 0, items: data ?? [] });

@@ -4,6 +4,7 @@ export type ApiErrorCode =
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "NOT_FOUND"
+  | "CONFLICT"
   | "VALIDATION_ERROR"
   | "INTERNAL_ERROR"
   | "SERVICE_UNAVAILABLE"

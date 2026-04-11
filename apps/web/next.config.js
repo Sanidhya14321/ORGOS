@@ -1,13 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const scriptSrc = isProduction
+      ? "script-src 'self'"
+      : "script-src 'self' 'unsafe-eval' 'unsafe-inline'";
+    const connectSrc = isProduction
+      ? "connect-src 'self' ws: wss: https:"
+      : "connect-src 'self' ws: wss: https: http://localhost:3000 http://localhost:4000";
+
     return [
       {
         source: '/(.*)',
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: https:; img-src 'self' data: https:"
+            value: `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; ${connectSrc}; img-src 'self' data: https:`
           },
           {
             key: 'X-Frame-Options',

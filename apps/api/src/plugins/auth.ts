@@ -2,7 +2,7 @@ import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { sendApiError } from "../lib/errors.js";
 
-const PUBLIC_ROUTES = new Set(["/api/auth/login", "/api/auth/refresh", "/healthz"]);
+const PUBLIC_ROUTES = new Set(["/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/health", "/healthz"]);
 
 function normalizePath(url: string): string {
   const parsed = new URL(url, "http://localhost");
