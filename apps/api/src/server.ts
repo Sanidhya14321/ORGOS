@@ -13,6 +13,7 @@ import authRoutes from "./routes/auth.js";
 import goalsRoutes from "./routes/goals.js";
 import healthRoutes from "./routes/health.js";
 import meRoutes from "./routes/me.js";
+import orgRoutes from "./routes/org.js";
 import reportsRoutes from "./routes/reports.js";
 import tasksRoutes from "./routes/tasks.js";
 import { initializeQueueForwarding } from "./queue/index.js";
@@ -105,6 +106,7 @@ export async function buildServer() {
 
   await fastify.register(async (api) => {
     await api.register(authRoutes);
+    await api.register(orgRoutes);
     await api.register(meRoutes);
     await api.register(goalsRoutes);
     await api.register(tasksRoutes);

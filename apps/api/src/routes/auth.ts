@@ -25,6 +25,18 @@ const RegisterBodySchema = z.object({
   )
 });
 
+const VerifyBodySchema = z.object({
+  email: z.string().trim().email()
+});
+
+const CompleteProfileBodySchema = z.object({
+  orgId: z.string().uuid(),
+  positionId: z.string().uuid(),
+  reportsTo: z.string().uuid().optional(),
+  department: z.string().trim().max(120).optional(),
+  skills: z.array(z.string().trim().min(1)).max(30).optional()
+});
+
 const RefreshBodySchema = z.object({
   refreshToken: z.string().min(1)
 });
@@ -65,15 +77,17 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { email, fullName, password, department } = parsed.data;
 
-    const createResult = await fastify.supabaseService.auth.admin.createUser({
+    const createResult = await fastify.supabaseAnon.auth.signUp({
       email,
       password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: fullName,
-        role: "worker",
-        department,
-        agent_enabled: true
+      options: {
+        emailRedirectTo: `${fastify.env.WEB_ORIGIN}/verify`,
+        data: {
+          full_name: fullName,
+          role: "worker",
+          department,
+          agent_enabled: true
+        }
       }
     });
 
@@ -93,25 +107,66 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     await persistUserProfile(fastify, profile);
 
-    const { data, error } = await fastify.supabaseAnon.auth.signInWithPassword({ email, password });
+    return reply.status(201).send({
+      requiresVerification: true,
+      message: "Verification email sent"
+    });
+  });
 
-    if (error || !data.session || !data.user) {
-      request.log.warn({ err: error }, "Created user but failed to establish a session");
-
-      await fastify.supabaseService.auth.admin.deleteUser(createdUser.id).catch((cleanupError) => {
-        request.log.warn({ err: cleanupError }, "Failed to clean up auth user after registration failure");
+  fastify.post("/auth/verify", async (request, reply) => {
+    const parsed = VerifyBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid verify payload", {
+        details: parsed.error.flatten()
       });
-
-      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Unable to start session after registration");
     }
 
-    const userProfile = await loadUserProfile(fastify, data.user);
+    const { error } = await fastify.supabaseService
+      .from("users")
+      .update({ email_verified: true, status: "pending" })
+      .eq("email", parsed.data.email);
 
-    return reply.status(201).send({
-      accessToken: data.session.access_token,
-      refreshToken: data.session.refresh_token,
-      user: userProfile
-    });
+    // Keep this endpoint best-effort for compatibility if migration is not applied yet.
+    if (error) {
+      request.log.warn({ err: error }, "Unable to persist verify state");
+    }
+
+    return reply.status(204).send();
+  });
+
+  fastify.post("/auth/complete-profile", async (request, reply) => {
+    const parsed = CompleteProfileBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid profile completion payload", {
+        details: parsed.error.flatten()
+      });
+    }
+
+    const authUser = request.user;
+    if (!authUser?.id) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const { orgId, positionId, reportsTo, department, skills } = parsed.data;
+    const { error } = await fastify.supabaseService
+      .from("users")
+      .update({
+        org_id: orgId,
+        position_id: positionId,
+        reports_to: reportsTo ?? null,
+        status: "pending",
+        ...(department ? { department } : {}),
+        ...(skills ? { skills } : {})
+      })
+      .eq("id", authUser.id);
+
+    if (error) {
+      request.log.error({ err: error }, "Failed to complete user profile");
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to complete profile");
+    }
+
+    const userProfile = await loadUserProfile(fastify, authUser);
+    return reply.send({ user: userProfile, status: "pending" });
   });
 
   fastify.post("/auth/refresh", async (request, reply) => {
