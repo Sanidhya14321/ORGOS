@@ -6,6 +6,24 @@ type Role = "ceo" | "cfo" | "manager" | "worker";
 
 let io: SocketIOServer | null = null;
 let fastifyRef: FastifyInstance | null = null;
+const ACCESS_TOKEN_COOKIE = "orgos_access_token";
+
+function extractCookieValue(cookieHeader: string | undefined, name: string): string | null {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const parts = cookieHeader.split(";");
+  for (const part of parts) {
+    const [rawKey, ...rest] = part.trim().split("=");
+    if (rawKey === name) {
+      const value = rest.join("=");
+      return value ? decodeURIComponent(value) : null;
+    }
+  }
+
+  return null;
+}
 
 function userRoom(userId: string): string {
   return `user:${userId}`;
@@ -70,7 +88,9 @@ export function initializeNotifier(fastify: FastifyInstance): void {
   });
 
   io.on("connection", async (socket: Socket) => {
-    const token = socket.handshake.auth?.token as string | undefined;
+    const handshakeToken = socket.handshake.auth?.token as string | undefined;
+    const cookieToken = extractCookieValue(socket.handshake.headers.cookie, ACCESS_TOKEN_COOKIE);
+    const token = handshakeToken ?? cookieToken ?? undefined;
     if (!token) {
       socket.disconnect(true);
       return;

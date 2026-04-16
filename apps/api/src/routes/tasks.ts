@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { TaskStatusSchema, type Task } from "@orgos/shared-types";
+import type { ApiErrorCode } from "../lib/errors.js";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { assignTask } from "../services/assignmentEngine.js";
@@ -56,6 +57,17 @@ const ConfirmRoutingBodySchema = z.object({
   status: z.enum(["pending", "active"]).default("active")
 });
 
+const roleHierarchyLevel: Record<"ceo" | "cfo" | "manager" | "worker", number> = {
+  ceo: 0,
+  cfo: 0,
+  manager: 1,
+  worker: 2
+};
+
+function isRoleValue(value: unknown): value is "ceo" | "cfo" | "manager" | "worker" {
+  return value === "ceo" || value === "cfo" || value === "manager" || value === "worker";
+}
+
 function isMissingSchemaCache(error: { code?: string } | null | undefined): boolean {
   return error?.code === "PGRST205" || error?.code === "PGRST204";
 }
@@ -84,21 +96,21 @@ async function getTaskWithScope(fastify: Parameters<FastifyPluginAsync>[0], task
   if (userRole === "manager") {
     const { data: manager, error: managerError } = await fastify.supabaseService
       .from("users")
-      .select("department")
+      .select("department, org_id")
       .eq("id", userId)
       .single();
 
-    if (managerError || !manager?.department) {
+    if (managerError || !manager?.department || !manager?.org_id) {
       return { task: null, reason: "forbidden" as const };
     }
 
     const { data: assignee } = await fastify.supabaseService
       .from("users")
-      .select("department")
+      .select("department, org_id")
       .eq("id", task.assigned_to)
       .maybeSingle();
 
-    if (assignee?.department === manager.department) {
+    if (assignee?.department === manager.department && assignee?.org_id === manager.org_id) {
       return { task, reason: "ok" as const };
     }
 
@@ -113,6 +125,153 @@ async function getTaskWithScope(fastify: Parameters<FastifyPluginAsync>[0], task
 }
 
 const tasksRoutes: FastifyPluginAsync = async (fastify) => {
+  async function getRequesterOrgId(userId: string): Promise<string | null> {
+    const requester = await fastify.supabaseService
+      .from("users")
+      .select("org_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    return (requester.data?.org_id as string | null | undefined) ?? null;
+  }
+
+  async function getUserRoleAndOrg(userId: string): Promise<{ role: "ceo" | "cfo" | "manager" | "worker"; orgId: string | null; reportsTo: string | null } | null> {
+    const result = await fastify.supabaseService
+      .from("users")
+      .select("role, org_id, reports_to")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const role = result.data?.role;
+    if (!isRoleValue(role)) {
+      return null;
+    }
+
+    return {
+      role,
+      orgId: (result.data?.org_id as string | null | undefined) ?? null,
+      reportsTo: (result.data?.reports_to as string | null | undefined) ?? null
+    };
+  }
+
+  async function isDescendantInOrg(ancestorId: string, candidateId: string, orgId: string): Promise<boolean> {
+    if (ancestorId === candidateId) {
+      return false;
+    }
+
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("id, reports_to")
+      .eq("org_id", orgId);
+
+    if (usersResult.error) {
+      return false;
+    }
+
+    const childrenByManager = new Map<string, string[]>();
+    for (const row of usersResult.data ?? []) {
+      const managerId = (row.reports_to as string | null | undefined) ?? null;
+      if (!managerId) {
+        continue;
+      }
+      const list = childrenByManager.get(managerId) ?? [];
+      list.push(row.id as string);
+      childrenByManager.set(managerId, list);
+    }
+
+    const visited = new Set<string>();
+    const stack = [...(childrenByManager.get(ancestorId) ?? [])];
+    while (stack.length > 0) {
+      const current = stack.pop() as string;
+      if (visited.has(current)) {
+        continue;
+      }
+      visited.add(current);
+      if (current === candidateId) {
+        return true;
+      }
+      const children = childrenByManager.get(current) ?? [];
+      for (const child of children) {
+        stack.push(child);
+      }
+    }
+
+    return false;
+  }
+
+  async function getDescendantIdsInOrg(ancestorId: string, orgId: string): Promise<string[]> {
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("id, reports_to")
+      .eq("org_id", orgId);
+
+    if (usersResult.error) {
+      return [];
+    }
+
+    const childrenByManager = new Map<string, string[]>();
+    for (const row of usersResult.data ?? []) {
+      const managerId = (row.reports_to as string | null | undefined) ?? null;
+      if (!managerId) {
+        continue;
+      }
+      const list = childrenByManager.get(managerId) ?? [];
+      list.push(row.id as string);
+      childrenByManager.set(managerId, list);
+    }
+
+    const descendants: string[] = [];
+    const visited = new Set<string>();
+    const stack = [...(childrenByManager.get(ancestorId) ?? [])];
+    while (stack.length > 0) {
+      const current = stack.pop() as string;
+      if (visited.has(current)) {
+        continue;
+      }
+      visited.add(current);
+      descendants.push(current);
+      const children = childrenByManager.get(current) ?? [];
+      for (const child of children) {
+        stack.push(child);
+      }
+    }
+
+    return descendants;
+  }
+
+  async function validateDownOnlyAssignment(params: {
+    requesterId: string;
+    requesterRole: string | null;
+    requesterOrgId: string;
+    assigneeId: string;
+  }): Promise<{ ok: boolean; code?: ApiErrorCode; message?: string; assigneeRole?: "ceo" | "cfo" | "manager" | "worker" }> {
+    if (!isRoleValue(params.requesterRole)) {
+      return { ok: false, code: "FORBIDDEN", message: "Requester role is not eligible for task assignment" };
+    }
+
+    const assignee = await getUserRoleAndOrg(params.assigneeId);
+    if (!assignee) {
+      return { ok: false, code: "VALIDATION_ERROR", message: "Assignee not found" };
+    }
+
+    if (!assignee.orgId || assignee.orgId !== params.requesterOrgId) {
+      return { ok: false, code: "FORBIDDEN", message: "Cannot assign tasks outside requester organization" };
+    }
+
+    if (roleHierarchyLevel[assignee.role] <= roleHierarchyLevel[params.requesterRole]) {
+      return { ok: false, code: "VALIDATION_ERROR", message: "Tasks can only be assigned downward in hierarchy" };
+    }
+
+    if (params.requesterRole === "manager") {
+      const descendant = await isDescendantInOrg(params.requesterId, params.assigneeId, params.requesterOrgId);
+      if (!descendant) {
+        return { ok: false, code: "FORBIDDEN", message: "Managers can only assign tasks within their reporting subtree" };
+      }
+    }
+
+    return { ok: true, assigneeRole: assignee.role };
+  }
+
   fastify.post("/tasks", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
     const parsed = CreateTaskBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -126,11 +285,21 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
+    const requesterOrgId = await getRequesterOrgId(userId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
     const payload = parsed.data;
+    const targetOrgId = payload.orgId ?? requesterOrgId;
+    if (targetOrgId !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot create tasks outside requester organization");
+    }
+
     const { data, error } = await fastify.supabaseService
       .from("tasks")
       .insert({
-        org_id: payload.orgId,
+        org_id: targetOrgId,
         created_by: userId,
         goal_id: payload.goalId,
         parent_task_id: payload.parentTaskId,
@@ -224,6 +393,40 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid routing confirmation payload");
     }
 
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const scopedTask = await fastify.supabaseService
+      .from("tasks")
+      .select("id, org_id")
+      .eq("id", params.data.id)
+      .maybeSingle();
+
+    const taskOrgId = (scopedTask.data?.org_id as string | null | undefined) ?? null;
+    if (!taskOrgId || taskOrgId !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot confirm routing outside requester organization");
+    }
+
+    for (const confirmed of body.data.confirmed) {
+      const validity = await validateDownOnlyAssignment({
+        requesterId,
+        requesterRole: request.userRole,
+        requesterOrgId,
+        assigneeId: confirmed.assigneeId
+      });
+
+      if (!validity.ok) {
+        return sendApiError(reply, request, validity.code === "FORBIDDEN" ? 403 : 400, validity.code ?? "VALIDATION_ERROR", validity.message ?? "Invalid routing confirmation assignee");
+      }
+    }
+
     const updateTask = await fastify.supabaseService
       .from("tasks")
       .update({
@@ -293,14 +496,15 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       if (request.userRole === "manager") {
         const { data: manager } = await fastify.supabaseService
           .from("users")
-          .select("department")
+          .select("department, org_id")
           .eq("id", userId)
           .single();
 
         const { data: deptUsers } = await fastify.supabaseService
           .from("users")
           .select("id")
-          .eq("department", manager?.department ?? "");
+          .eq("department", manager?.department ?? "")
+          .eq("org_id", manager?.org_id ?? "");
 
         const ids = (deptUsers ?? []).map((u) => u.id as string);
         if (ids.length === 0) {
@@ -454,6 +658,16 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid delegate payload");
     }
 
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
     const { data: task, error } = await fastify.supabaseService
       .from("tasks")
       .select("*")
@@ -464,7 +678,29 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Task not found");
     }
 
+    const taskOrgId = (task.org_id as string | null | undefined) ?? null;
+    if (!taskOrgId || taskOrgId !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot delegate task outside requester organization");
+    }
+
     if (body.data.assignTo === null) {
+      if (!isRoleValue(request.userRole)) {
+        return sendApiError(reply, request, 403, "FORBIDDEN", "Requester role is not eligible for task assignment");
+      }
+
+      const desiredRole = (body.data.role ?? task.assigned_role) as "ceo" | "cfo" | "manager" | "worker";
+      if (roleHierarchyLevel[desiredRole] <= roleHierarchyLevel[request.userRole]) {
+        return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Tasks can only be assigned downward in hierarchy");
+      }
+
+      const eligibleAssigneeIds = request.userRole === "manager"
+        ? await getDescendantIdsInOrg(requesterId, requesterOrgId)
+        : undefined;
+
+      if (request.userRole === "manager" && (!eligibleAssigneeIds || eligibleAssigneeIds.length === 0)) {
+        return sendApiError(reply, request, 400, "VALIDATION_ERROR", "No eligible direct reports available for assignment");
+      }
+
       const taskForAssignment: Task = {
         id: task.id as string,
         goal_id: task.goal_id as string,
@@ -481,15 +717,35 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         deadline: (task.deadline as string | null) ?? undefined
       };
 
-      const reassigned = await assignTask(taskForAssignment);
+      const reassigned = await assignTask({
+        ...taskForAssignment,
+        ...(eligibleAssigneeIds ? { eligible_assignee_ids: eligibleAssigneeIds } : {})
+      } as Task);
       return reply.send(reassigned);
+    }
+
+    const assigneeValidity = await validateDownOnlyAssignment({
+      requesterId,
+      requesterRole: request.userRole,
+      requesterOrgId,
+      assigneeId: body.data.assignTo
+    });
+
+    if (!assigneeValidity.ok || !assigneeValidity.assigneeRole) {
+      return sendApiError(
+        reply,
+        request,
+        assigneeValidity.code === "FORBIDDEN" ? 403 : 400,
+        assigneeValidity.code ?? "VALIDATION_ERROR",
+        assigneeValidity.message ?? "Invalid assignee"
+      );
     }
 
     const { data: updated, error: updateError } = await fastify.supabaseService
       .from("tasks")
       .update({
         assigned_to: body.data.assignTo,
-        assigned_role: body.data.role ?? task.assigned_role,
+        assigned_role: assigneeValidity.assigneeRole,
         is_agent_task: false,
         updated_at: new Date().toISOString()
       })

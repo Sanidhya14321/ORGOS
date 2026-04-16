@@ -5,12 +5,8 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 
 ## CURRENT STATUS
 
-- Step 1 — Auth & Registration [ ] NOT STARTED
-- Step 2 — Approval Dashboard [ ] NOT STARTED
-- Step 3 — Org Tree Visualization [ ] NOT STARTED
-- Step 4 — Task Creation & Routing [ ] NOT STARTED
-- Step 5 — SLA Tracking [ ] NOT STARTED
-- Step 6 — Load & Skill Matching [ ] NOT STARTED
+- Build roadmap Steps 1–14 [x] COMPLETED
+- Post-roadmap schema-cache hardening [x] COMPLETED
 
 ## BUILD ORDER TRACKER
 
@@ -27,7 +23,7 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - [x] Step 11: Frontend org tree (React Flow)
 - [x] Step 12: Frontend task board (role-aware)
 - [x] Step 13: Routing memory + Groq history context
-- [ ] Step 14: Tests + hardening
+- [x] Step 14: Tests + hardening
 
 ## WHAT HAS BEEN DONE
 - Introduced tracking files (`WINDOW.md`, `MEMORY.md`).
@@ -42,9 +38,22 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - Added dedicated CEO approval dashboard route with pending member review and realtime activity.
 - Added org tree route with React Flow visualization and backend org hierarchy endpoint.
 - Added role-aware task board with realtime updates and lifecycle actions (routing/delegation/status).
+- Added routing memory context in agent routing suggestions using historical decisions.
+- Added focused API tests and validation pass for routing memory/hardening behavior.
 - Added routing memory signals from historical suggestions into LLM routing context.
 - Hardened WebSocket notifier with user/role/org rooms and task lifecycle realtime events.
 - Implemented frontend onboarding flow pages for verify, complete-profile, and pending approval.
+- Hardened goals/reports routes for Supabase schema-cache misses with explicit 503 behavior and safe read fallbacks.
+- Updated reports integration test queue mock for `getSynthesizeQueue()` and revalidated full API tests.
+- Hardened OWASP-priority auth/access controls: server-authoritative role resolution, org-scoped mutation checks, and HttpOnly cookie auth.
+- Removed browser bearer-token handling from web fetch/socket/profile flows and added auth-route rate limiting.
+- Added optional auth context on public routes and secured verify flow to authenticated user identity.
+- Added CSRF origin validation for cookie-authenticated mutating API requests.
+- Enforced manager org-tree visibility to subtree-only scope while keeping full view for CEO/CFO.
+- Improved dashboard responsiveness and overflow handling across shell, task board, org tree, and approval views.
+- Added account-type-first login flow with RBAC compatibility checks (owner / C-suite / employee).
+- Enforced down-only task assignment with manager-subtree constraints in routing/delegation flows.
+- Enforced member approval email-domain policy with CEO-only override and audit logging.
 
 ## KNOWN ISSUES
 - Remote Supabase instance has intermittently missing schema-cache entries for tables.
@@ -61,6 +70,15 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - 2026-04-11 — Implemented Step 10 CEO approval dashboard route and realtime approval workflow.
 - 2026-04-11 — Implemented Step 11 org tree backend endpoint and React Flow dashboard view.
 - 2026-04-11 — Implemented Step 12 role-aware task board route and action controls.
+- 2026-04-11 — Implemented Step 13 routing memory context for Groq routing prompts.
+- 2026-04-11 — Implemented Step 14 tests and hardening checks.
 - 2026-04-11 — Implemented Step 13 routing memory context for Groq assignment prompts.
 - 2026-04-11 — Implemented Step 8 notifier hardening with room namespaces and task event emissions.
 - 2026-04-11 — Implemented Step 9 frontend auth/onboarding page flow and middleware updates.
+- 2026-04-16 — Implemented post-roadmap schema-cache hardening for goals/reports routes and restored full API test pass.
+- 2026-04-16 — Implemented OWASP remediation pass for access control, session handling, and auth throttling.
+- 2026-04-16 — Added verify-route identity binding and CSRF origin checks for cookie-auth mutation paths.
+- 2026-04-16 — Enforced manager subtree-only visibility in org tree API responses.
+- 2026-04-16 — Implemented responsive dashboard overflow fixes and RBAC account-type login gating.
+- 2026-04-16 — Enforced down-only assignment rules with subtree-safe manager auto-delegation.
+- 2026-04-16 — Added org-domain enforcement in member approvals with CEO override path.

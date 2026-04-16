@@ -210,13 +210,13 @@ export function CeoApprovalDashboard() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-8 lg:px-10">
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-6 px-0 py-3 sm:px-2 lg:px-4">
       <section className="rounded-[2rem] border border-white/70 bg-white/80 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.12)] backdrop-blur-xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
+          <div className="min-w-0 max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#6b7280]">CEO approval dashboard</p>
-            <h1 className="mt-3 font-serif text-4xl leading-tight text-[#121826] lg:text-6xl">Review onboarding requests</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-[#4b5563]">
+            <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[#121826] sm:text-4xl lg:text-6xl">Review onboarding requests</h1>
+            <p className="mt-4 max-w-2xl break-words text-base leading-7 text-[#4b5563]">
               Approve new members, monitor live execution, and keep the org moving without leaving the dashboard.
             </p>
             <div className="mt-5">
@@ -261,12 +261,12 @@ export function CeoApprovalDashboard() {
 
           <div className="mt-6 space-y-3">
             {pendingMembers.map((member) => (
-              <article key={member.id} className="rounded-3xl border border-[#ece7dd] bg-[#faf8f4] p-4">
+              <article key={member.id} className="min-w-0 rounded-3xl border border-[#ece7dd] bg-[#faf8f4] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-lg font-semibold text-[#121826]">{member.full_name}</p>
-                    <p className="text-sm text-[#6b7280]">{member.email}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[#8b8f97]">
+                    <p className="break-all text-sm text-[#6b7280]">{member.email}</p>
+                    <p className="mt-1 break-all text-xs uppercase tracking-[0.08em] text-[#8b8f97] sm:tracking-[0.2em]">
                       {member.position_id ? `Position ${member.position_id}` : "No position selected"}
                     </p>
                   </div>
@@ -332,12 +332,12 @@ export function CeoApprovalDashboard() {
           <h2 className="text-2xl font-semibold text-[#121826]">Approval activity</h2>
           <div className="mt-5 space-y-3">
             {activity.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
+              <article key={item.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
                 <div className="flex items-start gap-3">
                   <span className={`mt-1 inline-flex h-2.5 w-2.5 rounded-full ${toneClass(item.tone)}`} />
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold text-[#121826]">{item.title}</p>
-                    <p className="mt-1 text-sm leading-6 text-[#6b7280]">{item.description}</p>
+                    <p className="mt-1 break-words text-sm leading-6 text-[#6b7280]">{item.description}</p>
                   </div>
                 </div>
               </article>

@@ -85,6 +85,20 @@ export async function buildServer() {
   });
 
   fastify.addHook("preHandler", async (request, reply) => {
+    if (request.method === "POST") {
+      const path = request.url.split("?")[0];
+      if (path === "/api/auth/login" || path === "/api/auth/register" || path === "/api/auth/refresh") {
+        const key = `auth-post:${request.ip}:${path}`;
+        const count = await fastify.redis.incr(key);
+        if (count === 1) {
+          await fastify.redis.expire(key, 15 * 60);
+        }
+        if (count > 40) {
+          return sendApiError(reply, request, 429, "RATE_LIMITED", "Authentication rate limit exceeded");
+        }
+      }
+    }
+
     if (request.method === "POST" && request.url.startsWith("/api/goals")) {
       const isExec = request.userRole === "ceo" || request.userRole === "cfo";
       if (isExec) {

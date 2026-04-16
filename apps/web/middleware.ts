@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { ACCESS_TOKEN_COOKIE, ROLE_COOKIE } from "./lib/auth";
 
 const PROTECTED_PREFIXES = ["/dashboard"];
-const DASHBOARD_UTILITY_ROUTES = new Set(["org-tree", "task-board"]);
 
 function hasProtectedPrefix(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -14,21 +13,13 @@ export function middleware(request: NextRequest) {
   const role = request.cookies.get(ROLE_COOKIE)?.value;
   const authEntryPages = new Set(["/login", "/register", "/verify"]);
 
-  if (authEntryPages.has(pathname) && accessToken && role) {
-    return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
+  if (authEntryPages.has(pathname) && accessToken) {
+    return NextResponse.redirect(new URL(role ? `/dashboard/${role}` : "/dashboard", request.url));
   }
 
   if (hasProtectedPrefix(pathname)) {
-    if (!accessToken || !role) {
+    if (!accessToken) {
       return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    const dashboardPrefix = "/dashboard/";
-    if (pathname.startsWith(dashboardPrefix)) {
-      const requestedRole = pathname.slice(dashboardPrefix.length).split("/")[0];
-      if (requestedRole && !DASHBOARD_UTILITY_ROUTES.has(requestedRole) && requestedRole !== role) {
-        return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
-      }
     }
   }
 

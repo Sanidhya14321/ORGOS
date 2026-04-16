@@ -15,7 +15,7 @@
 - [x] Step 11: Frontend org tree (React Flow)
 - [x] Step 12: Frontend task board (role-aware)
 - [x] Step 13: Routing memory + Groq history context
-- [ ] Step 14: Tests + hardening
+- [x] Step 14: Tests + hardening
 
 ## Chunk Log
 
@@ -92,7 +92,55 @@
 - Added task board navigation links from role dashboard entry view.
 
 ### Chunk 13 (Completed)
-- Added historical routing memory extraction from `routing_suggestions` and prior task routing outcomes.
-- Added candidate-aligned memory signals (support count, average confidence, reasons) to improve suggestion quality.
-- Injected routing memory context into Groq/LLM assignment prompts in `agentService`.
-- Added safe fallbacks for schema-cache-missing paths so routing generation degrades gracefully.
+- Added routing memory extraction from historical `routing_suggestions` and prior org/role task history.
+- Added candidate-aligned memory signals (support count, confidence trend, prior reasons).
+- Injected memory context into LLM assignment prompts for routing suggestions.
+- Added schema-cache-safe fallback behavior for memory fetch paths.
+
+### Chunk 14 (Completed)
+- Added targeted API test for routing memory prompt enrichment (`agent-service.test.ts`).
+- Verified tests pass for the new behavior via Vitest.
+- Re-ran API and web typechecks after changes.
+
+### Chunk 15 (Completed)
+- Hardened `goals` and `reports` routes for Supabase schema-cache misses (`PGRST205` / `PGRST204`).
+- Added deterministic `503 SERVICE_UNAVAILABLE` responses when core goal/report tables are unavailable.
+- Added graceful read fallbacks (empty goals list or zero task counts) where safe degradation is possible.
+- Fixed reports-route integration test queue mock to support `getSynthesizeQueue()`.
+- Re-ran API tests and API/web typechecks successfully.
+
+### Chunk 16 (Completed)
+- Switched API authentication to support HttpOnly session cookie token fallback (no JS token requirement).
+- Resolved role authorization from server-side `users` table instead of token metadata role claims.
+- Added org-scope enforcement for task create/routing-confirm/delegate and org member approve/reject operations.
+- Added auth endpoint-specific rate limits (`/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`).
+- Updated web client fetch/socket/auth flows to use cookie credentials and removed browser token storage.
+
+### Chunk 17 (Completed)
+- Added optional-auth parsing on public routes to populate user context when token/cookie exists.
+- Hardened `/api/auth/verify` to update only the authenticated user's verification state.
+- Added CSRF origin checks for mutating non-public requests when using cookie-based auth.
+
+### Chunk 18 (Completed)
+- Enforced manager-scoped org tree visibility so managers only receive their own reporting subtree.
+- Preserved full-org visibility for CEO/CFO while keeping organization membership checks intact.
+
+### Chunk 19 (Completed)
+- Refactored dashboard pages to use a stack shell layout for responsive rendering.
+- Added targeted overflow controls (`min-w-0`, `break-words`, `break-all`) in dashboard, CEO approval, and task board components.
+- Tightened org-tree node text wrapping to prevent text spilling out of node cards.
+
+### Chunk 20 (Completed)
+- Added required pre-login account type selection (Company Owner, C-suite, Employee) in the login form.
+- Enforced RBAC role compatibility against the selected account type before granting session routing.
+- Updated login page copy to reflect the account-type-first login flow.
+
+### Chunk 21 (Completed)
+- Enforced down-only task assignment in routing confirmation and delegation paths.
+- Added manager subtree restriction for explicit delegation and auto-assignment candidate selection.
+- Prevented manual role-forging during delegation by deriving assigned role from actual assignee profile.
+
+### Chunk 22 (Completed)
+- Enforced organization email-domain checks during member approval.
+- Added explicit CEO-only domain mismatch override support (`overrideDomainMismatch`).
+- Added domain override audit logging to `audit_log` for traceability.

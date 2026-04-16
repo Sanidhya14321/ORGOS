@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { getAccessTokenFromBrowser } from "@/lib/auth";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -15,20 +14,15 @@ type PositionItem = { id: string; title: string; level: number };
 type ApiErrorResponse = { error?: { message?: string } };
 
 async function authedFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAccessTokenFromBrowser();
-  if (!token) {
-    throw new Error("Please sign in before completing profile");
-  }
-
   const headers = new Headers(options.headers ?? {});
-  headers.set("Authorization", `Bearer ${token}`);
   if (!headers.get("Content-Type") && options.body) {
     headers.set("Content-Type", "application/json");
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers
+    headers,
+    credentials: "include"
   });
 
   if (!response.ok) {

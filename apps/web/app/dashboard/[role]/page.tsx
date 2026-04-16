@@ -30,11 +30,12 @@ export default function DashboardRolePage({ params }: DashboardRolePageProps) {
 
   return (
     <AppShell
+      layout="stack"
       eyebrow="Role dashboard"
       title={`${role.toUpperCase()} command center`}
       description="Live ORGOS dashboards combine tasks, goals, and reports with realtime event delivery."
     >
-      <div className="space-y-3 text-sm leading-6 text-[#4b5563]">
+      <div className="min-w-0 space-y-3 text-sm leading-6 text-[#4b5563]">
         <p>Realtime updates are pushed via Socket.IO and merged into the dashboard feed as the queue advances.</p>
         <p>Continue into the live workspace to monitor task assignments, report submissions, and escalation events.</p>
         <div className="flex flex-wrap gap-2 pt-2">
@@ -54,7 +55,7 @@ export default function DashboardRolePage({ params }: DashboardRolePageProps) {
           ) : null}
         </div>
       </div>
-      <div className="mt-5 rounded-[1.75rem] border border-[#ece7dd] bg-[#fbfaf7] p-4">
+      <div className="mt-5 min-w-0 rounded-[1.75rem] border border-[#ece7dd] bg-[#fbfaf7] p-3 sm:p-4">
         <DashboardClient role={role} />
       </div>
     </AppShell>

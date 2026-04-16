@@ -9,7 +9,8 @@ const { enqueueMock, emitMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/queue/index.js", () => ({
-  synthesizeQueue: { add: enqueueMock }
+  synthesizeQueue: { add: enqueueMock },
+  getSynthesizeQueue: () => ({ add: enqueueMock })
 }));
 
 vi.mock("../src/services/notifier.js", () => ({

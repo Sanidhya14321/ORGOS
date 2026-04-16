@@ -18,6 +18,7 @@ export default function CeoDashboardPage() {
 
   return (
     <AppShell
+      layout="stack"
       eyebrow="CEO dashboard"
       title="Approval control center"
       description="Executive-first view for reviewing onboarding requests and watching live organization activity."

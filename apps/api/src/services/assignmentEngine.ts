@@ -37,6 +37,11 @@ export async function assignTask(task: Task): Promise<Task> {
     .lte("open_task_count", MAX_OPEN_TASKS)
     .order("open_task_count", { ascending: true });
 
+  const eligibleAssigneeIds = (task as Task & { eligible_assignee_ids?: string[] }).eligible_assignee_ids;
+  if (eligibleAssigneeIds && eligibleAssigneeIds.length > 0) {
+    query = query.in("id", eligibleAssigneeIds);
+  }
+
   const taskOrgId = (task as Task & { org_id?: string }).org_id;
   if (taskOrgId) {
     query = query.eq("org_id", taskOrgId);

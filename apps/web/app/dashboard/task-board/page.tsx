@@ -20,6 +20,7 @@ export default function TaskBoardPage() {
 
   return (
     <AppShell
+      layout="stack"
       eyebrow="Task operations"
       title="Role-aware task board"
       description="Manage routing, delegation, and execution status in one board tailored to your role permissions."

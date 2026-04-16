@@ -264,15 +264,15 @@ export function DashboardClient({ role }: DashboardClientProps) {
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-8 lg:px-10">
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-6 px-0 py-3 sm:px-2 lg:px-4">
       <section className="rounded-[2rem] border border-white/70 bg-white/75 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.12)] backdrop-blur-xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
+          <div className="min-w-0 max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#6b7280]">{dashboardTitle}</p>
-            <h1 className="mt-3 font-serif text-4xl leading-tight text-[#121826] lg:text-6xl">
+            <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[#121826] sm:text-4xl lg:text-6xl">
               {currentUser?.full_name ?? "ORGOS Operator"}
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-[#4b5563]">
+            <p className="mt-4 max-w-2xl break-words text-base leading-7 text-[#4b5563]">
               {roleDescription(role)}
             </p>
           </div>
@@ -301,16 +301,16 @@ export function DashboardClient({ role }: DashboardClientProps) {
                   <h2 className="text-xl font-semibold text-[#121826]">Pending approvals</h2>
                   <p className="mt-1 text-sm text-[#6b7280]">Review and approve member onboarding requests.</p>
                 </div>
-                <span className="rounded-full bg-[#fff0e6] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#b45527]">
+                <span className="rounded-full bg-[#fff0e6] px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#b45527] sm:tracking-[0.2em]">
                   {pendingMembers.length} pending
                 </span>
               </div>
 
               <div className="mt-4 space-y-3">
                 {pendingMembers.slice(0, 8).map((member) => (
-                  <article key={member.id} className="rounded-2xl border border-[#ece7dd] bg-white p-3">
+                  <article key={member.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-white p-3">
                     <p className="font-semibold text-[#121826]">{member.full_name}</p>
-                    <p className="text-sm text-[#6b7280]">{member.email}</p>
+                    <p className="break-all text-sm text-[#6b7280]">{member.email}</p>
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
@@ -346,14 +346,14 @@ export function DashboardClient({ role }: DashboardClientProps) {
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {myTasks.slice(0, 6).map((task) => (
-              <article key={task.id} className="rounded-3xl border border-[#ece7dd] bg-[#faf8f4] p-4">
+              <article key={task.id} className="min-w-0 rounded-3xl border border-[#ece7dd] bg-[#faf8f4] p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold text-[#121826]">{task.title}</h3>
-                  <span className="rounded-full bg-[#fff0e6] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#b45527]">
+                  <h3 className="min-w-0 break-words text-lg font-semibold text-[#121826]">{task.title}</h3>
+                  <span className="shrink-0 rounded-full bg-[#fff0e6] px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#b45527] sm:tracking-[0.2em]">
                     {task.status}
                   </span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-[#4b5563]">{task.description ?? task.success_criteria}</p>
+                <p className="mt-2 break-words text-sm leading-6 text-[#4b5563]">{task.description ?? task.success_criteria}</p>
               </article>
             ))}
           </div>
@@ -363,12 +363,12 @@ export function DashboardClient({ role }: DashboardClientProps) {
           <h2 className="text-2xl font-semibold text-[#121826]">Activity feed</h2>
           <div className="mt-5 space-y-3">
             {activity.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
+              <article key={item.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
                 <div className="flex items-start gap-3">
                   <span className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === "positive" ? "bg-[#2a9d8f]" : item.tone === "warning" ? "bg-[#ff6b35]" : "bg-[#e9c46a]"}`} />
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold text-[#121826]">{item.label}</p>
-                    <p className="mt-1 text-sm leading-6 text-[#6b7280]">{item.detail}</p>
+                    <p className="mt-1 break-words text-sm leading-6 text-[#6b7280]">{item.detail}</p>
                   </div>
                 </div>
               </article>
@@ -379,12 +379,12 @@ export function DashboardClient({ role }: DashboardClientProps) {
             <p className="text-sm uppercase tracking-[0.25em] text-white/60">Reports</p>
             <div className="mt-3 space-y-3">
               {reports.slice(0, 3).map((report) => (
-                <div key={report.id} className="rounded-2xl bg-white/8 p-4">
+                <div key={report.id} className="min-w-0 rounded-2xl bg-white/8 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold">{report.status}</span>
                     <span className="text-sm text-white/70">{mapReportTone(report)}</span>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-white/80">{report.insight}</p>
+                  <p className="mt-2 break-words text-sm leading-6 text-white/80">{report.insight}</p>
                 </div>
               ))}
               {reports.length === 0 ? <p className="text-sm text-white/70">No reports yet.</p> : null}

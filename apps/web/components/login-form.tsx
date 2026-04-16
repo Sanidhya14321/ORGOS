@@ -4,14 +4,25 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { setAuthCookies } from "@/lib/auth";
+import { setRoleCookie } from "@/lib/auth";
 
 export function LoginForm() {
   const router = useRouter();
+  const [audience, setAudience] = useState<"owner" | "csuite" | "employee" | "">("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  function audienceMatchesRole(kind: "owner" | "csuite" | "employee", role: string): boolean {
+    if (kind === "owner") {
+      return role === "ceo";
+    }
+    if (kind === "csuite") {
+      return role === "ceo" || role === "cfo";
+    }
+    return role === "manager" || role === "worker";
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -19,6 +30,10 @@ export function LoginForm() {
     setError(null);
 
     try {
+      if (!audience) {
+        throw new Error("Select your account type before signing in.");
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,8 +46,16 @@ export function LoginForm() {
         throw new Error(body?.error?.message ?? "Login failed");
       }
 
-      const data = await response.json() as { accessToken: string; user: { role: string; status?: string } };
-      setAuthCookies(data.accessToken, data.user.role);
+      const data = await response.json() as { user: { role: string; status?: string } };
+      if (!audienceMatchesRole(audience, data.user.role)) {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/auth/logout`, {
+          method: "POST",
+          credentials: "include"
+        }).catch(() => undefined);
+        throw new Error("Selected account type does not match your role. Please choose the correct option.");
+      }
+
+      setRoleCookie(data.user.role);
       if (data.user.status === "pending") {
         router.push("/pending");
       } else {
@@ -48,6 +71,33 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Account type</legend>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => setAudience("owner")}
+            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${audience === "owner" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
+          >
+            Company owner
+          </button>
+          <button
+            type="button"
+            onClick={() => setAudience("csuite")}
+            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${audience === "csuite" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
+          >
+            C-suite
+          </button>
+          <button
+            type="button"
+            onClick={() => setAudience("employee")}
+            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${audience === "employee" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
+          >
+            Employee
+          </button>
+        </div>
+      </fieldset>
+
       <label className="block space-y-2">
         <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Email</span>
         <input
@@ -78,7 +128,7 @@ export function LoginForm() {
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || !audience}
         className="inline-flex w-full items-center justify-center rounded-2xl bg-[#121826] px-4 py-3 font-semibold text-white transition hover:bg-[#1c2538] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? "Signing in..." : "Sign in"}

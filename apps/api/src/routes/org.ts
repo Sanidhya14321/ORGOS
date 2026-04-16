@@ -30,6 +30,10 @@ const RejectBodySchema = z.object({
   reason: z.string().trim().min(3).max(400)
 });
 
+const ApproveBodySchema = z.object({
+  overrideDomainMismatch: z.boolean().optional().default(false)
+});
+
 const OrgTreeNodeSchema = z.object({
   id: z.string().uuid(),
   full_name: z.string(),
@@ -45,7 +49,25 @@ function isMissingTableSchemaCache(error: { code?: string } | null | undefined):
   return error?.code === "PGRST205";
 }
 
+function getEmailDomain(email: string): string | null {
+  const at = email.lastIndexOf("@");
+  if (at < 0 || at === email.length - 1) {
+    return null;
+  }
+  return email.slice(at + 1).toLowerCase();
+}
+
 const orgRoutes: FastifyPluginAsync = async (fastify) => {
+  async function getRequesterOrgId(userId: string): Promise<string | null> {
+    const requester = await fastify.supabaseService
+      .from("users")
+      .select("org_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    return (requester.data?.org_id as string | null | undefined) ?? null;
+  }
+
   fastify.get("/orgs/search", async (request, reply) => {
     const parsed = SearchOrgQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -196,6 +218,7 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     if (!requesterOrgId || requesterOrgId !== parsed.data.id) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
     }
+    const requesterRole = requester.data?.role as string | undefined;
 
     const usersResult = await fastify.supabaseService
       .from("users")
@@ -235,10 +258,41 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization positions");
     }
 
-    const nodes = (usersResult.data ?? [])
+    const allNodes = (usersResult.data ?? [])
       .map((row) => OrgTreeNodeSchema.safeParse(row))
       .filter((result) => result.success)
       .map((result) => result.data);
+
+    // Managers can only view their own reporting subtree, while C-suite can view the full org.
+    const nodes = requesterRole === "manager"
+      ? (() => {
+          const childrenByManager = new Map<string, string[]>();
+          for (const node of allNodes) {
+            if (!node.reports_to) {
+              continue;
+            }
+            const list = childrenByManager.get(node.reports_to) ?? [];
+            list.push(node.id);
+            childrenByManager.set(node.reports_to, list);
+          }
+
+          const visible = new Set<string>();
+          const stack: string[] = [userId];
+          while (stack.length > 0) {
+            const current = stack.pop() as string;
+            if (visible.has(current)) {
+              continue;
+            }
+            visible.add(current);
+            const children = childrenByManager.get(current) ?? [];
+            for (const child of children) {
+              stack.push(child);
+            }
+          }
+
+          return allNodes.filter((node) => visible.has(node.id));
+        })()
+      : allNodes;
 
     return reply.send({
       orgId: parsed.data.id,
@@ -247,12 +301,22 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  fastify.post("/orgs/:id/positions", async (request, reply) => {
+  fastify.post("/orgs/:id/positions", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
     const params = OrgIdParamSchema.safeParse(request.params);
     const body = PositionBodySchema.safeParse(request.body);
 
     if (!params.success || !body.success) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid custom position payload");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId || requesterOrgId !== params.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot create position outside requester organization");
     }
 
     const { data, error } = await fastify.supabaseService
@@ -317,8 +381,64 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/orgs/members/:id/approve", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
     const parsed = MemberParamSchema.safeParse(request.params);
-    if (!parsed.success) {
+    const body = ApproveBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success || !body.success) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid member id");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const requester = await fastify.supabaseService
+      .from("users")
+      .select("id, role")
+      .eq("id", requesterId)
+      .maybeSingle();
+
+    const targetUser = await fastify.supabaseService
+      .from("users")
+      .select("id, org_id, status, email")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+
+    const org = await fastify.supabaseService
+      .from("orgs")
+      .select("id, domain")
+      .eq("id", requesterOrgId)
+      .maybeSingle();
+
+    const targetOrgId = (targetUser.data?.org_id as string | null | undefined) ?? null;
+    if (!targetOrgId || targetOrgId !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot approve member outside requester organization");
+    }
+
+    if (targetUser.data?.status !== "pending") {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Only pending members can be approved");
+    }
+
+    const orgDomain = typeof org.data?.domain === "string" ? org.data.domain.trim().toLowerCase() : "";
+    const emailDomain = typeof targetUser.data?.email === "string" ? getEmailDomain(targetUser.data.email) : null;
+    const domainMismatch = !!orgDomain && !!emailDomain && emailDomain !== orgDomain;
+
+    if (domainMismatch) {
+      const requesterRole = requester.data?.role;
+      const overrideAllowed = requesterRole === "ceo" && body.data.overrideDomainMismatch;
+      if (!overrideAllowed) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "VALIDATION_ERROR",
+          "User email domain does not match organization domain; CEO override is required"
+        );
+      }
     }
 
     const updated = await fastify.supabaseService
@@ -332,6 +452,21 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to approve member");
     }
 
+    if (domainMismatch) {
+      await fastify.supabaseService.from("audit_log").insert({
+        org_id: requesterOrgId,
+        actor_id: requesterId,
+        action: "member_domain_override",
+        entity: "user",
+        entity_id: parsed.data.id,
+        meta: {
+          orgDomain,
+          emailDomain,
+          overrideDomainMismatch: true
+        }
+      });
+    }
+
     return reply.send(updated.data);
   });
 
@@ -341,6 +476,27 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!params.success || !body.success) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid reject payload");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const targetUser = await fastify.supabaseService
+      .from("users")
+      .select("id, org_id")
+      .eq("id", params.data.id)
+      .maybeSingle();
+
+    const targetOrgId = (targetUser.data?.org_id as string | null | undefined) ?? null;
+    if (!targetOrgId || targetOrgId !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot reject member outside requester organization");
     }
 
     const updated = await fastify.supabaseService
@@ -355,7 +511,7 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     await fastify.supabaseService.from("audit_log").insert({
-      org_id: null,
+      org_id: requesterOrgId,
       actor_id: request.user?.id ?? null,
       action: "member_rejected",
       entity: "user",

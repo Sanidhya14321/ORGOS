@@ -34,6 +34,10 @@ const PatchGoalSchema = z
     message: "At least one field must be provided"
   });
 
+function isSchemaCacheUnavailable(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "PGRST205" || error?.code === "PGRST204";
+}
+
 const goalsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/goals", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
     const parsed = CreateGoalSchema.safeParse(request.body);
@@ -97,6 +101,15 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       .single();
 
     if (error || !data) {
+      if (isSchemaCacheUnavailable(error)) {
+        return sendApiError(
+          reply,
+          request,
+          503,
+          "SERVICE_UNAVAILABLE",
+          "Goal tables are not available yet; apply DB migrations first"
+        );
+      }
       request.log.error({ err: error }, "Failed to insert goal");
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create goal");
     }
@@ -133,6 +146,10 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data, count, error } = await query;
     if (error) {
+      if (isSchemaCacheUnavailable(error)) {
+        request.log.warn({ err: error }, "goals table missing in schema cache; returning empty list");
+        return reply.send({ page, limit, total: 0, items: [] });
+      }
       request.log.error({ err: error }, "Failed to fetch goals");
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch goals");
     }
@@ -147,6 +164,18 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
         .in("goal_id", goalIds);
 
       if (tasksError) {
+        if (isSchemaCacheUnavailable(tasksError)) {
+          request.log.warn({ err: tasksError }, "tasks table missing in schema cache; defaulting task counts to zero");
+          return reply.send({
+            page,
+            limit,
+            total: count ?? 0,
+            items: (data ?? []).map((goal) => ({
+              ...goal,
+              task_count: 0
+            }))
+          });
+        }
         request.log.error({ err: tasksError }, "Failed to fetch task counts");
         return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch task counts");
       }
@@ -185,6 +214,15 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       .maybeSingle();
 
     if (error) {
+      if (isSchemaCacheUnavailable(error)) {
+        return sendApiError(
+          reply,
+          request,
+          503,
+          "SERVICE_UNAVAILABLE",
+          "Goal tables are not available yet; apply DB migrations first"
+        );
+      }
       request.log.error({ err: error }, "Failed to fetch goal");
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch goal");
     }
@@ -226,6 +264,15 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       .single();
 
     if (error) {
+      if (isSchemaCacheUnavailable(error)) {
+        return sendApiError(
+          reply,
+          request,
+          503,
+          "SERVICE_UNAVAILABLE",
+          "Goal tables are not available yet; apply DB migrations first"
+        );
+      }
       request.log.error({ err: error }, "Failed to update goal");
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update goal");
     }

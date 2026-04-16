@@ -3,6 +3,18 @@ import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
 import { buildUserProfileFromAuthUser, loadUserProfile, persistUserProfile } from "../lib/user-profile.js";
 
+const ACCESS_TOKEN_COOKIE = "orgos_access_token";
+
+function buildCookie(value: string, secure: boolean): string {
+  const securePart = secure ? "; Secure" : "";
+  return `${ACCESS_TOKEN_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax${securePart}; Max-Age=3600`;
+}
+
+function buildClearCookie(secure: boolean): string {
+  const securePart = secure ? "; Secure" : "";
+  return `${ACCESS_TOKEN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax${securePart}; Max-Age=0`;
+}
+
 const LoginBodySchema = z.object({
   email: z.string().email(),
   password: z.string().min(1)
@@ -59,9 +71,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const userProfile = await loadUserProfile(fastify, data.user);
 
+    const secureCookie = fastify.env.NODE_ENV === "production";
+    reply.header("Set-Cookie", buildCookie(data.session.access_token, secureCookie));
+
     return reply.send({
-      accessToken: data.session.access_token,
-      refreshToken: data.session.refresh_token,
       user: userProfile
     });
   });
@@ -121,10 +134,19 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    const authUser = request.user;
+    if (!authUser?.id || !authUser.email) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    if (authUser.email.toLowerCase() !== parsed.data.email.toLowerCase()) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Email does not match authenticated user");
+    }
+
     const { error } = await fastify.supabaseService
       .from("users")
       .update({ email_verified: true, status: "pending" })
-      .eq("email", parsed.data.email);
+      .eq("id", authUser.id);
 
     // Keep this endpoint best-effort for compatibility if migration is not applied yet.
     if (error) {
@@ -186,14 +208,19 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Invalid refresh token");
     }
 
+    const secureCookie = fastify.env.NODE_ENV === "production";
+    reply.header("Set-Cookie", buildCookie(data.session.access_token, secureCookie));
+
     return reply.send({
-      accessToken: data.session.access_token,
       refreshToken: data.session.refresh_token
     });
   });
 
-  fastify.post("/auth/logout", async (_request, reply) => {
+  fastify.post("/auth/logout", async (request, reply) => {
     await fastify.supabaseAnon.auth.signOut();
+    const secureCookie = fastify.env.NODE_ENV === "production";
+    reply.header("Set-Cookie", buildClearCookie(secureCookie));
+    request.userRole = null;
     return reply.status(204).send();
   });
 };

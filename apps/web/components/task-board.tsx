@@ -223,7 +223,7 @@ export function TaskBoard() {
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         {statusColumns.map((status) => (
-          <section key={status} className="rounded-3xl border border-[#ece7dd] bg-white p-3">
+          <section key={status} className="min-w-0 rounded-3xl border border-[#ece7dd] bg-white p-3">
             <header className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#6b7280]">{status.replace("_", " ")}</h3>
               <span className="rounded-full bg-[#f8f5ef] px-2.5 py-1 text-xs font-semibold text-[#8b8f97]">
@@ -237,10 +237,10 @@ export function TaskBoard() {
                 const nextStatus = nextTransitionStatus(task);
 
                 return (
-                  <article key={task.id} className="rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-3">
-                    <p className="font-semibold text-[#121826]">{task.title}</p>
+                  <article key={task.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-3">
+                    <p className="break-words font-semibold text-[#121826]">{task.title}</p>
                     <p className="mt-1 text-xs text-[#6b7280]">Role: {task.assigned_role.toUpperCase()}</p>
-                    <p className="mt-1 text-xs text-[#6b7280]">Assignee: {task.assigned_to ?? "Unassigned"}</p>
+                    <p className="mt-1 break-all text-xs text-[#6b7280]">Assignee: {task.assigned_to ?? "Unassigned"}</p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       {canTransition && nextStatus ? (

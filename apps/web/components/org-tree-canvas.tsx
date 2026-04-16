@@ -83,6 +83,8 @@ function buildGraph(tree: OrgTreeResponse): { nodes: Node[]; edges: Edge[] } {
           border: `2px solid ${getStatusColor(person.status)}`,
           padding: 12,
           whiteSpace: "pre-line",
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
           fontSize: 13,
           lineHeight: 1.35,
           background: "#fffef9",

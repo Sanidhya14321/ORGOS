@@ -14,17 +14,28 @@ const ReportCreateSchema = ReportSchema.omit({ id: true }).extend({
 
 const TaskIdParamSchema = z.object({ taskId: z.string().uuid() });
 
+function isSchemaCacheUnavailable(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "PGRST205" || error?.code === "PGRST204";
+}
+
 async function canSubmitReport(
   fastify: Parameters<FastifyPluginAsync>[0],
   taskId: string,
   userId: string,
   userRole: string | null
-): Promise<boolean> {
-  const { data: task } = await fastify.supabaseService
+): Promise<boolean | "unavailable"> {
+  const { data: task, error: taskError } = await fastify.supabaseService
     .from("tasks")
     .select("id, assigned_to")
     .eq("id", taskId)
     .maybeSingle();
+
+  if (taskError) {
+    if (isSchemaCacheUnavailable(taskError)) {
+      return "unavailable";
+    }
+    return false;
+  }
 
   if (!task) {
     return false;
@@ -38,21 +49,35 @@ async function canSubmitReport(
     return false;
   }
 
-  const { data: manager } = await fastify.supabaseService
+  const { data: manager, error: managerError } = await fastify.supabaseService
     .from("users")
     .select("department")
     .eq("id", userId)
     .maybeSingle();
 
+  if (managerError) {
+    if (isSchemaCacheUnavailable(managerError)) {
+      return "unavailable";
+    }
+    return false;
+  }
+
   if (!manager?.department) {
     return false;
   }
 
-  const { data: assignee } = await fastify.supabaseService
+  const { data: assignee, error: assigneeError } = await fastify.supabaseService
     .from("users")
     .select("department")
     .eq("id", task.assigned_to)
     .maybeSingle();
+
+  if (assigneeError) {
+    if (isSchemaCacheUnavailable(assigneeError)) {
+      return "unavailable";
+    }
+    return false;
+  }
 
   return assignee?.department === manager.department;
 }
@@ -66,6 +91,9 @@ async function collectSubtreeTaskIds(
     .select("id, parent_id");
 
   if (error) {
+    if (isSchemaCacheUnavailable(error)) {
+      return [rootTaskId];
+    }
     throw new Error(error.message);
   }
 
@@ -134,6 +162,9 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
     const payload = parsed.data;
 
     const allowed = await canSubmitReport(fastify, payload.task_id, userId, request.userRole);
+    if (allowed === "unavailable") {
+      return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+    }
     if (!allowed) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Not allowed to submit report for this task");
     }
@@ -155,6 +186,9 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { error: insertError } = await fastify.supabaseService.from("reports").insert(reportToInsert);
     if (insertError) {
+      if (isSchemaCacheUnavailable(insertError)) {
+        return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+      }
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to insert report");
     }
 
@@ -164,6 +198,9 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       .eq("id", payload.task_id);
 
     if (updateTaskError) {
+      if (isSchemaCacheUnavailable(updateTaskError)) {
+        return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+      }
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update task status");
     }
 
@@ -191,7 +228,12 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task id", { field: "taskId" });
     }
 
-    const subtreeIds = await collectSubtreeTaskIds(fastify, params.data.taskId);
+    let subtreeIds: string[];
+    try {
+      subtreeIds = await collectSubtreeTaskIds(fastify, params.data.taskId);
+    } catch {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch reports");
+    }
 
     const { data: reports, error } = await fastify.supabaseService
       .from("reports")
@@ -200,6 +242,9 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       .order("created_at", { ascending: false });
 
     if (error) {
+      if (isSchemaCacheUnavailable(error)) {
+        return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Report tables are not available yet; apply DB migrations first");
+      }
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch reports");
     }
 
@@ -214,22 +259,38 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const taskId = params.data.taskId;
 
-    const { data: task } = await fastify.supabaseService
+    const taskResult = await fastify.supabaseService
       .from("tasks")
       .select("id, report_id")
       .eq("id", taskId)
       .maybeSingle();
 
-    if (!task) {
+    if (taskResult.error) {
+      if (isSchemaCacheUnavailable(taskResult.error)) {
+        return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch task for summary");
+    }
+
+    const taskData = taskResult.data;
+
+    if (!taskData) {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Task not found");
     }
 
-    if (task.report_id) {
-      const { data: report } = await fastify.supabaseService
+    if (taskData.report_id) {
+      const { data: report, error: reportError } = await fastify.supabaseService
         .from("reports")
         .select("*")
-        .eq("id", task.report_id)
+        .eq("id", taskData.report_id)
         .maybeSingle();
+
+      if (reportError) {
+        if (isSchemaCacheUnavailable(reportError)) {
+          return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+        }
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch report summary");
+      }
 
       if (report && report.is_agent) {
         return reply.send(report);

@@ -2,7 +2,6 @@
 
 import { io, type Socket } from "socket.io-client";
 import { useEffect, useMemo } from "react";
-import { getAccessTokenFromBrowser } from "./auth";
 import { useOrgosStore, type OrgosState } from "@/store";
 
 const SOCKET_BASE =
@@ -17,9 +16,7 @@ function ensureSocket(): Socket {
   socketSingleton = io(SOCKET_BASE, {
     autoConnect: false,
     transports: ["websocket"],
-    auth: {
-      token: getAccessTokenFromBrowser()
-    }
+    withCredentials: true
   });
 
   return socketSingleton;
@@ -27,7 +24,6 @@ function ensureSocket(): Socket {
 
 export function connectSocket(): Socket {
   const socket = ensureSocket();
-  socket.auth = { token: getAccessTokenFromBrowser() };
   if (!socket.connected) {
     socket.connect();
   }
