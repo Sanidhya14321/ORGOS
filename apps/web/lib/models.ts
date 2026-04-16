@@ -6,6 +6,9 @@ export interface User {
   full_name: string;
   role: Role;
   status?: "pending" | "active" | "rejected";
+  org_id?: string | null;
+  position_id?: string | null;
+  reports_to?: string | null;
   department?: string;
   skills?: string[];
   open_task_count?: number;

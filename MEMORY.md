@@ -23,10 +23,10 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - [x] Step 7: Assignment engine (skill match + load balance)
 - [x] Step 8: WebSocket / notifier
 - [x] Step 9: Frontend auth pages
-- [ ] Step 10: Frontend CEO approval dashboard
-- [ ] Step 11: Frontend org tree (React Flow)
-- [ ] Step 12: Frontend task board (role-aware)
-- [ ] Step 13: Routing memory + Groq history context
+- [x] Step 10: Frontend CEO approval dashboard
+- [x] Step 11: Frontend org tree (React Flow)
+- [x] Step 12: Frontend task board (role-aware)
+- [x] Step 13: Routing memory + Groq history context
 - [ ] Step 14: Tests + hardening
 
 ## WHAT HAS BEEN DONE
@@ -39,6 +39,10 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - Added `agentService` and wired auto-generated routing suggestions through agent-core LLM routing.
 - Added SLA monitor service with periodic status checks, breach notifications, and audit logging.
 - Upgraded assignment engine with weighted skill/load ranking and active-candidate filtering.
+- Added dedicated CEO approval dashboard route with pending member review and realtime activity.
+- Added org tree route with React Flow visualization and backend org hierarchy endpoint.
+- Added role-aware task board with realtime updates and lifecycle actions (routing/delegation/status).
+- Added routing memory signals from historical suggestions into LLM routing context.
 - Hardened WebSocket notifier with user/role/org rooms and task lifecycle realtime events.
 - Implemented frontend onboarding flow pages for verify, complete-profile, and pending approval.
 
@@ -54,5 +58,9 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - 2026-04-11 — Implemented Step 5 agent routing suggestion service and integrated it into task routing flow.
 - 2026-04-11 — Implemented Step 6 SLA monitor service and integrated lifecycle startup/shutdown.
 - 2026-04-11 — Implemented Step 7 assignment scoring upgrades (skills + load + org scope).
+- 2026-04-11 — Implemented Step 10 CEO approval dashboard route and realtime approval workflow.
+- 2026-04-11 — Implemented Step 11 org tree backend endpoint and React Flow dashboard view.
+- 2026-04-11 — Implemented Step 12 role-aware task board route and action controls.
+- 2026-04-11 — Implemented Step 13 routing memory context for Groq assignment prompts.
 - 2026-04-11 — Implemented Step 8 notifier hardening with room namespaces and task event emissions.
 - 2026-04-11 — Implemented Step 9 frontend auth/onboarding page flow and middleware updates.

@@ -11,10 +11,10 @@
 - [x] Step 7: Assignment engine (skill match + load balance)
 - [x] Step 8: WebSocket / notifier
 - [x] Step 9: Frontend auth pages
-- [ ] Step 10: Frontend CEO approval dashboard
-- [ ] Step 11: Frontend org tree (React Flow)
-- [ ] Step 12: Frontend task board (role-aware)
-- [ ] Step 13: Routing memory + Groq history context
+- [x] Step 10: Frontend CEO approval dashboard
+- [x] Step 11: Frontend org tree (React Flow)
+- [x] Step 12: Frontend task board (role-aware)
+- [x] Step 13: Routing memory + Groq history context
 - [ ] Step 14: Tests + hardening
 
 ## Chunk Log
@@ -73,3 +73,26 @@
 - Added onboarding pages: `/verify`, `/complete-profile`, `/pending`.
 - Wired complete-profile submission to org search, position loading, and authenticated profile completion API.
 - Updated middleware matcher/redirect logic to include the new auth onboarding routes.
+
+### Chunk 10 (Completed)
+- Added a dedicated CEO dashboard route at `/dashboard/ceo` for approval-first workflows.
+- Built a CEO approval dashboard panel with pending member review actions and executive overview stats.
+- Added realtime activity handling for pending members, assigned tasks, and submitted reports.
+
+### Chunk 11 (Completed)
+- Added backend org-tree endpoint: `GET /api/orgs/:id/tree` with role guard and requester org validation.
+- Added React Flow based org tree UI at `/dashboard/org-tree` for CEO/CFO/Manager roles.
+- Added middleware support for utility dashboard routes (`org-tree`, `task-board`) to avoid role-path redirect conflicts.
+- Added CEO dashboard quick link to open the org tree view.
+
+### Chunk 12 (Completed)
+- Added dedicated role-aware task board route at `/dashboard/task-board`.
+- Added task board UI with status columns, role-aware actions, and realtime refresh subscriptions.
+- Implemented task operations in board: assignee transitions, routing suggest/confirm flow, and delegation controls by role.
+- Added task board navigation links from role dashboard entry view.
+
+### Chunk 13 (Completed)
+- Added historical routing memory extraction from `routing_suggestions` and prior task routing outcomes.
+- Added candidate-aligned memory signals (support count, average confidence, reasons) to improve suggestion quality.
+- Injected routing memory context into Groq/LLM assignment prompts in `agentService`.
+- Added safe fallbacks for schema-cache-missing paths so routing generation degrades gracefully.

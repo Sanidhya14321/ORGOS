@@ -30,6 +30,17 @@ const RejectBodySchema = z.object({
   reason: z.string().trim().min(3).max(400)
 });
 
+const OrgTreeNodeSchema = z.object({
+  id: z.string().uuid(),
+  full_name: z.string(),
+  email: z.string().email().optional(),
+  role: z.enum(["ceo", "cfo", "manager", "worker"]),
+  status: z.enum(["pending", "active", "rejected"]).optional(),
+  department: z.string().nullable().optional(),
+  position_id: z.string().uuid().nullable().optional(),
+  reports_to: z.string().uuid().nullable().optional()
+});
+
 function isMissingTableSchemaCache(error: { code?: string } | null | undefined): boolean {
   return error?.code === "PGRST205";
 }
@@ -154,6 +165,86 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({ items: data ?? [] });
+  });
+
+  fastify.get("/orgs/:id/tree", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+    const parsed = OrgIdParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization id");
+    }
+
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requester = await fastify.supabaseService
+      .from("users")
+      .select("id, org_id, role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (requester.error) {
+      if (isMissingTableSchemaCache(requester.error)) {
+        request.log.warn({ err: requester.error }, "users table missing in schema cache; returning empty org tree");
+        return reply.send({ orgId: parsed.data.id, nodes: [], positions: [] });
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to resolve requester profile");
+    }
+
+    const requesterOrgId = requester.data?.org_id as string | null | undefined;
+    if (!requesterOrgId || requesterOrgId !== parsed.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
+    }
+
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("id, full_name, email, role, status, department, position_id, reports_to")
+      .eq("org_id", parsed.data.id)
+      .order("full_name", { ascending: true });
+
+    if (usersResult.error) {
+      if (isMissingTableSchemaCache(usersResult.error)) {
+        request.log.warn({ err: usersResult.error }, "users table missing in schema cache; returning empty org tree");
+        return reply.send({ orgId: parsed.data.id, nodes: [], positions: [] });
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization tree");
+    }
+
+    const positionsResult = await fastify.supabaseService
+      .from("positions")
+      .select("id, title, level, is_custom, confirmed")
+      .eq("org_id", parsed.data.id)
+      .order("level", { ascending: true })
+      .order("title", { ascending: true });
+
+    if (positionsResult.error) {
+      if (isMissingTableSchemaCache(positionsResult.error)) {
+        request.log.warn({ err: positionsResult.error }, "positions table missing in schema cache; returning org tree without positions");
+        const nodes = (usersResult.data ?? [])
+          .map((row) => OrgTreeNodeSchema.safeParse(row))
+          .filter((result) => result.success)
+          .map((result) => result.data);
+
+        return reply.send({
+          orgId: parsed.data.id,
+          nodes,
+          positions: []
+        });
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization positions");
+    }
+
+    const nodes = (usersResult.data ?? [])
+      .map((row) => OrgTreeNodeSchema.safeParse(row))
+      .filter((result) => result.success)
+      .map((result) => result.data);
+
+    return reply.send({
+      orgId: parsed.data.id,
+      nodes,
+      positions: positionsResult.data ?? []
+    });
   });
 
   fastify.post("/orgs/:id/positions", async (request, reply) => {
