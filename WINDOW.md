@@ -7,10 +7,10 @@
 - [x] Step 3: Org routes (create, search, approve/reject members)
 - [x] Step 4: Task routes (create, routing suggest, confirm, status)
 - [x] Step 5: Agent service (Groq decomposition + routing suggestions)
-- [ ] Step 6: SLA service (cron + breach + notifications)
-- [ ] Step 7: Assignment engine (skill match + load balance)
-- [ ] Step 8: WebSocket / notifier
-- [ ] Step 9: Frontend auth pages
+- [x] Step 6: SLA service (cron + breach + notifications)
+- [x] Step 7: Assignment engine (skill match + load balance)
+- [x] Step 8: WebSocket / notifier
+- [x] Step 9: Frontend auth pages
 - [ ] Step 10: Frontend CEO approval dashboard
 - [ ] Step 11: Frontend org tree (React Flow)
 - [ ] Step 12: Frontend task board (role-aware)
@@ -44,3 +44,32 @@
 - Integrated Groq-backed agent suggestion generation into `POST /api/tasks/:id/routing-suggest` when suggestions are omitted.
 - Added eligibility filtering (role match, active status, load threshold) before suggestions are accepted.
 - Added routing-ready notifier emission and API response payload with generated suggestions.
+
+### Infra Iteration (In Progress)
+- Added automated remote migration command: `npm run db:apply-remote`.
+- Added script `scripts/apply-remote-schema.sh` to apply `001_initial.sql` and `002_orgos_foundation.sql` via Supabase CLI.
+- Current blocker: `SUPABASE_DB_PASSWORD` is not set in shell env, so remote schema apply cannot run non-interactively yet.
+
+### Chunk 6 (Completed)
+- Added SLA monitoring service with periodic checks on active tasks with `sla_deadline`.
+- Implemented status transitions: `on_track` -> `at_risk` -> `breached`.
+- Added notifier emissions for at-risk and breached tasks plus C-suite breach alerts.
+- Added best-effort SLA audit entries (`sla_at_risk`, `sla_breached`) in `audit_log`.
+- Wired SLA monitor into API server lifecycle and added env configuration knobs.
+
+### Chunk 7 (Completed)
+- Improved assignment engine with load threshold filtering (`open_task_count <= 8`).
+- Added active-user filtering and optional org scoping for candidate selection.
+- Replaced first-match strategy with weighted ranking (full skill coverage first, then load-aware score).
+
+### Chunk 8 (Completed)
+- Hardened notifier room model with explicit room namespaces: `user:*`, `role:*`, `org:*`.
+- Added socket connection context resolution with DB-first fallback for role/org membership.
+- Added org-scoped event broadcast utility and used it in report cascade notifications.
+- Integrated realtime task lifecycle events for routing confirmation, delegation assignment, and status changes.
+
+### Chunk 9 (Completed)
+- Fixed register UX to follow verification-first backend flow.
+- Added onboarding pages: `/verify`, `/complete-profile`, `/pending`.
+- Wired complete-profile submission to org search, position loading, and authenticated profile completion API.
+- Updated middleware matcher/redirect logic to include the new auth onboarding routes.

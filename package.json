@@ -12,7 +12,8 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "db:apply-remote": "bash scripts/apply-remote-schema.sh"
   },
   "devDependencies": {
     "eslint": "^9.17.0",

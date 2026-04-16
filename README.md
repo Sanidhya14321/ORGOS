@@ -175,6 +175,13 @@ Events:
 - Check Redis connection: `curl $UPSTASH_REDIS_URL`
 - Run `npm run test -- --reporter=verbose` for details
 
+**Schema-cache errors (PGRST205 for users/goals/tasks/orgs)?**
+- Apply remote schema files using Supabase CLI:
+	- `SUPABASE_DB_PASSWORD=your_db_password npm run db:apply-remote`
+- This command links your project from `NEXT_PUBLIC_SUPABASE_URL` and applies:
+	- `packages/db/schema/001_initial.sql`
+	- `packages/db/schema/002_orgos_foundation.sql`
+
 ## Deployment
 
 ### Frontend (Vercel)

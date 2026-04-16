@@ -5,6 +5,7 @@ export interface User {
   email: string;
   full_name: string;
   role: Role;
+  status?: "pending" | "active" | "rejected";
   department?: string;
   skills?: string[];
   open_task_count?: number;
@@ -26,7 +27,7 @@ export interface Goal {
   task_count?: number;
 }
 
-export type TaskStatus = "pending" | "in_progress" | "blocked" | "completed" | "cancelled";
+export type TaskStatus = "pending" | "routing" | "active" | "in_progress" | "blocked" | "rejected" | "completed" | "cancelled";
 
 export interface Task {
   id: string;
@@ -66,5 +67,15 @@ export interface AgentLog {
   prompt_tokens?: number;
   comp_tokens?: number;
   error?: string | null;
+  created_at?: string;
+}
+
+export interface PendingMember {
+  id: string;
+  email: string;
+  full_name: string;
+  position_id?: string | null;
+  reports_to?: string | null;
+  status: "pending";
   created_at?: string;
 }

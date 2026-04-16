@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { setAuthCookies } from "@/lib/auth";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -33,9 +32,7 @@ export function RegisterForm() {
         throw new Error(body?.error?.message ?? "Registration failed");
       }
 
-      const data = await response.json() as { accessToken: string; user: { role: string } };
-      setAuthCookies(data.accessToken, data.user.role);
-      router.push(`/dashboard/${data.user.role}`);
+      router.push(`/verify?email=${encodeURIComponent(email)}`);
       router.refresh();
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : "Unable to create account");

@@ -21,6 +21,7 @@ import { startDecomposeWorker } from "./queue/workers/decompose.worker.js";
 import { startExecuteWorker } from "./queue/workers/execute.worker.js";
 import { startSynthesizeWorker } from "./queue/workers/synthesize.worker.js";
 import { initializeNotifier } from "./services/notifier.js";
+import { startSlaMonitor } from "./services/slaService.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -120,6 +121,7 @@ export async function start() {
   const server = await buildServer();
   initializeNotifier(server);
   initializeQueueForwarding();
+  const slaMonitor = startSlaMonitor(server);
 
   const workers = [
     startDecomposeWorker(),
@@ -128,6 +130,7 @@ export async function start() {
   ];
 
   server.addHook("onClose", async () => {
+    slaMonitor.stop();
     await Promise.all(workers.map(async (worker) => worker.close()));
   });
 

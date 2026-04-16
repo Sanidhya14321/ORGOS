@@ -4,7 +4,7 @@ import { TaskStatusSchema, type Task } from "@orgos/shared-types";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { assignTask } from "../services/assignmentEngine.js";
-import { emitToUser } from "../services/notifier.js";
+import { emitTaskAssigned, emitTaskStatusChanged, emitToUser } from "../services/notifier.js";
 import { suggestRoutingForTask } from "../services/agentService.js";
 
 const ListQuerySchema = z.object({
@@ -255,6 +255,13 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       request.log.warn({ err: upsertSuggestion.error }, "Unable to persist routing confirmation audit");
     }
 
+    for (const suggestion of body.data.confirmed) {
+      emitToUser(suggestion.assigneeId, "task:routing_confirmed", {
+        taskId: params.data.id,
+        confidence: suggestion.confidence
+      });
+    }
+
     return reply.send(updateTask.data);
   });
 
@@ -420,6 +427,22 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update task status");
     }
 
+    let managerId: string | null = null;
+    if (task.assigned_to) {
+      const managerLookup = await fastify.supabaseService
+        .from("users")
+        .select("reports_to")
+        .eq("id", task.assigned_to)
+        .maybeSingle();
+
+      managerId = (managerLookup.data?.reports_to as string | null) ?? null;
+    }
+
+    emitTaskStatusChanged(task.assigned_to as string, managerId, {
+      taskId: task.id,
+      status: body.data.status
+    });
+
     return reply.send(updated);
   });
 
@@ -476,6 +499,14 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (updateError || !updated) {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to delegate task");
+    }
+
+    if (updated.assigned_to) {
+      emitTaskAssigned(updated.assigned_to as string, {
+        taskId: updated.id,
+        role: updated.assigned_role,
+        isAgentTask: updated.is_agent_task
+      });
     }
 
     return reply.send(updated);

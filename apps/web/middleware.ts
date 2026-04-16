@@ -11,8 +11,9 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const role = request.cookies.get(ROLE_COOKIE)?.value;
+  const authEntryPages = new Set(["/login", "/register", "/verify"]);
 
-  if ((pathname === "/login" || pathname === "/register") && accessToken && role) {
+  if (authEntryPages.has(pathname) && accessToken && role) {
     return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
   }
 
@@ -34,5 +35,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/register"]
+  matcher: ["/dashboard/:path*", "/login", "/register", "/verify", "/complete-profile", "/pending"]
 };

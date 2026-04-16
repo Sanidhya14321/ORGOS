@@ -31,9 +31,13 @@ export function LoginForm() {
         throw new Error(body?.error?.message ?? "Login failed");
       }
 
-      const data = await response.json() as { accessToken: string; user: { role: string } };
+      const data = await response.json() as { accessToken: string; user: { role: string; status?: string } };
       setAuthCookies(data.accessToken, data.user.role);
-      router.push(`/dashboard/${data.user.role}`);
+      if (data.user.status === "pending") {
+        router.push("/pending");
+      } else {
+        router.push(`/dashboard/${data.user.role}`);
+      }
       router.refresh();
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Unable to sign in");

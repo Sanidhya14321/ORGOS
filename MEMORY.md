@@ -19,10 +19,10 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - [x] Step 3: Org routes (create, search, approve/reject members)
 - [x] Step 4: Task routes (create, routing suggest, confirm, status)
 - [x] Step 5: Agent service (Groq decomposition + routing suggestions)
-- [ ] Step 6: SLA service (cron + breach + notifications)
-- [ ] Step 7: Assignment engine (skill match + load balance)
-- [ ] Step 8: WebSocket / notifier
-- [ ] Step 9: Frontend auth pages
+- [x] Step 6: SLA service (cron + breach + notifications)
+- [x] Step 7: Assignment engine (skill match + load balance)
+- [x] Step 8: WebSocket / notifier
+- [x] Step 9: Frontend auth pages
 - [ ] Step 10: Frontend CEO approval dashboard
 - [ ] Step 11: Frontend org tree (React Flow)
 - [ ] Step 12: Frontend task board (role-aware)
@@ -37,6 +37,10 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - Added organization routes for search/create/positions and member approval decisions.
 - Added task create/routing-suggest/routing-confirm backend route flow.
 - Added `agentService` and wired auto-generated routing suggestions through agent-core LLM routing.
+- Added SLA monitor service with periodic status checks, breach notifications, and audit logging.
+- Upgraded assignment engine with weighted skill/load ranking and active-candidate filtering.
+- Hardened WebSocket notifier with user/role/org rooms and task lifecycle realtime events.
+- Implemented frontend onboarding flow pages for verify, complete-profile, and pending approval.
 
 ## KNOWN ISSUES
 - Remote Supabase instance has intermittently missing schema-cache entries for tables.
@@ -48,3 +52,7 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - 2026-04-11 — Implemented Step 3 org route scaffold and integrated it into the API server.
 - 2026-04-11 — Implemented Step 4 task-route lifecycle for routing and confirmation.
 - 2026-04-11 — Implemented Step 5 agent routing suggestion service and integrated it into task routing flow.
+- 2026-04-11 — Implemented Step 6 SLA monitor service and integrated lifecycle startup/shutdown.
+- 2026-04-11 — Implemented Step 7 assignment scoring upgrades (skills + load + org scope).
+- 2026-04-11 — Implemented Step 8 notifier hardening with room namespaces and task event emissions.
+- 2026-04-11 — Implemented Step 9 frontend auth/onboarding page flow and middleware updates.

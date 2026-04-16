@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { connectSocket, disconnectSocket, useSocket } from "@/lib/socket";
 import { useOrgosStore } from "@/store";
-import type { Goal, Report, Role, Task, User } from "@/lib/models";
+import type { Goal, PendingMember, Report, Role, Task, User } from "@/lib/models";
 
 type ActivityItem = {
   id: string;
@@ -60,6 +60,8 @@ export function DashboardClient({ role }: DashboardClientProps) {
   const myTasks = useOrgosStore((state) => state.myTasks);
 
   const [reports, setReports] = useState<Report[]>([]);
+  const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
+  const [memberActionId, setMemberActionId] = useState<string | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -81,6 +83,9 @@ export function DashboardClient({ role }: DashboardClientProps) {
         const goalResponse = role === "ceo" || role === "cfo"
           ? await apiFetch<{ items: Goal[] }>("/api/goals?limit=12")
           : { items: [] as Goal[] };
+        const pendingMemberResponse = role === "ceo" || role === "cfo"
+          ? await apiFetch<{ items: PendingMember[] }>("/api/orgs/pending-members")
+          : { items: [] as PendingMember[] };
 
         const reportResponse = taskResponse.items.length > 0
           ? await apiFetch<{ items: Report[] }>(`/api/reports/${taskResponse.items[0].id}`)
@@ -93,6 +98,7 @@ export function DashboardClient({ role }: DashboardClientProps) {
         setUser(user);
         setTasks(taskResponse.items);
         setGoals(goalResponse.items);
+        setPendingMembers(pendingMemberResponse.items);
         setReports(reportResponse.items);
         setActivity([
           {
@@ -208,6 +214,48 @@ export function DashboardClient({ role }: DashboardClientProps) {
 
   const taskCount = useOrgosStore((state) => state.myTasks.length);
   const goalCount = useOrgosStore((state) => state.activeGoals.length);
+
+  async function decideMember(memberId: string, decision: "approve" | "reject") {
+    try {
+      setMemberActionId(memberId);
+      if (decision === "approve") {
+        await apiFetch(`/api/orgs/members/${memberId}/approve`, { method: "POST" });
+      } else {
+        const reason = window.prompt("Reason for rejection (minimum 3 characters):", "Insufficient information") ?? "";
+        if (reason.trim().length < 3) {
+          throw new Error("Rejection reason must be at least 3 characters.");
+        }
+        await apiFetch(`/api/orgs/members/${memberId}/reject`, {
+          method: "POST",
+          body: JSON.stringify({ reason })
+        });
+      }
+
+      setPendingMembers((items) => items.filter((member) => member.id !== memberId));
+      setActivity((items) => [
+        {
+          id: `member-${decision}-${memberId}`,
+          label: decision === "approve" ? "Member approved" : "Member rejected",
+          detail: `Membership decision recorded for ${memberId}`,
+          tone: decision === "approve" ? "positive" : "warning"
+        },
+        ...items
+      ]);
+    } catch (error) {
+      setActivity((items) => [
+        {
+          id: `member-error-${memberId}`,
+          label: "Member decision failed",
+          detail: error instanceof Error ? error.message : "Unable to submit member decision",
+          tone: "warning"
+        },
+        ...items
+      ]);
+    } finally {
+      setMemberActionId(null);
+    }
+  }
+
   const stats = [
     { label: "Tasks", value: taskCount },
     { label: "Goals", value: goalCount },
@@ -246,6 +294,48 @@ export function DashboardClient({ role }: DashboardClientProps) {
 
       <section className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
         <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.1)]">
+          {(role === "ceo" || role === "cfo") ? (
+            <div className="mb-6 rounded-3xl border border-[#ece7dd] bg-[#fdfaf3] p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-[#121826]">Pending approvals</h2>
+                  <p className="mt-1 text-sm text-[#6b7280]">Review and approve member onboarding requests.</p>
+                </div>
+                <span className="rounded-full bg-[#fff0e6] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#b45527]">
+                  {pendingMembers.length} pending
+                </span>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {pendingMembers.slice(0, 8).map((member) => (
+                  <article key={member.id} className="rounded-2xl border border-[#ece7dd] bg-white p-3">
+                    <p className="font-semibold text-[#121826]">{member.full_name}</p>
+                    <p className="text-sm text-[#6b7280]">{member.email}</p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => decideMember(member.id, "approve")}
+                        disabled={memberActionId === member.id}
+                        className="rounded-xl bg-[#2a9d8f] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => decideMember(member.id, "reject")}
+                        disabled={memberActionId === member.id}
+                        className="rounded-xl bg-[#ff6b35] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </article>
+                ))}
+                {pendingMembers.length === 0 ? <p className="text-sm text-[#6b7280]">No pending members.</p> : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-semibold text-[#121826]">Active work</h2>

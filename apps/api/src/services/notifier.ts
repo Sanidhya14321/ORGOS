@@ -7,11 +7,54 @@ type Role = "ceo" | "cfo" | "manager" | "worker";
 let io: SocketIOServer | null = null;
 let fastifyRef: FastifyInstance | null = null;
 
+function userRoom(userId: string): string {
+  return `user:${userId}`;
+}
+
+function roleRoom(role: Role): string {
+  return `role:${role}`;
+}
+
+function orgRoom(orgId: string): string {
+  return `org:${orgId}`;
+}
+
 function requireIo(): SocketIOServer | null {
   if (!io) {
     return null;
   }
   return io;
+}
+
+async function resolveRealtimeContext(
+  fastify: FastifyInstance,
+  userId: string,
+  metadataRole: unknown,
+  metadataOrgId: unknown
+): Promise<{ role: Role | null; orgId: string | null }> {
+  const role = typeof metadataRole === "string" ? (metadataRole as Role) : null;
+  const metadataOrg = typeof metadataOrgId === "string" ? metadataOrgId : null;
+
+  const profile = await fastify.supabaseService
+    .from("users")
+    .select("role, org_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profile.error) {
+    return {
+      role,
+      orgId: metadataOrg
+    };
+  }
+
+  const profileRole = typeof profile.data?.role === "string" ? (profile.data.role as Role) : role;
+  const profileOrg = typeof profile.data?.org_id === "string" ? profile.data.org_id : metadataOrg;
+
+  return {
+    role: profileRole,
+    orgId: profileOrg
+  };
 }
 
 export function initializeNotifier(fastify: FastifyInstance): void {
@@ -40,11 +83,19 @@ export function initializeNotifier(fastify: FastifyInstance): void {
     }
 
     const userId = data.user.id;
-    const role = data.user.user_metadata?.role as Role | undefined;
+    const { role, orgId } = await resolveRealtimeContext(
+      fastify,
+      userId,
+      data.user.user_metadata?.role,
+      data.user.user_metadata?.org_id
+    );
 
-    socket.join(userId);
+    socket.join(userRoom(userId));
     if (role) {
-      socket.join(`role:${role}`);
+      socket.join(roleRoom(role));
+    }
+    if (orgId) {
+      socket.join(orgRoom(orgId));
     }
 
     socket.on("disconnect", () => {
@@ -58,7 +109,7 @@ export function emitToUser(userId: string, event: string, payload: unknown): voi
   if (!server) {
     return;
   }
-  server.to(userId).emit(event, payload);
+  server.to(userRoom(userId)).emit(event, payload);
 }
 
 export function emitToRole(role: Role, event: string, payload: unknown): void {
@@ -66,15 +117,15 @@ export function emitToRole(role: Role, event: string, payload: unknown): void {
   if (!server) {
     return;
   }
-  server.to(`role:${role}`).emit(event, payload);
+  server.to(roleRoom(role)).emit(event, payload);
 }
 
-export function emitToOrg(event: string, payload: unknown): void {
+export function emitToOrg(orgId: string, event: string, payload: unknown): void {
   const server = requireIo();
   if (!server) {
     return;
   }
-  server.emit(event, payload);
+  server.to(orgRoom(orgId)).emit(event, payload);
 }
 
 export function emitTaskAssigned(assigneeId: string, payload: unknown): void {
@@ -89,10 +140,19 @@ export function emitTaskStatusChanged(assigneeId: string, managerId: string | nu
 }
 
 export async function emitTaskReportSubmittedCascade(taskId: string, payload: unknown): Promise<void> {
-  emitToOrg("task:report_submitted", { taskId, ...((payload as Record<string, unknown>) ?? {}) });
-
   if (!fastifyRef) {
     return;
+  }
+
+  const rootTaskLookup = await fastifyRef.supabaseService
+    .from("tasks")
+    .select("org_id")
+    .eq("id", taskId)
+    .maybeSingle();
+
+  const orgId = typeof rootTaskLookup.data?.org_id === "string" ? rootTaskLookup.data.org_id : null;
+  if (orgId) {
+    emitToOrg(orgId, "task:report_submitted", { taskId, ...((payload as Record<string, unknown>) ?? {}) });
   }
 
   // Walk up tree and notify manager assignees plus exec roles.

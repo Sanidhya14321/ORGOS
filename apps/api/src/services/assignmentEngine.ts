@@ -9,21 +9,40 @@ interface CandidateUser {
   skills: string[] | null;
 }
 
+const MAX_OPEN_TASKS = 8;
+
 function hasRequiredSkills(candidate: CandidateUser, requiredSkills: string[]): boolean {
   const candidateSkills = candidate.skills ?? [];
   return requiredSkills.every((skill) => candidateSkills.includes(skill));
+}
+
+function scoreCandidate(candidate: CandidateUser, requiredSkills: string[]): number {
+  const candidateSkills = new Set(candidate.skills ?? []);
+  const matched = requiredSkills.reduce((count, skill) => (candidateSkills.has(skill) ? count + 1 : count), 0);
+
+  // Heavily weight skill coverage, then prefer lower load.
+  return matched * 100 - candidate.open_task_count;
 }
 
 export async function assignTask(task: Task): Promise<Task> {
   const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
-  const { data: candidates, error: candidatesError } = await supabase
+  let query = supabase
     .from("users")
     .select("id, open_task_count, skills")
     .eq("role", task.assigned_role)
     .eq("agent_enabled", true)
+    .eq("status", "active")
+    .lte("open_task_count", MAX_OPEN_TASKS)
     .order("open_task_count", { ascending: true });
+
+  const taskOrgId = (task as Task & { org_id?: string }).org_id;
+  if (taskOrgId) {
+    query = query.eq("org_id", taskOrgId);
+  }
+
+  const { data: candidates, error: candidatesError } = await query;
 
   if (candidatesError) {
     throw new Error(`Failed to load assignment candidates: ${candidatesError.message}`);
@@ -32,15 +51,22 @@ export async function assignTask(task: Task): Promise<Task> {
   const candidateList = (candidates ?? []) as CandidateUser[];
   const requiredSkills = task.required_skills ?? [];
 
-  let selected: CandidateUser | null = null;
-
-  if (requiredSkills.length > 0) {
-    selected = candidateList.find((candidate) => hasRequiredSkills(candidate, requiredSkills)) ?? null;
-  }
-
-  if (!selected && candidateList.length > 0) {
-    selected = candidateList[0] ?? null;
-  }
+  const selected = candidateList
+    .map((candidate) => ({
+      candidate,
+      score: scoreCandidate(candidate, requiredSkills),
+      coversAllSkills: hasRequiredSkills(candidate, requiredSkills)
+    }))
+    .sort((a, b) => {
+      if (a.coversAllSkills !== b.coversAllSkills) {
+        return a.coversAllSkills ? -1 : 1;
+      }
+      if (a.score !== b.score) {
+        return b.score - a.score;
+      }
+      return a.candidate.open_task_count - b.candidate.open_task_count;
+    })
+    .at(0)?.candidate ?? null;
 
   if (!selected) {
     const fallbackTask: Task = {
