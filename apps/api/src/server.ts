@@ -136,17 +136,29 @@ export async function buildServer() {
 export async function start() {
   const server = await buildServer();
   initializeNotifier(server);
-  initializeQueueForwarding();
-  await ensureSlaSchedule();
+  const workers: Array<{ close: () => Promise<void> }> = [];
 
-  const workers = [
-    startCsuiteDecomposeWorker(),
-    startManagerDecomposeWorker(),
-    startIndividualAckWorker(),
-    startSlaWorker(server),
-    startExecuteWorker(),
-    startSynthesizeWorker()
-  ];
+  try {
+    initializeQueueForwarding();
+
+    await Promise.race([
+      ensureSlaSchedule(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Queue startup timed out")), 3000);
+      })
+    ]);
+
+    workers.push(
+      startCsuiteDecomposeWorker(),
+      startManagerDecomposeWorker(),
+      startIndividualAckWorker(),
+      startSlaWorker(server),
+      startExecuteWorker(),
+      startSynthesizeWorker()
+    );
+  } catch (error) {
+    server.log.warn({ err: error }, "Queue subsystem disabled; API started without workers");
+  }
 
   server.addHook("onClose", async () => {
     await Promise.all(workers.map(async (worker) => worker.close()));

@@ -107,17 +107,73 @@ async function seed(): Promise<void> {
 
   const users = makeUsers();
 
-  const baseUserRows = users.map((user) => ({
-    email: user.email,
-    full_name: user.full_name,
-    role: user.role,
-    department: user.department,
-    skills: user.skills,
-    status: "active",
-    org_id: orgId,
-    email_verified: true,
-    agent_enabled: true
-  }));
+  const authList = await supabase.auth.admin.listUsers();
+  if (authList.error) {
+    throw new Error(`Unable to list auth users: ${authList.error.message}`);
+  }
+
+  const authIdByEmail = new Map<string, string>();
+  for (const authUser of authList.data.users ?? []) {
+    if (typeof authUser.email === "string" && authUser.id) {
+      authIdByEmail.set(authUser.email, authUser.id);
+    }
+  }
+
+  for (const user of users) {
+    const existingAuthId = authIdByEmail.get(user.email);
+    if (existingAuthId) {
+      const updated = await supabase.auth.admin.updateUserById(existingAuthId, {
+        email: user.email,
+        password: user.email,
+        email_confirm: true,
+        user_metadata: {
+          role: user.role
+        }
+      });
+
+      if (updated.error) {
+        throw new Error(`Unable to update auth user ${user.email}: ${updated.error.message}`);
+      }
+
+      authIdByEmail.set(user.email, existingAuthId);
+      continue;
+    }
+
+    const created = await supabase.auth.admin.createUser({
+      email: user.email,
+      password: user.email,
+      email_confirm: true,
+      user_metadata: {
+        role: user.role
+      }
+    });
+
+    if (created.error || !created.data.user?.id) {
+      throw new Error(`Unable to create auth user ${user.email}: ${created.error?.message ?? "unknown error"}`);
+    }
+
+    authIdByEmail.set(user.email, created.data.user.id);
+  }
+
+  const baseUserRows = users.map((user) => {
+    const authId = authIdByEmail.get(user.email);
+    if (!authId) {
+      throw new Error(`Missing auth user id for ${user.email}`);
+    }
+
+    return {
+      id: authId,
+      email: user.email,
+      full_name: user.full_name,
+      role: user.role,
+      department: user.department,
+      skills: user.skills,
+      status: "active",
+      org_id: orgId,
+      email_verified: true,
+      agent_enabled: true
+    };
+  });
 
   const upsertUsers = await supabase.from("users").upsert(baseUserRows, { onConflict: "email" }).select("id,email");
   if (upsertUsers.error) {

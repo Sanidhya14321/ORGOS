@@ -30,15 +30,17 @@ function initializeQueues() {
 
   const env = readEnv();
   const redisUrl = new URL(env.UPSTASH_REDIS_URL);
+  const useTls = redisUrl.protocol === "rediss:" || redisUrl.protocol === "https:";
+  const defaultPort = useTls ? 6380 : 6379;
 
   redisConnectionInstance = {
     host: redisUrl.hostname,
-    port: redisUrl.port ? Number(redisUrl.port) : 6379,
+    port: redisUrl.port ? Number(redisUrl.port) : defaultPort,
     username: redisUrl.username || "default",
     password: env.UPSTASH_REDIS_TOKEN,
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    tls: redisUrl.protocol === "rediss:" ? {} : undefined
+    tls: useTls ? {} : undefined
   };
 
   defaultJobOptionsInstance = {
@@ -53,22 +55,22 @@ function initializeQueues() {
     defaultJobOptions: defaultJobOptionsInstance
   });
 
-  csuiteQueueInstance = new Queue("queue:csuite", {
+  csuiteQueueInstance = new Queue("queue-csuite", {
     connection: redisConnectionInstance,
     defaultJobOptions: defaultJobOptionsInstance
   });
 
-  managerQueueInstance = new Queue("queue:manager", {
+  managerQueueInstance = new Queue("queue-manager", {
     connection: redisConnectionInstance,
     defaultJobOptions: defaultJobOptionsInstance
   });
 
-  individualQueueInstance = new Queue("queue:individual", {
+  individualQueueInstance = new Queue("queue-individual", {
     connection: redisConnectionInstance,
     defaultJobOptions: defaultJobOptionsInstance
   });
 
-  slaQueueInstance = new Queue("queue:sla", {
+  slaQueueInstance = new Queue("queue-sla", {
     connection: redisConnectionInstance,
     defaultJobOptions: defaultJobOptionsInstance
   });
@@ -118,7 +120,7 @@ export function getSlaQueue(): Queue {
 
 export function getDecomposeQueue(): Queue {
   initializeQueues();
-  return csuiteQueueInstance;
+  return decomposeQueueInstance;
 }
 
 export function getExecuteQueue(): Queue {
@@ -148,13 +150,13 @@ async function setupDeadLetterForwarding(queueName: string): Promise<void> {
   await queueEvents.waitUntilReady();
 
   queueEvents.on("failed", async ({ jobId, failedReason }) => {
-    const sourceQueue = queueName === "queue:csuite"
+    const sourceQueue = queueName === "queue-csuite"
       ? csuiteQueueInstance
-      : queueName === "queue:manager"
+      : queueName === "queue-manager"
         ? managerQueueInstance
-        : queueName === "queue:individual"
+        : queueName === "queue-individual"
           ? individualQueueInstance
-          : queueName === "queue:sla"
+          : queueName === "queue-sla"
             ? slaQueueInstance
             : queueName === "execute"
               ? executeQueueInstance
@@ -193,10 +195,10 @@ async function setupDeadLetterForwarding(queueName: string): Promise<void> {
 export function initializeQueueForwarding() {
   initializeQueues();
 
-  void setupDeadLetterForwarding("queue:csuite");
-  void setupDeadLetterForwarding("queue:manager");
-  void setupDeadLetterForwarding("queue:individual");
-  void setupDeadLetterForwarding("queue:sla");
+  void setupDeadLetterForwarding("queue-csuite");
+  void setupDeadLetterForwarding("queue-manager");
+  void setupDeadLetterForwarding("queue-individual");
+  void setupDeadLetterForwarding("queue-sla");
   void setupDeadLetterForwarding("execute");
   void setupDeadLetterForwarding("synthesize");
 }
