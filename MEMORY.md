@@ -54,6 +54,10 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - Added account-type-first login flow with RBAC compatibility checks (owner / C-suite / employee).
 - Enforced down-only task assignment with manager-subtree constraints in routing/delegation flows.
 - Enforced member approval email-domain policy with CEO-only override and audit logging.
+- Added end-to-end role workflow integration coverage for CEO/CFO/Manager/Worker endpoint paths.
+- Hardened all dashboard bootstraps to redirect unlinked/pending users to onboarding flows instead of surfacing permission bootstrap crashes.
+- Added auth role fallback (profile role -> metadata role) and richer `/api/me` profile hydration for safer onboarding-aware routing.
+- Made task list query parsing resilient to malformed page/limit values.
 
 ## KNOWN ISSUES
 - Remote Supabase instance has intermittently missing schema-cache entries for tables.
@@ -82,3 +86,5 @@ ORGOS is an AI-powered organizational task management system where tasks flow do
 - 2026-04-16 — Implemented responsive dashboard overflow fixes and RBAC account-type login gating.
 - 2026-04-16 — Enforced down-only assignment rules with subtree-safe manager auto-delegation.
 - 2026-04-16 — Added org-domain enforcement in member approvals with CEO override path.
+- 2026-04-16 — Added integration test coverage for cross-role endpoint workflow behavior.
+- 2026-04-16 — Implemented full onboarding-safe dashboard bootstrap guards and API role/profile/query resilience fixes.

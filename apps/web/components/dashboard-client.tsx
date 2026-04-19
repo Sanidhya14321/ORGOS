@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { connectSocket, disconnectSocket, useSocket } from "@/lib/socket";
 import { useOrgosStore } from "@/store";
@@ -51,6 +52,7 @@ function roleDescription(role: Role): string {
 }
 
 export function DashboardClient({ role }: DashboardClientProps) {
+  const router = useRouter();
   const socket = useSocket();
   const currentUser = useOrgosStore((state) => state.currentUser);
   const setUser = useOrgosStore((state) => state.setUser);
@@ -79,6 +81,38 @@ export function DashboardClient({ role }: DashboardClientProps) {
       setLoading(true);
       try {
         const user = await apiFetch<User>("/api/me");
+        if (user.status === "pending") {
+          if (!cancelled) {
+            setUser(user);
+            setActivity([
+              {
+                id: "pending-onboarding",
+                label: "Approval pending",
+                detail: "Your profile is awaiting CEO/CFO approval. Redirecting to onboarding status.",
+                tone: "warning"
+              }
+            ]);
+            router.replace("/pending");
+          }
+          return;
+        }
+
+        if (!user.org_id) {
+          if (!cancelled) {
+            setUser(user);
+            setActivity([
+              {
+                id: "org-link-required",
+                label: "Organization setup required",
+                detail: "Your account is not linked to an organization yet. Redirecting to profile completion.",
+                tone: "warning"
+              }
+            ]);
+            router.replace("/complete-profile");
+          }
+          return;
+        }
+
         const taskResponse = await apiFetch<{ items: Task[] }>("/api/tasks?limit=20");
         const goalResponse = role === "ceo" || role === "cfo"
           ? await apiFetch<{ items: Goal[] }>("/api/goals?limit=12")
@@ -131,7 +165,7 @@ export function DashboardClient({ role }: DashboardClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [role, setGoals, setTasks, setUser]);
+  }, [role, router, setGoals, setTasks, setUser]);
 
   useEffect(() => {
     const onTaskAssigned = (payload: { taskId: string; role?: Role }) => {

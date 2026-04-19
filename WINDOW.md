@@ -144,3 +144,15 @@
 - Enforced organization email-domain checks during member approval.
 - Added explicit CEO-only domain mismatch override support (`overrideDomainMismatch`).
 - Added domain override audit logging to `audit_log` for traceability.
+
+### Chunk 23 (Completed)
+- Added integration workflow test that exercises endpoint behavior across CEO/CFO/Manager/Worker roles.
+- Verified core role paths: CEO task create, CFO member approve, Manager routing-confirm denial + downward delegate, Worker task status update + delegate denial.
+- Expanded test Supabase mock helper coverage for org/routing/audit tables used by cross-role workflow tests.
+
+### Chunk 24 (Completed)
+- Hardened dashboard bootstrap across role dashboard, CEO dashboard, task board, and org tree with onboarding guards.
+- Added automatic redirects for users with `status=pending` to `/pending` and users without `org_id` to `/complete-profile`.
+- Expanded `/api/me` profile shape hydration to include org/status linkage fields used by frontend bootstrap decisions.
+- Added safe role fallback in auth plugin (`users.role` -> auth metadata role) to prevent false 403 denials during onboarding transitions.
+- Made `/api/tasks` pagination query parsing tolerant to malformed `page`/`limit` values to avoid unnecessary `Invalid task query` failures.

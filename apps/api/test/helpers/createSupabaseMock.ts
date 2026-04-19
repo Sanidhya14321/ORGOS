@@ -1,8 +1,17 @@
 type Row = Record<string, unknown>;
 
-type TableName = "users" | "goals" | "tasks" | "reports" | "agent_logs";
+type TableName =
+  | "users"
+  | "goals"
+  | "tasks"
+  | "reports"
+  | "agent_logs"
+  | "orgs"
+  | "positions"
+  | "routing_suggestions"
+  | "audit_log";
 
-export type FixtureStore = Record<TableName, Row[]>;
+export type FixtureStore = Partial<Record<TableName, Row[]>>;
 
 function matchesFilters(row: Row, filters: Array<{ kind: "eq" | "in"; column: string; value: unknown }>): boolean {
   return filters.every((filter) => {
@@ -20,7 +29,17 @@ function clone<T>(value: T): T {
 }
 
 export function createSupabaseMock(fixtures: FixtureStore) {
-  const store: FixtureStore = clone(fixtures);
+  const store: Record<TableName, Row[]> = {
+    users: clone(fixtures.users ?? []),
+    goals: clone(fixtures.goals ?? []),
+    tasks: clone(fixtures.tasks ?? []),
+    reports: clone(fixtures.reports ?? []),
+    agent_logs: clone(fixtures.agent_logs ?? []),
+    orgs: clone(fixtures.orgs ?? []),
+    positions: clone(fixtures.positions ?? []),
+    routing_suggestions: clone(fixtures.routing_suggestions ?? []),
+    audit_log: clone(fixtures.audit_log ?? [])
+  };
 
   function query(table: TableName) {
     const filters: Array<{ kind: "eq" | "in"; column: string; value: unknown }> = [];

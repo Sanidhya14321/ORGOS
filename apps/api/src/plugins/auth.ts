@@ -114,7 +114,9 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       .eq("id", data.user.id)
       .maybeSingle();
 
-    request.userRole = normalizeRole(profile.data?.role);
+    const profileRole = normalizeRole(profile.data?.role);
+    const metadataRole = normalizeRole(data.user.user_metadata?.role);
+    request.userRole = profileRole ?? metadataRole;
   });
 };
 

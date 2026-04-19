@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { connectSocket, disconnectSocket, useSocket } from "@/lib/socket";
@@ -33,6 +34,7 @@ function toneClass(tone: FeedItem["tone"]): string {
 }
 
 export function CeoApprovalDashboard() {
+  const router = useRouter();
   const socket = useSocket();
   const setUser = useOrgosStore((state) => state.setUser);
   const setTasks = useOrgosStore((state) => state.setTasks);
@@ -58,8 +60,40 @@ export function CeoApprovalDashboard() {
     async function bootstrap() {
       setLoading(true);
       try {
-        const [user, taskResponse, goalResponse, pendingResponse] = await Promise.all([
-          apiFetch<User>("/api/me"),
+        const user = await apiFetch<User>("/api/me");
+        if (user.status === "pending") {
+          if (!cancelled) {
+            setUser(user);
+            setActivity([
+              {
+                id: "pending-onboarding",
+                title: "Approval pending",
+                description: "Your account is awaiting executive approval. Redirecting to onboarding status.",
+                tone: "warning"
+              }
+            ]);
+            router.replace("/pending");
+          }
+          return;
+        }
+
+        if (!user.org_id) {
+          if (!cancelled) {
+            setUser(user);
+            setActivity([
+              {
+                id: "org-link-required",
+                title: "Organization setup required",
+                description: "Your account is not linked to an organization yet. Redirecting to profile completion.",
+                tone: "warning"
+              }
+            ]);
+            router.replace("/complete-profile");
+          }
+          return;
+        }
+
+        const [taskResponse, goalResponse, pendingResponse] = await Promise.all([
           apiFetch<{ items: Task[] }>("/api/tasks?limit=20"),
           apiFetch<{ items: Goal[] }>("/api/goals?limit=12"),
           apiFetch<{ items: PendingMember[] }>("/api/orgs/pending-members")
@@ -117,7 +151,7 @@ export function CeoApprovalDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [setGoals, setTasks, setUser]);
+  }, [router, setGoals, setTasks, setUser]);
 
   useEffect(() => {
     const onPendingMember = (payload: { memberId?: string; email?: string }) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { connectSocket, disconnectSocket, useSocket } from "@/lib/socket";
 import type { Role, Task, TaskStatus, User } from "@/lib/models";
@@ -52,6 +53,7 @@ function nextTransitionStatus(task: Task): TaskStatus | null {
 }
 
 export function TaskBoard() {
+  const router = useRouter();
   const socket = useSocket();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,10 +70,20 @@ export function TaskBoard() {
       setLoading(true);
       setError(null);
 
-      const [me, taskResponse] = await Promise.all([
-        apiFetch<User>("/api/me"),
-        apiFetch<TaskListResponse>("/api/tasks?limit=200")
-      ]);
+      const me = await apiFetch<User>("/api/me");
+      if (me.status === "pending") {
+        setCurrentUser(me);
+        router.replace("/pending");
+        return;
+      }
+
+      if (!me.org_id) {
+        setCurrentUser(me);
+        router.replace("/complete-profile");
+        return;
+      }
+
+      const taskResponse = await apiFetch<TaskListResponse>("/api/tasks?limit=200");
 
       setCurrentUser(me);
       setTasks(taskResponse.items ?? []);

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ReactFlow, { Background, Controls, MiniMap, type Edge, type Node } from "reactflow";
 import "reactflow/dist/style.css";
 import { apiFetch } from "@/lib/api";
@@ -111,6 +113,7 @@ function buildGraph(tree: OrgTreeResponse): { nodes: Node[]; edges: Edge[] } {
 }
 
 export function OrgTreeCanvas() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tree, setTree] = useState<OrgTreeResponse | null>(null);
@@ -125,7 +128,11 @@ export function OrgTreeCanvas() {
       try {
         const me = await apiFetch<User>("/api/me");
         if (!me.org_id) {
-          throw new Error("Current user is not linked to an organization yet.");
+          if (!cancelled) {
+            setError("Current user is not linked to an organization yet.");
+            router.replace("/complete-profile");
+          }
+          return;
         }
 
         const response = await apiFetch<OrgTreeResponse>(`/api/orgs/${me.org_id}/tree`);
@@ -147,7 +154,7 @@ export function OrgTreeCanvas() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   const graph = useMemo(() => {
     if (!tree) {
@@ -161,7 +168,17 @@ export function OrgTreeCanvas() {
   }
 
   if (error) {
-    return <p className="rounded-2xl bg-[#fff0e6] px-4 py-3 text-sm text-[#9f4f20]">{error}</p>;
+    return (
+      <div className="space-y-3 rounded-2xl bg-[#fff0e6] px-4 py-4 text-sm text-[#9f4f20]">
+        <p>{error}</p>
+        <Link
+          href="/complete-profile"
+          className="inline-flex items-center rounded-xl border border-[#e8cdbf] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9f4f20]"
+        >
+          Complete profile
+        </Link>
+      </div>
+    );
   }
 
   if (!tree || tree.nodes.length === 0) {

@@ -1,7 +1,7 @@
 import { LLMProviderError, LLMTimeoutError, RateLimitError } from "./errors.js";
 import type { LLMMessage, LLMOptions, LLMProvider, LLMResponse } from "./provider.js";
 
-const GROQ_MODEL = "llama-3.1-70b-versatile";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 interface GroqUsage {

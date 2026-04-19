@@ -60,7 +60,7 @@ export function buildUserProfileFromAuthUser(authUser: SupabaseAuthUser): User {
 export async function loadUserProfile(fastify: FastifyInstance, authUser: SupabaseAuthUser): Promise<User> {
   const profileQuery = await fastify.supabaseService
     .from("users")
-    .select("id, email, full_name, role, department, skills, agent_enabled")
+    .select("id, email, full_name, role, status, org_id, position_id, reports_to, department, skills, open_task_count, agent_enabled")
     .eq("id", authUser.id)
     .maybeSingle();
 
