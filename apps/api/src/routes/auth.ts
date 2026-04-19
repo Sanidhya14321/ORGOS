@@ -169,6 +169,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
+    const requesterRole = request.userRole;
+    const nextStatus = requesterRole === "ceo" || requesterRole === "cfo" ? "active" : "pending";
+
     const { orgId, positionId, reportsTo, department, skills } = parsed.data;
     const { error } = await fastify.supabaseService
       .from("users")
@@ -176,7 +179,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         org_id: orgId,
         position_id: positionId,
         reports_to: reportsTo ?? null,
-        status: "pending",
+        status: nextStatus,
         ...(department ? { department } : {}),
         ...(skills ? { skills } : {})
       })
@@ -188,7 +191,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const userProfile = await loadUserProfile(fastify, authUser);
-    return reply.send({ user: userProfile, status: "pending" });
+    return reply.send({ user: userProfile, status: nextStatus });
   });
 
   fastify.post("/auth/refresh", async (request, reply) => {

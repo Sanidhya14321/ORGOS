@@ -43,4 +43,7 @@ SUPABASE_DB_PASSWORD="$DB_PASSWORD" npx supabase db query < packages/db/schema/0
 echo "Applying schema/002_orgos_foundation.sql"
 SUPABASE_DB_PASSWORD="$DB_PASSWORD" npx supabase db query < packages/db/schema/002_orgos_foundation.sql
 
+echo "Applying schema/003_ancestors_rls.sql"
+SUPABASE_DB_PASSWORD="$DB_PASSWORD" npx supabase db query < packages/db/schema/003_ancestors_rls.sql
+
 echo "Remote schema apply complete."

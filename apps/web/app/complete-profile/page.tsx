@@ -10,6 +10,15 @@ const API_BASE =
 
 type OrgItem = { id: string; name: string; domain?: string | null };
 type PositionItem = { id: string; title: string; level: number };
+type UserRole = "ceo" | "cfo" | "manager" | "worker";
+type OnboardingMode = "owner" | "employee";
+
+type MePayload = {
+  id: string;
+  role: UserRole;
+  status?: "pending" | "active" | "rejected";
+  org_id?: string | null;
+};
 
 type ApiErrorResponse = { error?: { message?: string } };
 
@@ -40,11 +49,22 @@ async function authedFetch<T>(path: string, options: RequestInit = {}): Promise<
 export default function CompleteProfilePage() {
   const router = useRouter();
 
+  const [mode, setMode] = useState<OnboardingMode>("employee");
+  const [me, setMe] = useState<MePayload | null>(null);
+
   const [query, setQuery] = useState("");
   const [orgs, setOrgs] = useState<OrgItem[]>([]);
   const [orgId, setOrgId] = useState("");
   const [positions, setPositions] = useState<PositionItem[]>([]);
   const [positionId, setPositionId] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [orgDomain, setOrgDomain] = useState("");
+  const [creatingOrg, setCreatingOrg] = useState(false);
+
+  const [newPositionTitle, setNewPositionTitle] = useState("");
+  const [newPositionLevel, setNewPositionLevel] = useState<0 | 1 | 2>(1);
+  const [creatingPosition, setCreatingPosition] = useState(false);
+
   const [reportsTo, setReportsTo] = useState("");
   const [department, setDepartment] = useState("");
   const [skills, setSkills] = useState("");
@@ -61,6 +81,35 @@ export default function CompleteProfilePage() {
         .filter((value) => value.length > 0),
     [skills]
   );
+
+  const canChooseOwner = !me || me.role === "ceo" || me.role === "cfo";
+  const canChooseEmployee = !me || me.role === "manager" || me.role === "worker";
+
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const profile = await authedFetch<MePayload>("/api/me");
+        if (!active) {
+          return;
+        }
+
+        setMe(profile);
+        setMode(profile.role === "ceo" || profile.role === "cfo" ? "owner" : "employee");
+
+        if (profile.org_id) {
+          setOrgId(profile.org_id);
+        }
+      } catch {
+        // Keep UX interactive even if profile prefetch fails.
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!orgId) {
@@ -92,6 +141,10 @@ export default function CompleteProfilePage() {
   }, [orgId]);
 
   async function searchOrganizations() {
+    if (mode !== "employee") {
+      return;
+    }
+
     if (!query.trim()) {
       setOrgs([]);
       return;
@@ -116,6 +169,78 @@ export default function CompleteProfilePage() {
     }
   }
 
+  async function createOrganization() {
+    if (mode !== "owner") {
+      return;
+    }
+
+    if (!orgName.trim()) {
+      setError("Organization name is required.");
+      return;
+    }
+
+    setCreatingOrg(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const payload = await authedFetch<{ org: OrgItem }>("/api/orgs/create", {
+        method: "POST",
+        body: JSON.stringify({
+          name: orgName.trim(),
+          ...(orgDomain.trim() ? { domain: orgDomain.trim() } : {}),
+          makeCreatorCeo: true
+        })
+      });
+
+      setOrgId(payload.org.id);
+      setQuery(payload.org.name);
+      setOrgs([payload.org]);
+      setMessage("Organization created. Add positions, then submit your profile.");
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "Unable to create organization");
+    } finally {
+      setCreatingOrg(false);
+    }
+  }
+
+  async function createPosition() {
+    if (!orgId) {
+      setError("Create or select an organization before adding positions.");
+      return;
+    }
+
+    if (!newPositionTitle.trim()) {
+      setError("Position title is required.");
+      return;
+    }
+
+    setCreatingPosition(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const created = await authedFetch<PositionItem>(`/api/orgs/${orgId}/positions`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: newPositionTitle.trim(),
+          level: newPositionLevel
+        })
+      });
+
+      setPositions((prev) => {
+        const merged = [...prev, created];
+        return merged.sort((a, b) => (a.level - b.level) || a.title.localeCompare(b.title));
+      });
+      setNewPositionTitle("");
+      setMessage("Position added.");
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "Unable to create position");
+    } finally {
+      setCreatingPosition(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -123,7 +248,7 @@ export default function CompleteProfilePage() {
     setMessage(null);
 
     try {
-      await authedFetch<{ status: string }>("/api/auth/complete-profile", {
+      const payload = await authedFetch<{ user?: { role: UserRole; status?: "pending" | "active" | "rejected" } }>("/api/auth/complete-profile", {
         method: "POST",
         body: JSON.stringify({
           orgId,
@@ -134,8 +259,16 @@ export default function CompleteProfilePage() {
         })
       });
 
-      setMessage("Profile submitted. Waiting for executive approval.");
-      router.push("/pending");
+      const nextRole = payload.user?.role ?? me?.role;
+      const nextStatus = payload.user?.status;
+
+      if (nextRole && nextStatus === "active") {
+        setMessage("Profile completed. Redirecting to your dashboard.");
+        router.push(`/dashboard/${nextRole}`);
+      } else {
+        setMessage("Profile submitted. Waiting for executive approval.");
+        router.push("/pending");
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to complete profile");
     } finally {
@@ -147,9 +280,70 @@ export default function CompleteProfilePage() {
     <AppShell
       eyebrow="ORGOS onboarding"
       title="Complete your profile"
-      description="Pick your organization, role, and reporting line to request activation."
+      description="Choose your onboarding path: create your company as an owner or join an existing company as an employee."
     >
       <form onSubmit={onSubmit} className="space-y-4">
+        <div className="rounded-2xl border border-[#e2ddd2] bg-[#f9f7f2] p-4 text-sm text-[#4b5563]">
+          {me?.org_id
+            ? "You already have an organization linked. Confirm role details and submit to continue."
+            : "You are on this page because your account is not fully linked to an organization yet."}
+        </div>
+
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">I am joining as</legend>
+          <div className={`grid gap-2 ${canChooseOwner && canChooseEmployee ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
+            {canChooseOwner ? (
+              <button
+                type="button"
+                onClick={() => setMode("owner")}
+                className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${mode === "owner" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
+              >
+                CEO / Company owner
+              </button>
+            ) : null}
+            {canChooseEmployee ? (
+              <button
+                type="button"
+                onClick={() => setMode("employee")}
+                className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${mode === "employee" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
+              >
+                Employee
+              </button>
+            ) : null}
+          </div>
+        </fieldset>
+
+        {mode === "owner" ? (
+          <div className="space-y-3 rounded-2xl border border-[#ddd6c8] bg-[#fcfbf8] p-4">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Create organization</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                type="text"
+                value={orgName}
+                onChange={(event) => setOrgName(event.target.value)}
+                placeholder="Organization name"
+              />
+              <input
+                className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                type="text"
+                value={orgDomain}
+                onChange={(event) => setOrgDomain(event.target.value)}
+                placeholder="company.com (optional)"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={createOrganization}
+              disabled={creatingOrg}
+              className="inline-flex items-center justify-center rounded-2xl bg-[#121826] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c2538] disabled:opacity-60"
+            >
+              {creatingOrg ? "Creating organization..." : "Create organization"}
+            </button>
+          </div>
+        ) : null}
+
+        {mode === "employee" ? (
         <label className="block space-y-2">
           <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Find organization</span>
           <div className="flex gap-2">
@@ -170,6 +364,7 @@ export default function CompleteProfilePage() {
             </button>
           </div>
         </label>
+        ) : null}
 
         <label className="block space-y-2">
           <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Organization</span>
@@ -188,6 +383,50 @@ export default function CompleteProfilePage() {
           </select>
         </label>
 
+        {mode === "owner" ? (
+          <div className="space-y-3 rounded-2xl border border-[#ddd6c8] bg-[#fcfbf8] p-4">
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Create positions</p>
+            <div className="grid gap-2 sm:grid-cols-[1.5fr_1fr_auto]">
+              <input
+                className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                type="text"
+                value={newPositionTitle}
+                onChange={(event) => setNewPositionTitle(event.target.value)}
+                placeholder="Position title"
+              />
+              <select
+                className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                value={String(newPositionLevel)}
+                onChange={(event) => setNewPositionLevel(Number(event.target.value) as 0 | 1 | 2)}
+              >
+                <option value="0">Level 0</option>
+                <option value="1">Level 1</option>
+                <option value="2">Level 2</option>
+              </select>
+              <button
+                type="button"
+                onClick={createPosition}
+                disabled={creatingPosition || !orgId}
+                className="rounded-2xl bg-[#121826] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {creatingPosition ? "Adding..." : "Add"}
+              </button>
+            </div>
+
+            {positions.length > 0 ? (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {positions.map((position) => (
+                  <li key={position.id} className="rounded-xl border border-[#e6e0d5] bg-white px-3 py-2 text-sm text-[#2f3545]">
+                    {position.title} (L{position.level})
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-[#6b7280]">No positions available yet. Add one above.</p>
+            )}
+          </div>
+        ) : null}
+
         <label className="block space-y-2">
           <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Position</span>
           <select
@@ -205,16 +444,18 @@ export default function CompleteProfilePage() {
           </select>
         </label>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Reports to (optional user ID)</span>
-          <input
-            className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
-            type="text"
-            value={reportsTo}
-            onChange={(event) => setReportsTo(event.target.value)}
-            placeholder="Manager user UUID"
-          />
-        </label>
+        {mode === "employee" ? (
+          <label className="block space-y-2">
+            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Reports to (optional user ID)</span>
+            <input
+              className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+              type="text"
+              value={reportsTo}
+              onChange={(event) => setReportsTo(event.target.value)}
+              placeholder="Manager user UUID"
+            />
+          </label>
+        ) : null}
 
         <label className="block space-y-2">
           <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Department</span>
