@@ -17,11 +17,13 @@ import orgRoutes from "./routes/org.js";
 import reportsRoutes from "./routes/reports.js";
 import tasksRoutes from "./routes/tasks.js";
 import { initializeQueueForwarding } from "./queue/index.js";
-import { startDecomposeWorker } from "./queue/workers/decompose.worker.js";
+import { startCsuiteDecomposeWorker } from "./queue/workers/decompose.csuite.worker.js";
+import { startManagerDecomposeWorker } from "./queue/workers/decompose.manager.worker.js";
+import { startIndividualAckWorker } from "./queue/workers/decompose.individual.worker.js";
 import { startExecuteWorker } from "./queue/workers/execute.worker.js";
+import { ensureSlaSchedule, startSlaWorker } from "./queue/workers/sla.worker.js";
 import { startSynthesizeWorker } from "./queue/workers/synthesize.worker.js";
 import { initializeNotifier } from "./services/notifier.js";
-import { startSlaMonitor } from "./services/slaService.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -135,16 +137,18 @@ export async function start() {
   const server = await buildServer();
   initializeNotifier(server);
   initializeQueueForwarding();
-  const slaMonitor = startSlaMonitor(server);
+  await ensureSlaSchedule();
 
   const workers = [
-    startDecomposeWorker(),
+    startCsuiteDecomposeWorker(),
+    startManagerDecomposeWorker(),
+    startIndividualAckWorker(),
+    startSlaWorker(server),
     startExecuteWorker(),
     startSynthesizeWorker()
   ];
 
   server.addHook("onClose", async () => {
-    slaMonitor.stop();
     await Promise.all(workers.map(async (worker) => worker.close()));
   });
 

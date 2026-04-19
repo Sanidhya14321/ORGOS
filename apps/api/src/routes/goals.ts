@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { GoalPrioritySchema, GoalStatusSchema } from "@orgos/shared-types";
 import { sanitizeGoalInput, SanitizationError } from "@orgos/agent-core";
-import { getDecomposeQueue } from "../queue/index.js";
+import { getCsuiteQueue } from "../queue/index.js";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { buildSimulationPreview, buildTaskTree, updateGoalStatus } from "../services/goalEngine.js";
@@ -114,7 +114,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create goal");
     }
 
-    await getDecomposeQueue().add("goal_decompose", { goalId: data.id });
+    await getCsuiteQueue().add("goal_decompose", { goalId: data.id });
 
     return reply.status(202).send({ goalId: data.id });
   });

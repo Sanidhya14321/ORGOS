@@ -130,6 +130,11 @@ async function evaluateSlaOnce(
   }
 }
 
+export async function runSlaEvaluationOnce(fastify: FastifyInstance): Promise<void> {
+  const atRiskWindowMs = fastify.env.SLA_AT_RISK_WINDOW_MINUTES * 60_000;
+  await evaluateSlaOnce(fastify, atRiskWindowMs);
+}
+
 export function startSlaMonitor(fastify: FastifyInstance): { stop: () => void } {
   const intervalMs = fastify.env.SLA_CHECK_INTERVAL_MS;
   const atRiskWindowMs = fastify.env.SLA_AT_RISK_WINDOW_MINUTES * 60_000;

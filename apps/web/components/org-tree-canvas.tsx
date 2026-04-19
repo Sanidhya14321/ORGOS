@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReactFlow, { Background, Controls, MiniMap, type Edge, type Node } from "reactflow";
+import dagre from "dagre";
 import "reactflow/dist/style.css";
 import { apiFetch } from "@/lib/api";
 import type { User } from "@/lib/models";
@@ -38,6 +39,9 @@ const roleLevel: Record<TreeUserNode["role"], number> = {
   worker: 2
 };
 
+const nodeWidth = 260;
+const nodeHeight = 120;
+
 function getStatusColor(status: TreeUserNode["status"] | undefined): string {
   if (status === "active") {
     return "#2a9d8f";
@@ -50,37 +54,67 @@ function getStatusColor(status: TreeUserNode["status"] | undefined): string {
 
 function buildGraph(tree: OrgTreeResponse): { nodes: Node[]; edges: Edge[] } {
   const positionById = new Map(tree.positions.map((position) => [position.id, position]));
+  const validIds = new Set(tree.nodes.map((node) => node.id));
+  const graphEdges: Edge[] = tree.nodes
+    .filter((node) => node.reports_to && validIds.has(node.reports_to))
+    .map((node) => ({
+      id: `${node.reports_to}-${node.id}`,
+      source: node.reports_to as string,
+      target: node.id,
+      animated: false,
+      type: "smoothstep",
+      style: { stroke: "#74809a", strokeWidth: 1.75 }
+    }));
 
-  const byLevel = new Map<number, TreeUserNode[]>();
+  const graph = new dagre.graphlib.Graph();
+  graph.setGraph({ rankdir: "TB", ranksep: 95, nodesep: 52, marginx: 20, marginy: 20 });
+  graph.setDefaultEdgeLabel(() => ({}));
+
   for (const node of tree.nodes) {
-    const positionLevel = node.position_id ? positionById.get(node.position_id)?.level : undefined;
-    const level = positionLevel ?? roleLevel[node.role] ?? 2;
-    const current = byLevel.get(level) ?? [];
-    current.push(node);
-    byLevel.set(level, current);
+    graph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
   }
 
-  const sortedLevels = Array.from(byLevel.keys()).sort((a, b) => a - b);
-  const graphNodes: Node[] = [];
+  for (const edge of graphEdges) {
+    graph.setEdge(edge.source, edge.target);
+  }
 
-  for (const level of sortedLevels) {
-    const row = (byLevel.get(level) ?? []).sort((a, b) => a.full_name.localeCompare(b.full_name));
-    const rowWidth = Math.max(1, row.length) * 320;
+  // For disconnected roots, create soft edges by role level to keep top-down ordering deterministic.
+  const roots = tree.nodes
+    .filter((node) => !node.reports_to || !validIds.has(node.reports_to))
+    .sort((a, b) => {
+      const levelA = (a.position_id ? positionById.get(a.position_id)?.level : undefined) ?? roleLevel[a.role] ?? 2;
+      const levelB = (b.position_id ? positionById.get(b.position_id)?.level : undefined) ?? roleLevel[b.role] ?? 2;
+      if (levelA !== levelB) {
+        return levelA - levelB;
+      }
+      return a.full_name.localeCompare(b.full_name);
+    });
 
-    row.forEach((person, index) => {
-      const x = index * 320 - rowWidth / 2;
-      const y = level * 190;
+  for (let index = 1; index < roots.length; index += 1) {
+    graph.setEdge(roots[index - 1].id, roots[index].id, { minlen: 1, weight: 0.1 });
+  }
+
+  dagre.layout(graph);
+
+  const graphNodes: Node[] = tree.nodes
+    .slice()
+    .sort((a, b) => a.full_name.localeCompare(b.full_name))
+    .map((person) => {
+      const layoutNode = graph.node(person.id) as { x: number; y: number } | undefined;
       const positionTitle = person.position_id ? positionById.get(person.position_id)?.title : undefined;
 
-      graphNodes.push({
+      return {
         id: person.id,
-        position: { x, y },
+        position: {
+          x: (layoutNode?.x ?? 0) - nodeWidth / 2,
+          y: (layoutNode?.y ?? 0) - nodeHeight / 2
+        },
         draggable: false,
         data: {
           label: `${person.full_name}\n${positionTitle ?? person.role.toUpperCase()}${person.department ? `\n${person.department}` : ""}`
         },
         style: {
-          width: 240,
+          width: nodeWidth,
           borderRadius: 16,
           border: `2px solid ${getStatusColor(person.status)}`,
           padding: 12,
@@ -93,21 +127,8 @@ function buildGraph(tree: OrgTreeResponse): { nodes: Node[]; edges: Edge[] } {
           color: "#121826",
           boxShadow: "0 8px 24px rgba(18,24,38,0.12)"
         }
-      });
+      } as Node;
     });
-  }
-
-  const validIds = new Set(tree.nodes.map((node) => node.id));
-  const graphEdges: Edge[] = tree.nodes
-    .filter((node) => node.reports_to && validIds.has(node.reports_to))
-    .map((node) => ({
-      id: `${node.reports_to}-${node.id}`,
-      source: node.reports_to as string,
-      target: node.id,
-      animated: false,
-      type: "smoothstep",
-      style: { stroke: "#74809a", strokeWidth: 1.75 }
-    }));
 
   return { nodes: graphNodes, edges: graphEdges };
 }

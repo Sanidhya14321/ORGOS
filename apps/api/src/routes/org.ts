@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
+import { invalidateOrgPromptCache } from "../services/promptCache.js";
 
 const SearchOrgQuerySchema = z.object({
   q: z.string().trim().min(1).max(120)
@@ -158,6 +159,8 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     if (userUpdate.error) {
       request.log.warn({ err: userUpdate.error }, "User org bootstrap update failed after org creation");
     }
+
+    await invalidateOrgPromptCache(fastify, createdOrg.data.id);
 
     return reply.status(201).send({
       org: createdOrg.data,
@@ -467,6 +470,8 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    await invalidateOrgPromptCache(fastify, requesterOrgId);
+
     return reply.send(updated.data);
   });
 
@@ -518,6 +523,8 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       entity_id: params.data.id,
       meta: { reason: body.data.reason }
     });
+
+    await invalidateOrgPromptCache(fastify, requesterOrgId);
 
     return reply.send(updated.data);
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
 import Link from "next/link";
@@ -9,7 +9,7 @@ import { AppShell } from "@/components/app-shell";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
-export default function VerifyPage() {
+function VerifyPageContent() {
   const params = useSearchParams();
   const router = useRouter();
   const initialEmail = useMemo(() => params.get("email") ?? "", [params]);
@@ -84,5 +84,13 @@ export default function VerifyPage() {
         </p>
       </form>
     </AppShell>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<p className="px-6 py-8 text-sm text-[#6b7280]">Loading verification details...</p>}>
+      <VerifyPageContent />
+    </Suspense>
   );
 }

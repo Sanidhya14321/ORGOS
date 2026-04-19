@@ -6,6 +6,7 @@ export * from "./llm/gemini.js";
 export * from "./llm/router.js";
 export * from "./agents/ceoAgent.js";
 export * from "./agents/managerAgent.js";
+export * from "./agents/individualAgent.js";
 export * from "./agents/workerAgent.js";
 export * from "./agents/synthesisAgent.js";
 export * from "./tools/webSearch.js";

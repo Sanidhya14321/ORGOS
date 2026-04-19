@@ -6,7 +6,8 @@ import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { assignTask } from "../services/assignmentEngine.js";
 import { emitTaskAssigned, emitTaskStatusChanged, emitToUser } from "../services/notifier.js";
-import { suggestRoutingForTask } from "../services/agentService.js";
+import { getManagerQueue } from "../queue/index.js";
+import { persistRoutingOutcome } from "../services/routingMemory.js";
 
 const ListQuerySchema = z.object({
   status: TaskStatusSchema.optional(),
@@ -327,7 +328,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create task");
     }
 
-    return reply.status(201).send(data);
+    return reply.status(202).send(data);
   });
 
   fastify.post("/tasks/:id/routing-suggest", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
@@ -340,13 +341,15 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     let suggestions = body.data.suggestions;
     if (!suggestions) {
-      try {
-        const generated = await suggestRoutingForTask(fastify, params.data.id);
-        suggestions = generated.suggestions;
-      } catch (error) {
-        request.log.error({ err: error, taskId: params.data.id }, "Failed to generate routing suggestion");
-        return sendApiError(reply, request, 502, "INTERNAL_ERROR", "Failed to generate routing suggestion");
-      }
+      await getManagerQueue().add("routing_suggest", {
+        mode: "routing_suggest",
+        taskId: params.data.id
+      });
+
+      return reply.status(202).send({
+        taskId: params.data.id,
+        status: "routing_in_progress"
+      });
     }
 
     if (!suggestions || suggestions.length === 0) {
@@ -445,18 +448,12 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to confirm routing");
     }
 
-    const upsertSuggestion = await fastify.supabaseService
-      .from("routing_suggestions")
-      .insert({
-        task_id: params.data.id,
-        suggested: body.data.confirmed,
-        confirmed: body.data.confirmed,
-        outcome: "confirmed"
-      });
-
-    if (upsertSuggestion.error) {
-      request.log.warn({ err: upsertSuggestion.error }, "Unable to persist routing confirmation audit");
-    }
+    await persistRoutingOutcome(fastify, {
+      taskId: params.data.id,
+      suggested: body.data.confirmed,
+      confirmed: body.data.confirmed,
+      outcome: "confirmed"
+    });
 
     for (const suggestion of body.data.confirmed) {
       emitToUser(suggestion.assigneeId, "task:routing_confirmed", {

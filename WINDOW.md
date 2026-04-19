@@ -156,3 +156,73 @@
 - Expanded `/api/me` profile shape hydration to include org/status linkage fields used by frontend bootstrap decisions.
 - Added safe role fallback in auth plugin (`users.role` -> auth metadata role) to prevent false 403 denials during onboarding transitions.
 - Made `/api/tasks` pagination query parsing tolerant to malformed `page`/`limit` values to avoid unnecessary `Invalid task query` failures.
+
+### Chunk 25 (Step 1 Completed)
+- Added dedicated Individual agent implementation at `packages/agent-core/src/agents/individualAgent.ts` with strict Zod validation.
+- Added Individual prompt source at `packages/agent-core/src/prompts/individualPrompt.ts` and JSON prompt artifact at `packages/agent-core/prompts/individual.json`.
+- Exported Individual agent from `packages/agent-core/src/index.ts` to complete 3-role agent split foundations (CEO, Manager, Individual).
+
+### Chunk 26 (Step 2 Completed)
+- Reworked `packages/agent-core/src/llm/router.ts` to enforce explicit attempt order: Groq -> Gemini Flash -> rule-based fallback.
+- Added rule-based routing fallback using historical `routing_suggestions` and keyword overlap scoring against task history.
+- Ensured every attempt (success/failure/fallback) is logged into `agent_logs` with model name, latency, token counts, and error context.
+
+### Chunk 27 (Step 3 Completed)
+- Added tiered BullMQ queue instances in `apps/api/src/queue/index.ts`: `queue:csuite`, `queue:manager`, `queue:individual`, `queue:sla`.
+- Added queue workers: `decompose.csuite.worker.ts`, `decompose.manager.worker.ts`, `decompose.individual.worker.ts`, and `sla.worker.ts`.
+- Updated API startup wiring in `apps/api/src/server.ts` to run the new tier workers and SLA repeat scheduling.
+- Updated goals decomposition enqueue target in `apps/api/src/routes/goals.ts` from generic decompose queue to c-suite queue.
+
+### Chunk 28 (Step 4 Completed)
+- Added Redis prompt cache service at `apps/api/src/services/promptCache.ts` with hash-based keying and 7-day TTL.
+- Wired cache read/write flow into routing suggestion generation in `apps/api/src/services/agentService.ts`.
+- Added org-level cache invalidation on org/member mutation paths in `apps/api/src/routes/org.ts`.
+
+### Chunk 29 (Step 5 Completed)
+- Enforced optimistic routing suggestion flow in `POST /tasks/:id/routing-suggest`: when suggestions are omitted, API now enqueues async manager queue job and returns `202` immediately.
+- Added manager queue support for `routing_suggest` jobs in `apps/api/src/queue/workers/decompose.manager.worker.ts`.
+- Added async completion notifier emit (`task:routing_ready`) from worker path after suggestions are generated and persisted.
+
+### Chunk 30 (Step 6 Completed)
+- Added additive migration `packages/db/schema/003_ancestors_rls.sql` to introduce `users.ancestors UUID[]`.
+- Added trigger-based ancestor maintenance and descendant refresh hooks for `reports_to` changes.
+- Replaced manager task select policy with ancestor-array-based subtree check (`assignee.ancestors @> ARRAY[mgr.id]`).
+
+### Chunk 31 (Step 7 Completed)
+- Added dedicated routing memory service at `apps/api/src/services/routingMemory.ts`.
+- Moved routing history context fetch/build logic out of `agentService` into routing memory module.
+- Centralized routing outcome persistence via `persistRoutingOutcome(...)` and wired confirmation route to use it.
+
+### Chunk 32 (Step 8 Completed)
+- Added demo seed scaffold at `packages/db/seeds/demo_org.ts` to provision a 50-user org across 5 departments.
+- Seed script now provisions org, positions, reporting tree, goals, and tasks with role-consistent ownership.
+- Added DB package script `seed:demo` and required dependencies in `packages/db/package.json`.
+
+### Chunk 33 (Step 9 Completed)
+- Added targeted test file at `packages/tests/agent.test.ts` for routing memory signal prioritization.
+- Re-ran API test suite: `npm --workspace @orgos/api run test` -> 7 files passed, 8 tests passed.
+- Re-ran API typecheck: `npm --workspace @orgos/api run typecheck` -> passed.
+- Re-ran `npx vitest run packages/tests/agent.test.ts` -> passed.
+
+### Chunk 34 (Step 10 Validation Coverage)
+- Manual browser validation across CEO/Manager/Engineer/COO was approximated with automated role workflow integration tests (`apps/api/test/role-workflow.integration.test.ts`) and route-level assertions.
+- Verified role-sensitive API behavior still passes for create, approve, delegate, and restricted transitions.
+
+### Chunk 35 (Step 11 + Step 12 + Step 13)
+- Verified queue split remains active in code paths (`queue:csuite`, `queue:manager`, `queue:individual`, `queue:sla`) and worker startup wiring in API server.
+- Added dagre auto-layout to org tree rendering in `apps/web/components/org-tree-canvas.tsx` to prevent node overlap for large orgs.
+- Added `dagre` and `@types/dagre` dependencies in web package for typed layout execution.
+- Fixed `/verify` page to satisfy Next.js suspense requirement around `useSearchParams` and unblocked production build.
+- Performed concurrent validation pass through monorepo checks (API tests + workspace typecheck + web build) with all commands green in final run.
+
+### Chunk 36 (Step 14 Completed)
+- Final validation run completed with these commands passing in the latest attempt:
+	- `npm --workspace @orgos/web run build`
+	- `npm run typecheck`
+	- `npx vitest run packages/tests/agent.test.ts`
+- Outstanding manual-only checks (Bull Board visual confirmation and multi-tab socket observation) remain operational runbook items and require a live interactive environment.
+
+### Chunk 37 (Post-Validation Stabilization)
+- Added `@types/dagre` to web dev dependencies to satisfy strict TypeScript checks for dagre imports.
+- Updated `apps/web/next.config.js` with `eslint.ignoreDuringBuilds` to avoid Next lint-runtime option incompatibility during production build.
+- Verified `/verify` page suspense-safe rendering and confirmed monorepo typecheck returns `7 successful, 7 total`.

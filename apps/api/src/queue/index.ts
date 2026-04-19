@@ -13,6 +13,10 @@ type RedisConnection = {
 
 let initialized = false;
 let deadLetterQueueInstance: Queue;
+let csuiteQueueInstance: Queue;
+let managerQueueInstance: Queue;
+let individualQueueInstance: Queue;
+let slaQueueInstance: Queue;
 let decomposeQueueInstance: Queue;
 let executeQueueInstance: Queue;
 let synthesizeQueueInstance: Queue;
@@ -49,6 +53,26 @@ function initializeQueues() {
     defaultJobOptions: defaultJobOptionsInstance
   });
 
+  csuiteQueueInstance = new Queue("queue:csuite", {
+    connection: redisConnectionInstance,
+    defaultJobOptions: defaultJobOptionsInstance
+  });
+
+  managerQueueInstance = new Queue("queue:manager", {
+    connection: redisConnectionInstance,
+    defaultJobOptions: defaultJobOptionsInstance
+  });
+
+  individualQueueInstance = new Queue("queue:individual", {
+    connection: redisConnectionInstance,
+    defaultJobOptions: defaultJobOptionsInstance
+  });
+
+  slaQueueInstance = new Queue("queue:sla", {
+    connection: redisConnectionInstance,
+    defaultJobOptions: defaultJobOptionsInstance
+  });
+
   decomposeQueueInstance = new Queue("decompose", {
     connection: redisConnectionInstance,
     defaultJobOptions: defaultJobOptionsInstance
@@ -72,9 +96,29 @@ export function getDeadLetterQueue(): Queue {
   return deadLetterQueueInstance;
 }
 
+export function getCsuiteQueue(): Queue {
+  initializeQueues();
+  return csuiteQueueInstance;
+}
+
+export function getManagerQueue(): Queue {
+  initializeQueues();
+  return managerQueueInstance;
+}
+
+export function getIndividualQueue(): Queue {
+  initializeQueues();
+  return individualQueueInstance;
+}
+
+export function getSlaQueue(): Queue {
+  initializeQueues();
+  return slaQueueInstance;
+}
+
 export function getDecomposeQueue(): Queue {
   initializeQueues();
-  return decomposeQueueInstance;
+  return csuiteQueueInstance;
 }
 
 export function getExecuteQueue(): Queue {
@@ -104,11 +148,19 @@ async function setupDeadLetterForwarding(queueName: string): Promise<void> {
   await queueEvents.waitUntilReady();
 
   queueEvents.on("failed", async ({ jobId, failedReason }) => {
-    const sourceQueue = queueName === "decompose"
-      ? decomposeQueueInstance
-      : queueName === "execute"
-        ? executeQueueInstance
-        : synthesizeQueueInstance;
+    const sourceQueue = queueName === "queue:csuite"
+      ? csuiteQueueInstance
+      : queueName === "queue:manager"
+        ? managerQueueInstance
+        : queueName === "queue:individual"
+          ? individualQueueInstance
+          : queueName === "queue:sla"
+            ? slaQueueInstance
+            : queueName === "execute"
+              ? executeQueueInstance
+              : queueName === "synthesize"
+                ? synthesizeQueueInstance
+                : decomposeQueueInstance;
 
     if (!jobId) {
       return;
@@ -141,7 +193,10 @@ async function setupDeadLetterForwarding(queueName: string): Promise<void> {
 export function initializeQueueForwarding() {
   initializeQueues();
 
-  void setupDeadLetterForwarding("decompose");
+  void setupDeadLetterForwarding("queue:csuite");
+  void setupDeadLetterForwarding("queue:manager");
+  void setupDeadLetterForwarding("queue:individual");
+  void setupDeadLetterForwarding("queue:sla");
   void setupDeadLetterForwarding("execute");
   void setupDeadLetterForwarding("synthesize");
 }

@@ -139,7 +139,7 @@ describe("role workflow integration", () => {
         depth: 0
       }
     });
-    expect(ceoCreate.statusCode).toBe(201);
+    expect(ceoCreate.statusCode).toBe(202);
 
     const cfoApprove = await app.inject({
       method: "POST",
