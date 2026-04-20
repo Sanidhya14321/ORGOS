@@ -74,7 +74,7 @@ function makeUsers(): SeedUser[] {
 }
 
 async function seed(): Promise<void> {
-  const supabaseUrl = requiredEnv("SUPABASE_URL");
+  const supabaseUrl = process.env.SUPABASE_URL ?? requiredEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -250,7 +250,7 @@ async function seed(): Promise<void> {
       success_criteria: `Complete velocity outcome ${index + 1}`,
       assigned_to: assigneeId,
       assigned_role: role,
-      status: index % 12 === 0 ? "blocked" : "active",
+      status: index % 12 === 0 ? "blocked" : "in_progress",
       priority: index % 5 === 0 ? "high" : "medium",
       org_id: orgId,
       created_by: ceoId,

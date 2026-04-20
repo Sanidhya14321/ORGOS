@@ -43,7 +43,7 @@ const VerifyBodySchema = z.object({
 
 const CompleteProfileBodySchema = z.object({
   orgId: z.string().uuid(),
-  positionId: z.string().uuid(),
+  positionId: z.string().uuid().optional(),
   reportsTo: z.string().uuid().optional(),
   department: z.string().trim().max(120).optional(),
   skills: z.array(z.string().trim().min(1)).max(30).optional()
@@ -173,11 +173,43 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const nextStatus = requesterRole === "ceo" || requesterRole === "cfo" ? "active" : "pending";
 
     const { orgId, positionId, reportsTo, department, skills } = parsed.data;
+
+    let resolvedPositionId = positionId ?? null;
+    if (!resolvedPositionId) {
+      const targetLevel = requesterRole === "manager" ? 1 : requesterRole === "worker" ? 2 : 0;
+      const inferred = await fastify.supabaseService
+        .from("positions")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("level", targetLevel)
+        .order("confirmed", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (inferred.error) {
+        request.log.error({ err: inferred.error }, "Failed to infer position for profile completion");
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to resolve position assignment");
+      }
+
+      if (!inferred.data?.id) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "VALIDATION_ERROR",
+          "No matching position is available for your role. Ask your CEO to add positions in the CEO dashboard."
+        );
+      }
+
+      resolvedPositionId = inferred.data.id;
+    }
+
     const { error } = await fastify.supabaseService
       .from("users")
       .update({
         org_id: orgId,
-        position_id: positionId,
+        position_id: resolvedPositionId,
         reports_to: reportsTo ?? null,
         status: nextStatus,
         ...(department ? { department } : {}),

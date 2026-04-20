@@ -110,6 +110,12 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { name, domain, makeCreatorCeo } = parsed.data;
 
+    const requesterProfile = await fastify.supabaseService
+      .from("users")
+      .select("id")
+      .eq("id", authUser.id)
+      .maybeSingle();
+
     const existing = await fastify.supabaseService
       .from("orgs")
       .select("id")
@@ -122,7 +128,7 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
 
     const createdOrg = await fastify.supabaseService
       .from("orgs")
-      .insert({ name, domain, created_by: authUser.id })
+      .insert({ name, domain, created_by: requesterProfile.data?.id ?? null })
       .select("id, name, domain, created_by")
       .single();
 

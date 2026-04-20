@@ -250,7 +250,7 @@ async function seed(): Promise<void> {
       success_criteria: `Complete demo outcome ${index + 1}`,
       assigned_to: assigneeId,
       assigned_role: role,
-      status: index % 11 === 0 ? "blocked" : "active",
+      status: index % 11 === 0 ? "blocked" : "in_progress",
       priority: index % 5 === 0 ? "high" : "medium",
       org_id: orgId,
       created_by: ceoId,

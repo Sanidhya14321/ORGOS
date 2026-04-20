@@ -81,10 +81,14 @@ export async function invalidateOrgPromptCache(fastify: FastifyInstance, orgId: 
     return;
   }
 
-  const keys = await redisKeys(`cache:${orgId}:*`);
-  if (!keys || keys.length === 0) {
+  try {
+    const keys = await redisKeys(`cache:${orgId}:*`);
+    if (!keys || keys.length === 0) {
+      return;
+    }
+
+    await Promise.all(keys.map(async (key) => redisDel(key)));
+  } catch {
     return;
   }
-
-  await Promise.all(keys.map(async (key) => redisDel(key)));
 }
