@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.positions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID NOT NULL REFERENCES public.orgs(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
-  level INT NOT NULL CHECK (level IN (0, 1, 2)),
+  level INT NOT NULL CHECK (level >= 0),
   is_custom BOOLEAN NOT NULL DEFAULT false,
   confirmed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

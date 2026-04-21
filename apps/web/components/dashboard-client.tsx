@@ -104,11 +104,11 @@ export function DashboardClient({ role }: DashboardClientProps) {
               {
                 id: "org-link-required",
                 label: "Organization setup required",
-                detail: "Your account is not linked to an organization yet. Redirecting to profile completion.",
+                detail: "Your account is not linked to an organization yet. Ask your administrator to provision access.",
                 tone: "warning"
               }
             ]);
-            router.replace("/complete-profile");
+            router.replace("/pending");
           }
           return;
         }
@@ -299,52 +299,52 @@ export function DashboardClient({ role }: DashboardClientProps) {
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-6 px-0 py-3 sm:px-2 lg:px-4">
-      <section className="rounded-[2rem] border border-white/70 bg-white/75 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.12)] backdrop-blur-xl">
+      <section className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0 max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#6b7280]">{dashboardTitle}</p>
-            <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[#121826] sm:text-4xl lg:text-6xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--muted)]">{dashboardTitle}</p>
+            <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[var(--ink)] sm:text-4xl lg:text-6xl">
               {currentUser?.full_name ?? "ORGOS Operator"}
             </h1>
-            <p className="mt-4 max-w-2xl break-words text-base leading-7 text-[#4b5563]">
+            <p className="mt-4 max-w-2xl break-words text-base leading-7 text-[var(--muted)]">
               {roleDescription(role)}
             </p>
           </div>
-          <div className={`inline-flex items-center gap-2 self-start rounded-full px-4 py-2 text-sm font-semibold ${wsConnected ? "bg-[#e6f5f1] text-[#166c60]" : "bg-[#fff1e8] text-[#9f4f20]"}`}>
-            <span className={`h-2.5 w-2.5 rounded-full ${wsConnected ? "bg-[#2a9d8f]" : "bg-[#ff6b35]"}`} />
+          <div className={`inline-flex items-center gap-2 self-start rounded-full px-4 py-2 text-sm font-semibold ${wsConnected ? "bg-[#102017] text-[#86efac]" : "bg-[#25170f] text-[#fdba74]"}`}>
+            <span className={`h-2.5 w-2.5 rounded-full ${wsConnected ? "bg-[#22c55e]" : "bg-[#f59e0b]"}`} />
             {wsConnected ? "Realtime connected" : "Connecting realtime"}
           </div>
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
-            <article key={stat.label} className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-              <p className="text-sm font-medium text-[#6b7280]">{stat.label}</p>
-              <p className="mt-2 text-3xl font-semibold text-[#121826]">{stat.value}</p>
+            <article key={stat.label} className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+              <p className="text-sm font-medium text-[var(--muted)]">{stat.label}</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--ink)]">{stat.value}</p>
             </article>
           ))}
         </div>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
-        <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.1)]">
+        <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
           {(role === "ceo" || role === "cfo") ? (
-            <div className="mb-6 rounded-3xl border border-[#ece7dd] bg-[#fdfaf3] p-4">
+            <div className="mb-6 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-[#121826]">Pending approvals</h2>
-                  <p className="mt-1 text-sm text-[#6b7280]">Review and approve member onboarding requests.</p>
+                  <h2 className="text-xl font-semibold text-[var(--ink)]">Pending approvals</h2>
+                  <p className="mt-1 text-sm text-[var(--muted)]">Review and approve member onboarding requests.</p>
                 </div>
-                <span className="rounded-full bg-[#fff0e6] px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#b45527] sm:tracking-[0.2em]">
+                <span className="rounded-full bg-[var(--warn)]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--warn)] sm:tracking-[0.2em]">
                   {pendingMembers.length} pending
                 </span>
               </div>
 
               <div className="mt-4 space-y-3">
                 {pendingMembers.slice(0, 8).map((member) => (
-                  <article key={member.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-white p-3">
-                    <p className="font-semibold text-[#121826]">{member.full_name}</p>
-                    <p className="break-all text-sm text-[#6b7280]">{member.email}</p>
+                  <article key={member.id} className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+                    <p className="font-semibold text-[var(--ink)]">{member.full_name}</p>
+                    <p className="break-all text-sm text-[var(--muted)]">{member.email}</p>
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
@@ -365,44 +365,44 @@ export function DashboardClient({ role }: DashboardClientProps) {
                     </div>
                   </article>
                 ))}
-                {pendingMembers.length === 0 ? <p className="text-sm text-[#6b7280]">No pending members.</p> : null}
+                {pendingMembers.length === 0 ? <p className="text-sm text-[var(--muted)]">No pending members.</p> : null}
               </div>
             </div>
           ) : null}
 
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-[#121826]">Active work</h2>
-              <p className="mt-1 text-sm text-[#6b7280]">Live tasks and goals update here as the queue moves.</p>
+              <h2 className="text-2xl font-semibold text-[var(--ink)]">Active work</h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">Live tasks and goals update here as the queue moves.</p>
             </div>
-            {loading ? <span className="text-sm text-[#6b7280]">Syncing...</span> : null}
+            {loading ? <span className="text-sm text-[var(--muted)]">Syncing...</span> : null}
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {myTasks.slice(0, 6).map((task) => (
-              <article key={task.id} className="min-w-0 rounded-3xl border border-[#ece7dd] bg-[#faf8f4] p-4">
+              <article key={task.id} className="min-w-0 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="min-w-0 break-words text-lg font-semibold text-[#121826]">{task.title}</h3>
-                  <span className="shrink-0 rounded-full bg-[#fff0e6] px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#b45527] sm:tracking-[0.2em]">
+                  <h3 className="min-w-0 break-words text-lg font-semibold text-[var(--ink)]">{task.title}</h3>
+                  <span className="shrink-0 rounded-full bg-[var(--warn)]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--warn)] sm:tracking-[0.2em]">
                     {task.status}
                   </span>
                 </div>
-                <p className="mt-2 break-words text-sm leading-6 text-[#4b5563]">{task.description ?? task.success_criteria}</p>
+                <p className="mt-2 break-words text-sm leading-6 text-[var(--muted)]">{task.description ?? task.success_criteria}</p>
               </article>
             ))}
           </div>
         </div>
 
-        <aside className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.1)]">
-          <h2 className="text-2xl font-semibold text-[#121826]">Activity feed</h2>
+        <aside className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+          <h2 className="text-2xl font-semibold text-[var(--ink)]">Activity feed</h2>
           <div className="mt-5 space-y-3">
             {activity.map((item) => (
-              <article key={item.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
+              <article key={item.id} className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                 <div className="flex items-start gap-3">
                   <span className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === "positive" ? "bg-[#2a9d8f]" : item.tone === "warning" ? "bg-[#ff6b35]" : "bg-[#e9c46a]"}`} />
                   <div className="min-w-0">
-                    <p className="font-semibold text-[#121826]">{item.label}</p>
-                    <p className="mt-1 break-words text-sm leading-6 text-[#6b7280]">{item.detail}</p>
+                      <p className="font-semibold text-[var(--ink)]">{item.label}</p>
+                      <p className="mt-1 break-words text-sm leading-6 text-[var(--muted)]">{item.detail}</p>
                   </div>
                 </div>
               </article>

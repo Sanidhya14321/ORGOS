@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import type { Role } from "@/lib/models";
 
 type AppShellProps = {
   eyebrow: string;
@@ -6,18 +8,35 @@ type AppShellProps = {
   description: string;
   children: ReactNode;
   layout?: "split" | "stack";
+  role?: Role;
 };
 
-export function AppShell({ eyebrow, title, description, children, layout = "split" }: AppShellProps) {
+export function AppShell({ eyebrow, title, description, children, layout = "split", role }: AppShellProps) {
+  const navLinks = role ? [
+    { href: `/dashboard/${role}`, label: "Overview" },
+    { href: "/dashboard/task-board", label: "Task board" },
+    ...(role === "ceo" || role === "cfo" || role === "manager" ? [{ href: "/dashboard/org-tree", label: "Org tree" }] : []),
+    ...(role === "ceo" ? [{ href: "/dashboard/ceo", label: "CEO control" }] : [])
+  ] : [];
+
   if (layout === "stack") {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col px-4 py-8 sm:px-6 lg:px-10">
+      <main className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-4 py-8 sm:px-6 lg:px-10">
+        {navLinks.length > 0 ? (
+          <nav className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2">
+            {navLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink)]">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
         <section className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6b7280] sm:text-sm sm:tracking-[0.3em]">{eyebrow}</p>
-          <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[#121826] sm:text-4xl lg:text-6xl">{title}</h1>
-          <p className="mt-4 max-w-4xl break-words text-base leading-7 text-[#4b5563]">{description}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--muted)] sm:text-sm sm:tracking-[0.32em]">{eyebrow}</p>
+          <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[var(--ink)] sm:text-4xl lg:text-6xl">{title}</h1>
+          <p className="mt-4 max-w-4xl break-words text-base leading-7 text-[var(--muted)]">{description}</p>
         </section>
-        <section className="mt-6 min-w-0">
+        <section className="mt-6 min-w-0 rounded-[28px] border border-[var(--border)] bg-[var(--surface)]/85 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
           {children}
         </section>
       </main>
@@ -26,13 +45,22 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col justify-center px-4 py-10 sm:px-6 lg:px-10 lg:py-12">
+      {navLinks.length > 0 ? (
+        <nav className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2">
+          {navLinks.map((link) => (
+            <Link key={link.href} href={link.href} className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink)]">
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <section className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6b7280] sm:text-sm sm:tracking-[0.3em]">{eyebrow}</p>
-          <h1 className="mt-4 break-words font-serif text-3xl leading-tight text-[#121826] sm:text-5xl lg:text-7xl">{title}</h1>
-          <p className="mt-5 max-w-2xl break-words text-base leading-7 text-[#4b5563] sm:text-lg sm:leading-8">{description}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--muted)] sm:text-sm sm:tracking-[0.32em]">{eyebrow}</p>
+          <h1 className="mt-4 break-words font-serif text-3xl leading-tight text-[var(--ink)] sm:text-5xl lg:text-7xl">{title}</h1>
+          <p className="mt-5 max-w-2xl break-words text-base leading-7 text-[var(--muted)] sm:text-lg sm:leading-8">{description}</p>
         </section>
-        <section className="min-w-0 overflow-hidden rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-[0_24px_80px_rgba(18,24,38,0.12)] backdrop-blur-xl sm:p-6">
+        <section className="min-w-0 overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.3)] backdrop-blur-xl sm:p-6">
           {children}
         </section>
       </div>

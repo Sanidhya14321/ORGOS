@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { connectSocket, disconnectSocket, useSocket } from "@/lib/socket";
-import type { Role, Task, TaskStatus, User } from "@/lib/models";
+import type { Goal, Role, Task, TaskStatus, User } from "@/lib/models";
 
 type TaskListResponse = { items: Task[]; total: number; page: number; limit: number };
 type RoutingSuggestion = { assigneeId: string; reason: string; confidence: number };
@@ -13,6 +13,8 @@ type RoleActionMap = {
   canRouteSuggest: boolean;
   canRouteConfirm: boolean;
   canDelegate: boolean;
+  canExecutiveApprove: boolean;
+  canCreateTask: boolean;
 };
 
 const statusColumns: TaskStatus[] = [
@@ -30,7 +32,9 @@ function roleActions(role: Role): RoleActionMap {
   return {
     canRouteSuggest: role === "ceo" || role === "cfo" || role === "manager",
     canRouteConfirm: role === "ceo" || role === "cfo",
-    canDelegate: role === "ceo" || role === "cfo" || role === "manager"
+    canDelegate: role === "ceo" || role === "cfo" || role === "manager",
+    canExecutiveApprove: role === "ceo" || role === "cfo",
+    canCreateTask: role === "ceo" || role === "cfo" || role === "manager"
   };
 }
 
@@ -58,10 +62,19 @@ export function TaskBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [delegateToByTask, setDelegateToByTask] = useState<Record<string, string>>({});
   const [delegateRoleByTask, setDelegateRoleByTask] = useState<Record<string, Role>>({});
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [newTaskGoalId, setNewTaskGoalId] = useState("");
+  const [manualGoalId, setManualGoalId] = useState("");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskCriteria, setNewTaskCriteria] = useState("");
+  const [newTaskRole, setNewTaskRole] = useState<Role>("manager");
+  const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
 
   const actions = useMemo(() => roleActions(currentUser?.role ?? "worker"), [currentUser?.role]);
 
@@ -79,14 +92,21 @@ export function TaskBoard() {
 
       if (!me.org_id) {
         setCurrentUser(me);
-        router.replace("/complete-profile");
+        router.replace("/pending");
         return;
       }
 
-      const taskResponse = await apiFetch<TaskListResponse>("/api/tasks?limit=200");
+      const [taskResponse, goalResponse] = await Promise.all([
+        apiFetch<TaskListResponse>("/api/tasks?limit=200"),
+        apiFetch<{ items: Goal[] }>("/api/goals?limit=100").catch(() => ({ items: [] as Goal[] }))
+      ]);
 
       setCurrentUser(me);
       setTasks(taskResponse.items ?? []);
+      setGoals(goalResponse.items ?? []);
+      if (!newTaskGoalId && (goalResponse.items?.length ?? 0) > 0) {
+        setNewTaskGoalId(goalResponse.items[0]?.id ?? "");
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load task board");
     } finally {
@@ -202,6 +222,103 @@ export function TaskBoard() {
     }
   }
 
+  async function onExecutiveDecision(task: Task, approved: boolean) {
+    try {
+      setBusyTaskId(task.id);
+      await apiFetch(`/api/tasks/${task.id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ approved })
+      });
+      await loadBoard();
+    } catch (approvalError) {
+      setError(approvalError instanceof Error ? approvalError.message : "Unable to apply executive approval decision");
+    } finally {
+      setBusyTaskId(null);
+    }
+  }
+
+  async function onCreateTask() {
+    if (!actions.canCreateTask) {
+      return;
+    }
+
+    const effectiveGoalId = newTaskGoalId || manualGoalId.trim();
+    if (!effectiveGoalId || !newTaskTitle.trim() || !newTaskCriteria.trim()) {
+      setError("Goal, title, and success criteria are required to create a task");
+      return;
+    }
+
+    try {
+      setCreatingTask(true);
+      await apiFetch("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          goalId: effectiveGoalId,
+          title: newTaskTitle.trim(),
+          successCriteria: newTaskCriteria.trim(),
+          assignedRole: newTaskRole,
+          priority: newTaskPriority,
+          depth: 0
+        })
+      });
+
+      setNewTaskTitle("");
+      setNewTaskCriteria("");
+      await loadBoard();
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "Unable to create task");
+    } finally {
+      setCreatingTask(false);
+    }
+  }
+
+  async function onDropToStatus(targetStatus: TaskStatus) {
+    if (!draggingTaskId) {
+      return;
+    }
+
+    const task = tasks.find((item) => item.id === draggingTaskId);
+    setDraggingTaskId(null);
+
+    if (!task || task.status === targetStatus) {
+      return;
+    }
+
+    try {
+      setBusyTaskId(task.id);
+
+      const expectedNext = nextTransitionStatus(task);
+      if (expectedNext && expectedNext === targetStatus && canAssigneeTransition(task, currentUser?.id)) {
+        await apiFetch(`/api/tasks/${task.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: targetStatus })
+        });
+        await loadBoard();
+        return;
+      }
+
+      if (actions.canExecutiveApprove && task.assigned_role === "manager" && (targetStatus === "completed" || targetStatus === "in_progress")) {
+        await apiFetch(`/api/tasks/${task.id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ approved: targetStatus === "completed" })
+        });
+        await loadBoard();
+        return;
+      }
+
+      if (actions.canRouteSuggest && task.status === "routing" && targetStatus === "active") {
+        await onAutoRoute(task);
+        return;
+      }
+
+      setError("Drag-and-drop transition is not allowed for this task/role");
+    } catch (dropError) {
+      setError(dropError instanceof Error ? dropError.message : "Unable to move task");
+    } finally {
+      setBusyTaskId(null);
+    }
+  }
+
   const groupedTasks = useMemo(() => {
     const entries: Record<TaskStatus, Task[]> = {
       routing: [],
@@ -231,14 +348,89 @@ export function TaskBoard() {
 
   return (
     <div className="space-y-4">
-      {error ? <p className="rounded-2xl bg-[#fff0e6] px-4 py-3 text-sm text-[#9f4f20]">{error}</p> : null}
+      {error ? <p className="rounded-2xl border border-[var(--warn)]/30 bg-[var(--warn)]/12 px-4 py-3 text-sm text-[var(--warn)]">{error}</p> : null}
+
+      {actions.canCreateTask ? (
+        <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Create task</h2>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+            <select
+              value={newTaskGoalId}
+              onChange={(event) => setNewTaskGoalId(event.target.value)}
+              className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-sm text-[var(--ink)]"
+            >
+              <option value="">Select goal</option>
+              {goals.map((goal) => (
+                <option key={goal.id} value={goal.id}>{goal.title}</option>
+              ))}
+            </select>
+            <input
+              value={manualGoalId}
+              onChange={(event) => setManualGoalId(event.target.value)}
+              placeholder="Or paste Goal UUID"
+              className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-sm text-[var(--ink)]"
+            />
+            <input
+              value={newTaskTitle}
+              onChange={(event) => setNewTaskTitle(event.target.value)}
+              placeholder="Task title"
+              className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-sm text-[var(--ink)]"
+            />
+            <input
+              value={newTaskCriteria}
+              onChange={(event) => setNewTaskCriteria(event.target.value)}
+              placeholder="Success criteria"
+              className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-sm text-[var(--ink)]"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={newTaskRole}
+                onChange={(event) => setNewTaskRole(event.target.value as Role)}
+                className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-2 py-2 text-sm text-[var(--ink)]"
+              >
+                <option value="manager">Manager</option>
+                <option value="worker">Worker</option>
+                {(currentUser?.role === "ceo" || currentUser?.role === "cfo") ? <option value="cfo">CFO</option> : null}
+              </select>
+              <select
+                value={newTaskPriority}
+                onChange={(event) => setNewTaskPriority(event.target.value as "low" | "medium" | "high" | "critical")}
+                className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-2 py-2 text-sm text-[var(--ink)]"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => void onCreateTask()}
+              disabled={creatingTask}
+              className="rounded-xl bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-[#0f1115] disabled:opacity-60"
+            >
+              {creatingTask ? "Creating..." : "Add task"}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         {statusColumns.map((status) => (
-          <section key={status} className="min-w-0 rounded-3xl border border-[#ece7dd] bg-white p-3">
+          <section
+            key={status}
+            className="min-w-0 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-3"
+            onDragOver={(event) => {
+              event.preventDefault();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              void onDropToStatus(status);
+            }}
+          >
             <header className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#6b7280]">{status.replace("_", " ")}</h3>
-              <span className="rounded-full bg-[#f8f5ef] px-2.5 py-1 text-xs font-semibold text-[#8b8f97]">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{status.replace("_", " ")}</h3>
+              <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
                 {groupedTasks[status].length}
               </span>
             </header>
@@ -249,10 +441,16 @@ export function TaskBoard() {
                 const nextStatus = nextTransitionStatus(task);
 
                 return (
-                  <article key={task.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-3">
-                    <p className="break-words font-semibold text-[#121826]">{task.title}</p>
-                    <p className="mt-1 text-xs text-[#6b7280]">Role: {task.assigned_role.toUpperCase()}</p>
-                    <p className="mt-1 break-all text-xs text-[#6b7280]">Assignee: {task.assigned_to ?? "Unassigned"}</p>
+                  <article
+                    key={task.id}
+                    className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-3"
+                    draggable
+                    onDragStart={() => setDraggingTaskId(task.id)}
+                    onDragEnd={() => setDraggingTaskId(null)}
+                  >
+                    <p className="break-words font-semibold text-[var(--ink)]">{task.title}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">Role: {task.assigned_role.toUpperCase()}</p>
+                    <p className="mt-1 break-all text-xs text-[var(--muted)]">Assignee: {task.assigned_to ?? "Unassigned"}</p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       {canTransition && nextStatus ? (
@@ -260,7 +458,7 @@ export function TaskBoard() {
                           type="button"
                           onClick={() => void onTransition(task)}
                           disabled={busyTaskId === task.id}
-                          className="rounded-xl bg-[#121826] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                          className="rounded-xl bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-[#0f1115] disabled:opacity-60"
                         >
                           {nextStatus === "in_progress" ? "Start" : "Complete"}
                         </button>
@@ -271,15 +469,36 @@ export function TaskBoard() {
                           type="button"
                           onClick={() => void onAutoRoute(task)}
                           disabled={busyTaskId === task.id}
-                          className="rounded-xl bg-[#2a9d8f] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                          className="rounded-xl bg-[var(--ok)] px-3 py-1.5 text-xs font-semibold text-[#08120d] disabled:opacity-60"
                         >
                           {actions.canRouteConfirm ? "Suggest + confirm" : "Suggest route"}
                         </button>
                       ) : null}
+
+                      {actions.canExecutiveApprove && task.assigned_role === "manager" && (task.status === "pending" || task.status === "completed") ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void onExecutiveDecision(task, true)}
+                            disabled={busyTaskId === task.id}
+                            className="rounded-xl bg-[var(--ok)] px-3 py-1.5 text-xs font-semibold text-[#08120d] disabled:opacity-60"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void onExecutiveDecision(task, false)}
+                            disabled={busyTaskId === task.id}
+                            className="rounded-xl border border-[var(--warn)]/60 bg-[var(--warn)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--warn)] disabled:opacity-60"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : null}
                     </div>
 
                     {actions.canDelegate ? (
-                      <div className="mt-3 space-y-2 rounded-xl border border-[#e6e0d4] bg-white p-2">
+                      <div className="mt-3 space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2">
                         <input
                           value={delegateToByTask[task.id] ?? ""}
                           onChange={(event) =>
@@ -289,7 +508,7 @@ export function TaskBoard() {
                             }))
                           }
                           placeholder="Delegate user UUID (blank = agent)"
-                          className="w-full rounded-lg border border-[#ddd6c8] px-2 py-1.5 text-xs text-[#121826]"
+                          className="w-full rounded-lg border border-[var(--border)] bg-[#0f1115] px-2 py-1.5 text-xs text-[var(--ink)]"
                         />
                         <select
                           value={delegateRoleByTask[task.id] ?? task.assigned_role}
@@ -299,7 +518,7 @@ export function TaskBoard() {
                               [task.id]: event.target.value as Role
                             }))
                           }
-                          className="w-full rounded-lg border border-[#ddd6c8] px-2 py-1.5 text-xs text-[#121826]"
+                          className="w-full rounded-lg border border-[var(--border)] bg-[#0f1115] px-2 py-1.5 text-xs text-[var(--ink)]"
                         >
                           <option value="ceo">CEO</option>
                           <option value="cfo">CFO</option>
@@ -310,7 +529,7 @@ export function TaskBoard() {
                           type="button"
                           onClick={() => void onDelegate(task)}
                           disabled={busyTaskId === task.id}
-                          className="w-full rounded-lg bg-[#ff6b35] px-2 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                          className="w-full rounded-lg bg-[var(--accent)] px-2 py-1.5 text-xs font-semibold text-[#0f1115] disabled:opacity-60"
                         >
                           Delegate
                         </button>
@@ -320,7 +539,7 @@ export function TaskBoard() {
                 );
               })}
 
-              {groupedTasks[status].length === 0 ? <p className="text-xs text-[#8b8f97]">No tasks.</p> : null}
+              {groupedTasks[status].length === 0 ? <p className="text-xs text-[var(--muted)]">No tasks.</p> : null}
             </div>
           </section>
         ))}

@@ -2,27 +2,19 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { setRoleCookie } from "@/lib/auth";
 
 export function LoginForm() {
   const router = useRouter();
-  const [audience, setAudience] = useState<"owner" | "csuite" | "employee" | "">("");
-  const [email, setEmail] = useState("");
+  const searchParams = useSearchParams();
+  const initialEmail = useMemo(() => searchParams.get("email") ?? "", [searchParams]);
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-
-  function audienceMatchesRole(kind: "owner" | "csuite" | "employee", role: string): boolean {
-    if (kind === "owner") {
-      return role === "ceo";
-    }
-    if (kind === "csuite") {
-      return role === "ceo" || role === "cfo";
-    }
-    return role === "manager" || role === "worker";
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,10 +22,6 @@ export function LoginForm() {
     setError(null);
 
     try {
-      if (!audience) {
-        throw new Error("Select your account type before signing in.");
-      }
-
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -47,14 +35,6 @@ export function LoginForm() {
       }
 
       const data = await response.json() as { user: { role: string; status?: string } };
-      if (!audienceMatchesRole(audience, data.user.role)) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/auth/logout`, {
-          method: "POST",
-          credentials: "include"
-        }).catch(() => undefined);
-        throw new Error("Selected account type does not match your role. Please choose the correct option.");
-      }
-
       setRoleCookie(data.user.role);
       if (data.user.status === "pending") {
         router.push("/pending");
@@ -71,37 +51,10 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Account type</legend>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => setAudience("owner")}
-            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${audience === "owner" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
-          >
-            Company owner
-          </button>
-          <button
-            type="button"
-            onClick={() => setAudience("csuite")}
-            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${audience === "csuite" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
-          >
-            C-suite
-          </button>
-          <button
-            type="button"
-            onClick={() => setAudience("employee")}
-            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${audience === "employee" ? "border-[#121826] bg-[#121826] text-white" : "border-[#ddd6c8] bg-white text-[#121826]"}`}
-          >
-            Employee
-          </button>
-        </div>
-      </fieldset>
-
       <label className="block space-y-2">
-        <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Email</span>
+        <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Email</span>
         <input
-          className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+          className="w-full rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 text-[#eef2ff] outline-none transition focus:border-[#f59e0b]"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -112,9 +65,9 @@ export function LoginForm() {
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Password</span>
+        <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Password</span>
         <input
-          className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+          className="w-full rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 text-[#eef2ff] outline-none transition focus:border-[#f59e0b]"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -124,18 +77,18 @@ export function LoginForm() {
         />
       </label>
 
-      {error ? <p className="rounded-2xl bg-[#fff0e6] px-4 py-3 text-sm text-[#9f4f20]">{error}</p> : null}
+      {error ? <p className="rounded-2xl border border-[#3a2f1f] bg-[#25170f] px-4 py-3 text-sm text-[#fdba74]">{error}</p> : null}
 
       <button
         type="submit"
-        disabled={pending || !audience}
-        className="inline-flex w-full items-center justify-center rounded-2xl bg-[#121826] px-4 py-3 font-semibold text-white transition hover:bg-[#1c2538] disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={pending}
+        className="inline-flex w-full items-center justify-center rounded-2xl bg-[#f59e0b] px-4 py-3 font-semibold text-[#0f1115] transition hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? "Signing in..." : "Sign in"}
       </button>
 
-      <p className="text-center text-sm text-[#5f6470]">
-        New here? <Link href="/register" className="font-semibold text-[#121826] underline-offset-4 hover:underline">Create an account</Link>
+      <p className="text-center text-sm text-[var(--muted)]">
+        New here? <Link href="/register" className="font-semibold text-[#eef2ff] underline-offset-4 hover:underline">Create an account</Link>
       </p>
     </form>
   );

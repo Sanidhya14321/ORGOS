@@ -19,6 +19,7 @@ export default function CeoDashboardPage() {
   return (
     <AppShell
       layout="stack"
+      role={cookieRole}
       eyebrow="CEO dashboard"
       title="Executive control center"
       description="Switch between approvals and org setup to onboard members and manage level structure from one place."

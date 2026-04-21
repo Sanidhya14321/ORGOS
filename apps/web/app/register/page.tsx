@@ -5,8 +5,8 @@ export default function RegisterPage() {
   return (
     <AppShell
       eyebrow="ORGOS access"
-      title="Create your workspace account"
-      description="Set up a new worker account to explore ORGOS locally. Executive roles are still meant to be provisioned by an administrator."
+      title="Create an executive account"
+      description="Owners, CEOs, and CFOs can register here. Everyone else receives credentials from the company admin."
     >
       <RegisterForm />
     </AppShell>

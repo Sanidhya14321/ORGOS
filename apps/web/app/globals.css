@@ -3,21 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --bg-main: #f5f1e8;
-  --surface: #fffdf8;
-  --ink: #111827;
-  --accent: #ff6b35;
-  --muted: #5f6470;
-  --ok: #2a9d8f;
-  --warn: #e9c46a;
+  /* Design Style: Dark Premium
+     Theme: slate-charcoal
+     Fonts: Display -> Space Grotesk | Body -> Space Grotesk
+  */
+  --bg-main: #0f1115;
+  --surface: #171a21;
+  --surface-2: #1f2430;
+  --ink: #eef2ff;
+  --accent: #f59e0b;
+  --accent-2: #22c55e;
+  --muted: #94a3b8;
+  --ok: #22c55e;
+  --warn: #fb923c;
+  --border: #2c3240;
 }
 
 html,
 body {
-  background:
-    radial-gradient(circle at 0% 0%, #fff0db 0%, transparent 36%),
-    radial-gradient(circle at 100% 0%, #d9f1eb 0%, transparent 28%),
-    linear-gradient(180deg, #faf7f0 0%, var(--bg-main) 100%);
+  background: var(--bg-main);
   min-height: 100%;
   color: var(--ink);
   font-family: var(--font-grotesk), "Segoe UI", sans-serif;
@@ -33,7 +37,7 @@ a {
 }
 
 ::selection {
-  background: rgba(255, 107, 53, 0.2);
+  background: rgba(245, 158, 11, 0.24);
 }
 
 .font-serif {

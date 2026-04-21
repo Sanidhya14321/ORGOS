@@ -37,8 +37,8 @@ function VerifyPageContent() {
         throw new Error(body?.error?.message ?? "Verification failed");
       }
 
-      setMessage("Verification recorded. Complete your profile to join an organization.");
-      router.push("/complete-profile");
+      setMessage("Verification recorded. Sign in to continue profile setup.");
+      router.push(`/login?verified=1&email=${encodeURIComponent(email)}`);
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "Unable to verify account");
     } finally {
@@ -54,9 +54,9 @@ function VerifyPageContent() {
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Email</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Email</span>
           <input
-            className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+            className="w-full rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 text-[#eef2ff] outline-none transition focus:border-[#f59e0b]"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -65,21 +65,21 @@ function VerifyPageContent() {
           />
         </label>
 
-        {error ? <p className="rounded-2xl bg-[#fff0e6] px-4 py-3 text-sm text-[#9f4f20]">{error}</p> : null}
-        {message ? <p className="rounded-2xl bg-[#ebfff3] px-4 py-3 text-sm text-[#0f7b45]">{message}</p> : null}
+        {error ? <p className="rounded-2xl border border-[#3a2f1f] bg-[#25170f] px-4 py-3 text-sm text-[#fdba74]">{error}</p> : null}
+        {message ? <p className="rounded-2xl border border-[#1b3d2a] bg-[#102017] px-4 py-3 text-sm text-[#86efac]">{message}</p> : null}
 
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex w-full items-center justify-center rounded-2xl bg-[#121826] px-4 py-3 font-semibold text-white transition hover:bg-[#1c2538] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center rounded-2xl bg-[#f59e0b] px-4 py-3 font-semibold text-[#0f1115] transition hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? "Verifying..." : "Verify email"}
         </button>
 
         <p className="text-center text-sm text-[#5f6470]">
           Already verified?{" "}
-          <Link href="/complete-profile" className="font-semibold text-[#121826] underline-offset-4 hover:underline">
-            Complete profile
+          <Link href="/login" className="font-semibold text-[#eef2ff] underline-offset-4 hover:underline">
+            Sign in
           </Link>
         </p>
       </form>

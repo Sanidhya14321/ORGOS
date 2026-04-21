@@ -27,6 +27,11 @@ const StatusPatchSchema = z.object({
   status: TaskStatusSchema
 });
 
+const ApproveTaskBodySchema = z.object({
+  approved: z.boolean().default(true),
+  notes: z.string().trim().max(1000).optional()
+});
+
 const CreateTaskBodySchema = z.object({
   orgId: z.string().uuid().optional(),
   goalId: z.string().uuid(),
@@ -617,9 +622,26 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    let targetStatus = body.data.status;
+    let suggestedFixes: string | null = null;
+
+    if (body.data.status === "completed") {
+      const assigneeRoleResult = await fastify.supabaseService
+        .from("users")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const assigneeRole = assigneeRoleResult.data?.role;
+      if (assigneeRole === "manager") {
+        targetStatus = "pending";
+        suggestedFixes = "Awaiting executive approval for manager-completed task";
+      }
+    }
+
     const { data: updated, error: updateError } = await fastify.supabaseService
       .from("tasks")
-      .update({ status: body.data.status, updated_at: new Date().toISOString() })
+      .update({ status: targetStatus, suggested_fixes: suggestedFixes, updated_at: new Date().toISOString() })
       .eq("id", task.id)
       .select("*")
       .single();
@@ -641,10 +663,77 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     emitTaskStatusChanged(task.assigned_to as string, managerId, {
       taskId: task.id,
-      status: body.data.status
+      status: targetStatus
     });
 
     return reply.send(updated);
+  });
+
+  fastify.post("/tasks/:id/approve", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const params = IdParamSchema.safeParse(request.params);
+    const body = ApproveTaskBodySchema.safeParse(request.body ?? {});
+
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task approval payload");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const taskResult = await fastify.supabaseService
+      .from("tasks")
+      .select("id, org_id, assigned_to, assigned_role, status")
+      .eq("id", params.data.id)
+      .maybeSingle();
+
+    if (taskResult.error || !taskResult.data?.id) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Task not found");
+    }
+
+    if (taskResult.data.org_id !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot approve task outside requester organization");
+    }
+
+    if (taskResult.data.assigned_role !== "manager") {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Only manager-level tasks require executive approval");
+    }
+
+    if (taskResult.data.status !== "pending" && taskResult.data.status !== "completed") {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Task is not awaiting executive approval");
+    }
+
+    const approvedStatus = body.data.approved ? "completed" : "in_progress";
+    const updated = await fastify.supabaseService
+      .from("tasks")
+      .update({
+        status: approvedStatus,
+        rejection_reason: body.data.approved ? null : (body.data.notes || "Rejected during executive review"),
+        suggested_fixes: body.data.approved ? null : (body.data.notes || "Revise task output and resubmit for review"),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", params.data.id)
+      .select("*")
+      .single();
+
+    if (updated.error || !updated.data) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to apply executive task approval decision");
+    }
+
+    if (taskResult.data.assigned_to) {
+      emitTaskStatusChanged(taskResult.data.assigned_to as string, requesterId, {
+        taskId: params.data.id,
+        status: approvedStatus
+      });
+    }
+
+    return reply.send(updated.data);
   });
 
   fastify.post("/tasks/:id/delegate", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {

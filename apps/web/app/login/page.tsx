@@ -6,7 +6,7 @@ export default function LoginPage() {
     <AppShell
       eyebrow="ORGOS access"
       title="Sign in to the control room"
-      description="First choose your account type (owner, C-suite, or employee), then sign in to enter the correct RBAC workspace."
+      description="Sign in with your assigned credentials. Executives can create accounts here; employees log in with the IDs issued by their company."
     >
       <LoginForm />
     </AppShell>

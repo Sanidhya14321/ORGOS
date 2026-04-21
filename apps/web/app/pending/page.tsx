@@ -8,7 +8,7 @@ export default function PendingPage() {
       title="Approval pending"
       description="Your profile is submitted and waiting for CEO/CFO approval. You will get access once activated."
     >
-      <div className="space-y-4 text-sm text-[#4b5563]">
+      <div className="space-y-4 text-sm text-[var(--muted)]">
         <p>
           Your account is currently in pending state. An executive in your organization needs to approve your membership
           before dashboard access is enabled.
@@ -19,13 +19,13 @@ export default function PendingPage() {
         <div className="flex gap-3">
           <Link
             href="/login"
-            className="inline-flex items-center justify-center rounded-2xl bg-[#121826] px-4 py-3 font-semibold text-white transition hover:bg-[#1c2538]"
+            className="inline-flex items-center justify-center rounded-2xl bg-[#f59e0b] px-4 py-3 font-semibold text-[#0f1115] transition hover:bg-[#d97706]"
           >
             Back to sign in
           </Link>
           <Link
             href="/complete-profile"
-            className="inline-flex items-center justify-center rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 font-semibold text-[#121826]"
+            className="inline-flex items-center justify-center rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 font-semibold text-[#eef2ff]"
           >
             Edit profile
           </Link>

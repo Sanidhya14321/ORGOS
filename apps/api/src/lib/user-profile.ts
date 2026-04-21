@@ -65,7 +65,14 @@ export async function loadUserProfile(fastify: FastifyInstance, authUser: Supaba
     .maybeSingle();
 
   if (!profileQuery.error && profileQuery.data) {
-    const parsed = UserSchema.safeParse(profileQuery.data);
+    const normalized = {
+      ...profileQuery.data,
+      department: profileQuery.data.department ?? undefined,
+      skills: Array.isArray(profileQuery.data.skills) ? profileQuery.data.skills : undefined,
+      current_load: typeof profileQuery.data.open_task_count === "number" ? profileQuery.data.open_task_count : undefined
+    };
+
+    const parsed = UserSchema.safeParse(normalized);
     if (parsed.success) {
       return parsed.data;
     }

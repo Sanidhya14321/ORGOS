@@ -24,6 +24,7 @@ const RegisterBodySchema = z.object({
   fullName: z.string().trim().min(1).max(120),
   email: z.string().trim().email(),
   password: z.string().min(8),
+  role: z.enum(["ceo", "cfo"]).default("ceo"),
   department: z.preprocess(
     (value) => {
       if (typeof value !== "string") {
@@ -88,7 +89,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const { email, fullName, password, department } = parsed.data;
+    const { email, fullName, password, department, role } = parsed.data;
+
+    if (role !== "ceo" && role !== "cfo") {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Only executive accounts can self-register");
+    }
 
     const createResult = await fastify.supabaseAnon.auth.signUp({
       email,
@@ -97,7 +102,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         emailRedirectTo: `${fastify.env.WEB_ORIGIN}/verify`,
         data: {
           full_name: fullName,
-          role: "worker",
+          role,
           department,
           agent_enabled: true
         }
@@ -106,8 +111,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (createResult.error || !createResult.data.user) {
       const message = createResult.error?.message ?? "Unable to create account";
-      const status = message.toLowerCase().includes("already") ? 409 : 500;
-      const code = status === 409 ? "CONFLICT" : "INTERNAL_ERROR";
+      const lowered = message.toLowerCase();
+      const isConflict = lowered.includes("already") || lowered.includes("exists");
+      const isValidation = lowered.includes("invalid") || lowered.includes("email") || lowered.includes("password");
+      const status = isConflict ? 409 : isValidation ? 400 : 500;
+      const code = status === 409 ? "CONFLICT" : status === 400 ? "VALIDATION_ERROR" : "INTERNAL_ERROR";
       return sendApiError(reply, request, status, code, message);
     }
 
@@ -135,18 +143,38 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const authUser = request.user;
-    if (!authUser?.id || !authUser.email) {
-      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
-    }
-
-    if (authUser.email.toLowerCase() !== parsed.data.email.toLowerCase()) {
+    const requestedEmail = parsed.data.email.toLowerCase();
+    let resolvedRole = authUser?.user_metadata?.role as string | undefined;
+    if (authUser?.email && authUser.email.toLowerCase() !== requestedEmail) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Email does not match authenticated user");
     }
 
+    let userId = authUser?.id ?? null;
+    if (!userId) {
+      const existingUser = await fastify.supabaseService
+        .from("users")
+        .select("id, role")
+        .ilike("email", requestedEmail)
+        .maybeSingle();
+
+      if (existingUser.error) {
+        request.log.warn({ err: existingUser.error }, "Unable to resolve user during verify");
+      }
+
+      if (!existingUser.data?.id) {
+        return sendApiError(reply, request, 404, "NOT_FOUND", "No account found for this email");
+      }
+
+      userId = existingUser.data.id;
+      resolvedRole = existingUser.data.role as string | undefined;
+    }
+
+    const nextStatus = resolvedRole === "ceo" || resolvedRole === "cfo" ? "active" : "pending";
+
     const { error } = await fastify.supabaseService
       .from("users")
-      .update({ email_verified: true, status: "pending" })
-      .eq("id", authUser.id);
+      .update({ email_verified: true, status: nextStatus })
+      .eq("id", userId);
 
     // Keep this endpoint best-effort for compatibility if migration is not applied yet.
     if (error) {

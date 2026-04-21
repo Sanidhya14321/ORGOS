@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
@@ -18,9 +19,19 @@ const OrgIdParamSchema = z.object({
   id: z.string().uuid()
 });
 
+const LevelSchema = z.coerce.number().int().min(0).max(999);
+
 const PositionBodySchema = z.object({
   title: z.string().trim().min(1).max(200),
-  level: z.union([z.literal(0), z.literal(1), z.literal(2)])
+  level: LevelSchema,
+  createLogin: z.boolean().optional().default(true),
+  loginEmail: z.string().trim().email().optional(),
+  fullName: z.string().trim().min(1).max(120).optional()
+});
+
+const AccountsListQuerySchema = z.object({
+  page: z.coerce.number().int().positive().catch(1).default(1),
+  limit: z.coerce.number().int().positive().max(100).catch(20).default(20)
 });
 
 const MemberParamSchema = z.object({
@@ -33,6 +44,34 @@ const RejectBodySchema = z.object({
 
 const ApproveBodySchema = z.object({
   overrideDomainMismatch: z.boolean().optional().default(false)
+});
+
+const MemberRoleSchema = z.enum(["ceo", "cfo", "manager", "worker"]);
+
+const MemberStructureBodySchema = z.object({
+  role: MemberRoleSchema.optional(),
+  positionId: z.string().uuid().nullable().optional(),
+  reportsTo: z.string().uuid().nullable().optional(),
+  department: z.string().trim().max(120).nullable().optional()
+});
+
+const EmployeeImportRowSchema = z.object({
+  fullName: z.string().trim().min(1).max(120),
+  email: z.string().trim().email(),
+  department: z.string().trim().max(120).optional(),
+  role: MemberRoleSchema.optional(),
+  positionTitle: z.string().trim().max(200).optional(),
+  positionLevel: LevelSchema.optional(),
+  reportsToEmail: z.string().trim().email().optional(),
+  password: z.string().min(8).optional()
+});
+
+const AccountParamSchema = z.object({
+  id: z.string().uuid()
+});
+
+const EmployeeImportBodySchema = z.object({
+  employees: z.array(EmployeeImportRowSchema).min(1).max(100)
 });
 
 const OrgTreeNodeSchema = z.object({
@@ -56,6 +95,31 @@ function getEmailDomain(email: string): string | null {
     return null;
   }
   return email.slice(at + 1).toLowerCase();
+}
+
+function inferLevelFromRole(role: z.infer<typeof MemberRoleSchema>): 0 | 1 | 2 {
+  if (role === "ceo" || role === "cfo") {
+    return 0;
+  }
+
+  if (role === "manager") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function generatePassword(): string {
+  return crypto.randomBytes(9).toString("base64url");
+}
+
+function slugify(input: string): string {
+  const value = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return value || "position";
 }
 
 const orgRoutes: FastifyPluginAsync = async (fastify) => {
@@ -310,7 +374,138 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  fastify.post("/orgs/:id/positions", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+  fastify.get("/orgs/:id/accounts", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const params = OrgIdParamSchema.safeParse(request.params);
+    const query = AccountsListQuerySchema.safeParse(request.query);
+
+    if (!params.success || !query.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid account list request payload");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId || requesterOrgId !== params.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot read accounts outside requester organization");
+    }
+
+    const from = (query.data.page - 1) * query.data.limit;
+    const to = from + query.data.limit - 1;
+
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("id, email, full_name, role, status, department, position_id, reports_to, created_at", { count: "exact" })
+      .eq("org_id", params.data.id)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (usersResult.error) {
+      if (isMissingTableSchemaCache(usersResult.error)) {
+        return reply.send({ page: query.data.page, limit: query.data.limit, total: 0, items: [] });
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization accounts");
+    }
+
+    const positionsResult = await fastify.supabaseService
+      .from("positions")
+      .select("id, title, level")
+      .eq("org_id", params.data.id);
+
+    const positionById = new Map<string, { title: string; level: number }>();
+    for (const row of positionsResult.data ?? []) {
+      positionById.set(row.id as string, { title: row.title as string, level: Number(row.level) });
+    }
+
+    const items = (usersResult.data ?? []).map((row) => {
+      const positionId = (row.position_id as string | null | undefined) ?? null;
+      const position = positionId ? positionById.get(positionId) : null;
+      return {
+        id: row.id,
+        email: row.email,
+        full_name: row.full_name,
+        role: row.role,
+        status: row.status,
+        department: row.department,
+        reports_to: row.reports_to,
+        position_id: positionId,
+        position_title: position?.title ?? null,
+        position_level: position?.level ?? null,
+        password: null,
+        password_note: "Existing passwords are never retrievable. Use password reset to generate a new temporary password."
+      };
+    });
+
+    return reply.send({
+      page: query.data.page,
+      limit: query.data.limit,
+      total: usersResult.count ?? 0,
+      items
+    });
+  });
+
+  fastify.post("/orgs/accounts/:id/reset-password", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const params = AccountParamSchema.safeParse(request.params);
+    if (!params.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid account id");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const targetUser = await fastify.supabaseService
+      .from("users")
+      .select("id, email, org_id")
+      .eq("id", params.data.id)
+      .maybeSingle();
+
+    if (targetUser.error || !targetUser.data?.id) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Account not found");
+    }
+
+    if (targetUser.data.org_id !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot reset password for account outside requester organization");
+    }
+
+    const temporaryPassword = generatePassword();
+    const updated = await fastify.supabaseService.auth.admin.updateUserById(params.data.id, {
+      password: temporaryPassword,
+      email_confirm: true
+    });
+
+    if (updated.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to reset account password");
+    }
+
+    await fastify.supabaseService.from("audit_log").insert({
+      org_id: requesterOrgId,
+      actor_id: requesterId,
+      action: "account_password_reset",
+      entity: "user",
+      entity_id: params.data.id,
+      meta: {
+        email: targetUser.data.email
+      }
+    });
+
+    return reply.send({
+      id: params.data.id,
+      email: targetUser.data.email,
+      password: temporaryPassword,
+      message: "Temporary password generated. Share securely and rotate after first login."
+    });
+  });
+
+  fastify.post("/orgs/:id/positions", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
     const params = OrgIdParamSchema.safeParse(request.params);
     const body = PositionBodySchema.safeParse(request.body);
 
@@ -350,7 +545,363 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create custom position");
     }
 
-    return reply.status(201).send(data);
+    let credentials: { email: string; password: string; role: "ceo" | "cfo" | "manager" | "worker" } | null = null;
+    if (body.data.createLogin) {
+      const orgResult = await fastify.supabaseService
+        .from("orgs")
+        .select("id, name, domain")
+        .eq("id", params.data.id)
+        .maybeSingle();
+
+      if (orgResult.error || !orgResult.data?.id) {
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Position created but failed to resolve organization for login provisioning");
+      }
+
+      const fallbackDomain = `${slugify(orgResult.data.name)}.orgos.ai`;
+      const domain = (orgResult.data.domain || fallbackDomain).toLowerCase();
+      const emailPrefix = `${slugify(body.data.title)}.${crypto.randomBytes(3).toString("hex")}`;
+      const email = (body.data.loginEmail?.toLowerCase() || `${emailPrefix}@${domain}`);
+      const password = generatePassword();
+      const role: "ceo" | "cfo" | "manager" | "worker" = body.data.level === 0 ? "cfo" : body.data.level === 1 ? "manager" : "worker";
+      const fullName = body.data.fullName || `${body.data.title} Seat`;
+
+      const existing = await fastify.supabaseService.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (existing.error) {
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Position created but failed to validate login uniqueness");
+      }
+
+      const alreadyExists = existing.data.users.some((user) => user.email?.toLowerCase() === email);
+      if (alreadyExists) {
+        return sendApiError(reply, request, 409, "CONFLICT", "Position created, but generated login email already exists. Retry with a custom loginEmail");
+      }
+
+      const createdAuthUser = await fastify.supabaseService.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fullName,
+          role,
+          department: null,
+          agent_enabled: true
+        }
+      });
+
+      if (createdAuthUser.error || !createdAuthUser.data.user?.id) {
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Position created but failed to provision login credentials");
+      }
+
+      const profileUpsert = await fastify.supabaseService
+        .from("users")
+        .upsert({
+          id: createdAuthUser.data.user.id,
+          email,
+          full_name: fullName,
+          role,
+          status: "active",
+          org_id: params.data.id,
+          position_id: data.id,
+          department: null,
+          reports_to: null
+        }, { onConflict: "id" });
+
+      if (profileUpsert.error) {
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Position created but failed to persist provisioned member profile");
+      }
+
+      credentials = { email, password, role };
+    }
+
+    return reply.status(201).send({ ...data, credentials });
+  });
+
+  fastify.patch("/orgs/members/:id/structure", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+    const params = MemberParamSchema.safeParse(request.params);
+    const body = MemberStructureBodySchema.safeParse(request.body);
+
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid member structure payload");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const targetUser = await fastify.supabaseService
+      .from("users")
+      .select("id, org_id, role")
+      .eq("id", params.data.id)
+      .maybeSingle();
+
+    if (targetUser.error) {
+      if (isMissingTableSchemaCache(targetUser.error)) {
+        return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "User table is not available yet; apply DB migrations first");
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load target member");
+    }
+
+    if (!targetUser.data?.org_id || targetUser.data.org_id !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot update member outside requester organization");
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (body.data.department !== undefined) {
+      patch.department = body.data.department;
+    }
+    if (body.data.positionId !== undefined) {
+      if (body.data.positionId === null) {
+        patch.position_id = null;
+      } else {
+        const position = await fastify.supabaseService
+          .from("positions")
+          .select("id, org_id")
+          .eq("id", body.data.positionId)
+          .maybeSingle();
+
+        if (position.error) {
+          return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to resolve position");
+        }
+
+        if (!position.data?.id || position.data.org_id !== requesterOrgId) {
+          return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Selected position does not belong to this organization");
+        }
+
+        patch.position_id = position.data.id;
+      }
+    }
+    if (body.data.reportsTo !== undefined) {
+      if (body.data.reportsTo === null) {
+        patch.reports_to = null;
+      } else if (body.data.reportsTo === params.data.id) {
+        return sendApiError(reply, request, 400, "VALIDATION_ERROR", "A member cannot report to themselves");
+      } else {
+        const manager = await fastify.supabaseService
+          .from("users")
+          .select("id, org_id")
+          .eq("id", body.data.reportsTo)
+          .maybeSingle();
+
+        if (manager.error) {
+          return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to resolve reporting line");
+        }
+
+        if (!manager.data?.id || manager.data.org_id !== requesterOrgId) {
+          return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Reporting manager must belong to the same organization");
+        }
+
+        patch.reports_to = manager.data.id;
+      }
+    }
+    if (body.data.role) {
+      const requesterRole = request.userRole;
+      if (requesterRole !== "ceo" && requesterRole !== "cfo") {
+        return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO or CFO can change employee roles");
+      }
+
+      patch.role = body.data.role;
+      if (body.data.role === "manager" || body.data.role === "worker") {
+        patch.status = "active";
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "No changes requested");
+    }
+
+    const updated = await fastify.supabaseService
+      .from("users")
+      .update(patch)
+      .eq("id", params.data.id)
+      .select("id, email, full_name, role, org_id, status, position_id, reports_to, department")
+      .maybeSingle();
+
+    if (updated.error || !updated.data) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update member structure");
+    }
+
+    await invalidateOrgPromptCache(fastify, requesterOrgId);
+
+    return reply.send(updated.data);
+  });
+
+  fastify.post("/orgs/:id/employees/import", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const params = OrgIdParamSchema.safeParse(request.params);
+    const body = EmployeeImportBodySchema.safeParse(request.body);
+
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid employee import payload");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId || requesterOrgId !== params.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot import employees outside requester organization");
+    }
+
+    const positionsResult = await fastify.supabaseService
+      .from("positions")
+      .select("id, title, level")
+      .eq("org_id", params.data.id);
+
+    if (positionsResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization positions for import");
+    }
+
+    const existingPositions = positionsResult.data ?? [];
+    const positionByKey = new Map<string, { id: string; title: string; level: number }>();
+    for (const position of existingPositions) {
+      positionByKey.set(`${position.title.toLowerCase()}::${position.level}`, position);
+    }
+
+    const authUsers = await fastify.supabaseService.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (authUsers.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to list existing auth users");
+    }
+
+    const authByEmail = new Map<string, string>();
+    for (const user of authUsers.data.users) {
+      if (user.email) {
+        authByEmail.set(user.email.toLowerCase(), user.id);
+      }
+    }
+
+    const createdCredentials: Array<{ fullName: string; email: string; password: string; role: string; position: string }> = [];
+    const reportToLinks: Array<{ id: string; reportsToEmail: string }> = [];
+
+    for (const row of body.data.employees) {
+      const email = row.email.toLowerCase();
+      const role = row.role ?? "worker";
+      const password = row.password ?? generatePassword();
+      const level = row.positionLevel ?? inferLevelFromRole(role);
+      const title = row.positionTitle?.trim() || (role === "ceo" ? "CEO" : role === "cfo" ? "CFO" : role === "manager" ? "Manager" : "Individual Contributor");
+      const positionKey = `${title.toLowerCase()}::${level}`;
+
+      let position = positionByKey.get(positionKey);
+      if (!position) {
+        const createdPosition = await fastify.supabaseService
+          .from("positions")
+          .insert({
+            org_id: params.data.id,
+            title,
+            level,
+            is_custom: true,
+            confirmed: true
+          })
+          .select("id, title, level")
+          .single();
+
+        if (createdPosition.error || !createdPosition.data) {
+          return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Failed to create position for ${email}`);
+        }
+
+        position = createdPosition.data;
+        positionByKey.set(positionKey, position);
+      }
+
+      const existingAuthId = authByEmail.get(email);
+      if (existingAuthId) {
+        const updated = await fastify.supabaseService.auth.admin.updateUserById(existingAuthId, {
+          password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: row.fullName,
+            role,
+            department: row.department,
+            agent_enabled: true
+          }
+        });
+
+        if (updated.error) {
+          return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Failed to update auth user for ${email}`);
+        }
+      } else {
+        const created = await fastify.supabaseService.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: row.fullName,
+            role,
+            department: row.department,
+            agent_enabled: true
+          }
+        });
+
+        if (created.error || !created.data.user) {
+          return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Failed to create auth user for ${email}`);
+        }
+
+        authByEmail.set(email, created.data.user.id);
+      }
+
+      const authId = authByEmail.get(email);
+      if (!authId) {
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Unable to resolve auth user for ${email}`);
+      }
+
+      const profileUpdate = await fastify.supabaseService
+        .from("users")
+        .upsert(
+          {
+            id: authId,
+            email,
+            full_name: row.fullName,
+            role,
+            status: "active",
+            org_id: params.data.id,
+            position_id: position.id,
+            department: row.department ?? null
+          },
+          { onConflict: "id" }
+        )
+        .select("id")
+        .maybeSingle();
+
+      if (profileUpdate.error) {
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Failed to persist profile for ${email}`);
+      }
+
+      createdCredentials.push({
+        fullName: row.fullName,
+        email,
+        password,
+        role,
+        position: position.title
+      });
+
+      if (row.reportsToEmail) {
+        reportToLinks.push({ id: authId, reportsToEmail: row.reportsToEmail.toLowerCase() });
+      }
+    }
+
+    for (const link of reportToLinks) {
+      const reportsToId = authByEmail.get(link.reportsToEmail);
+      if (!reportsToId) {
+        continue;
+      }
+
+      await fastify.supabaseService
+        .from("users")
+        .update({ reports_to: reportsToId })
+        .eq("id", link.id);
+    }
+
+    await invalidateOrgPromptCache(fastify, params.data.id);
+
+    return reply.status(201).send({
+      imported: createdCredentials.length,
+      credentials: createdCredentials
+    });
   });
 
   fastify.get("/orgs/pending-members", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {

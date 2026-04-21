@@ -21,6 +21,7 @@ export default function TaskBoardPage() {
   return (
     <AppShell
       layout="stack"
+      role={cookieRole}
       eyebrow="Task operations"
       title="Role-aware task board"
       description="Manage routing, delegation, and execution status in one board tailored to your role permissions."

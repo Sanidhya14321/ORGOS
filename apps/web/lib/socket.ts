@@ -15,7 +15,11 @@ function ensureSocket(): Socket {
 
   socketSingleton = io(SOCKET_BASE, {
     autoConnect: false,
-    transports: ["websocket"],
+    transports: ["websocket", "polling"],
+    reconnection: true,
+    reconnectionAttempts: 8,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 4000,
     withCredentials: true
   });
 

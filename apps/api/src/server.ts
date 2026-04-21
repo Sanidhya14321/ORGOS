@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import net from "node:net";
+import tls from "node:tls";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
@@ -138,7 +140,47 @@ export async function start() {
   initializeNotifier(server);
   const workers: Array<{ close: () => Promise<void> }> = [];
 
+  async function canReachQueueRedis(redisUrlRaw: string): Promise<boolean> {
+    try {
+      const redisUrl = new URL(redisUrlRaw);
+      const tlsMode = redisUrl.protocol === "rediss:" || redisUrl.protocol === "https:";
+      const port = redisUrl.port ? Number(redisUrl.port) : (tlsMode ? 6380 : 6379);
+
+      await new Promise<void>((resolve, reject) => {
+        const timeoutMs = 1200;
+        const socket = tlsMode
+          ? tls.connect({ host: redisUrl.hostname, port, rejectUnauthorized: false })
+          : net.createConnection({ host: redisUrl.hostname, port });
+
+        const onError = (error: Error) => {
+          socket.destroy();
+          reject(error);
+        };
+
+        socket.setTimeout(timeoutMs, () => {
+          socket.destroy();
+          reject(new Error("Redis preflight timeout"));
+        });
+
+        socket.once("error", onError);
+        socket.once("connect", () => {
+          socket.end();
+          resolve();
+        });
+      });
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   try {
+    const redisReachable = await canReachQueueRedis(server.env.UPSTASH_REDIS_URL);
+    if (!redisReachable) {
+      throw new Error("Queue Redis endpoint is unreachable");
+    }
+
     initializeQueueForwarding();
 
     await Promise.race([

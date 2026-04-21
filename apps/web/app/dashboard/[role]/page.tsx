@@ -31,6 +31,7 @@ export default function DashboardRolePage({ params }: DashboardRolePageProps) {
   return (
     <AppShell
       layout="stack"
+      role={role}
       eyebrow="Role dashboard"
       title={`${role.toUpperCase()} command center`}
       description="Live ORGOS dashboards combine tasks, goals, and reports with realtime event delivery."

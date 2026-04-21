@@ -21,6 +21,7 @@ export default function OrgTreePage() {
   return (
     <AppShell
       layout="stack"
+      role={cookieRole}
       eyebrow="Org structure"
       title="Organization tree"
       description="Interactive hierarchy map of your organization, including reporting lines and position levels."
