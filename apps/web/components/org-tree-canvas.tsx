@@ -435,7 +435,7 @@ export function OrgTreeCanvas() {
   }
 
   if (loading) {
-    return <p className="text-sm text-[#6b7280]">Loading organization tree...</p>;
+    return <p className="text-sm text-[var(--muted)]">Loading organization tree...</p>;
   }
 
   if (error) {
@@ -453,7 +453,7 @@ export function OrgTreeCanvas() {
   }
 
   if (!tree || tree.nodes.length === 0) {
-    return <p className="text-sm text-[#6b7280]">No members found for this organization yet.</p>;
+    return <p className="text-sm text-[var(--muted)]">No members found for this organization yet.</p>;
   }
 
   const treeData = tree;

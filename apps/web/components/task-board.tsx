@@ -343,7 +343,7 @@ export function TaskBoard() {
   }, [tasks]);
 
   if (loading) {
-    return <p className="text-sm text-[#6b7280]">Loading task board...</p>;
+    return <p className="text-sm text-[var(--muted)]">Loading task board...</p>;
   }
 
   return (

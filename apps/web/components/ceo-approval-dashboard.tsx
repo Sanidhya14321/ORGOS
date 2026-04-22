@@ -895,18 +895,18 @@ export function CeoApprovalDashboard() {
             <p className="mt-1 text-sm text-[var(--muted)]">Create your org once, then maintain position levels here for smooth employee onboarding.</p>
 
             {!orgId ? (
-              <div className="mt-6 space-y-3 rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Create organization</p>
+              <div className="mt-6 space-y-3 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Create organization</p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input
-                    className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                    className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                     type="text"
                     value={orgName}
                     onChange={(event) => setOrgName(event.target.value)}
                     placeholder="ORGOS Velocity Labs"
                   />
                   <input
-                    className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                    className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                     type="text"
                     value={orgDomain}
                     onChange={(event) => setOrgDomain(event.target.value)}
@@ -917,29 +917,29 @@ export function CeoApprovalDashboard() {
                   type="button"
                   onClick={createOrganization}
                   disabled={creatingOrg}
-                  className="rounded-2xl bg-[#121826] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c2538] disabled:opacity-60"
+                  className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0f1115] transition hover:brightness-95 disabled:opacity-60"
                 >
                   {creatingOrg ? "Creating organization..." : "Create organization"}
                 </button>
               </div>
             ) : (
               <div className="mt-6 space-y-4">
-                <div className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4 text-sm text-[#4b5563]">
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">
                   Organization linked. You can now create and tune position levels used during employee onboarding.
                 </div>
 
-                <div className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Create positions</p>
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Create positions</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-[1.5fr_1fr_auto]">
                     <input
-                      className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                      className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                       type="text"
                       value={newPositionTitle}
                       onChange={(event) => setNewPositionTitle(event.target.value)}
                       placeholder="Position title"
                     />
                     <input
-                      className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                      className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                       type="number"
                       min={0}
                       value={newPositionLevel}
@@ -950,36 +950,36 @@ export function CeoApprovalDashboard() {
                       type="button"
                       onClick={createPosition}
                       disabled={creatingPosition}
-                      className="rounded-2xl bg-[#121826] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                      className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0f1115] disabled:opacity-60"
                     >
                       {creatingPosition ? "Adding..." : "Add"}
                     </button>
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Current position levels</p>
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Current position levels</p>
                   {positions.length > 0 ? (
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                       {positions.map((position) => (
-                        <li key={position.id} className="rounded-2xl bg-white px-3 py-2 text-sm text-[#2f3545]">
+                        <li key={position.id} className="rounded-2xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)]">
                           {position.title} (L{position.level}) {position.confirmed ? "- confirmed" : "- draft"}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-3 text-sm text-[#6b7280]">No positions yet. Add your level map above.</p>
+                    <p className="mt-3 text-sm text-[var(--muted)]">No positions yet. Add your level map above.</p>
                   )}
                 </div>
 
-                <div className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Bulk employee import</p>
-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Bulk employee import</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
                     Upload an Excel or CSV sheet with columns like fullName, email, role, department, positionTitle, positionLevel, reportsToEmail, and password.
                   </p>
                   <div className="mt-3 grid gap-2">
                     <input
-                      className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-sm text-[#121826] outline-none transition file:mr-4 file:rounded-full file:border-0 file:bg-[#121826] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-[#1c2538] focus:border-[#ff6b35]"
+                      className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--ink)] outline-none transition file:mr-4 file:rounded-full file:border-0 file:bg-[var(--surface)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--ink)] hover:file:bg-[var(--surface-2)] focus:border-[var(--accent)]"
                       type="file"
                       accept=".xlsx,.xls,.csv"
                       onChange={async (event) => {
@@ -1017,30 +1017,30 @@ export function CeoApprovalDashboard() {
                         type="button"
                         onClick={submitEmployeeImport}
                         disabled={importingEmployees || importRows.length === 0}
-                        className="rounded-2xl bg-[#121826] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c2538] disabled:opacity-60"
+                        className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0f1115] transition hover:brightness-95 disabled:opacity-60"
                       >
                         {importingEmployees ? "Importing..." : "Import employees"}
                       </button>
-                      <span className="text-sm text-[#6b7280]">
+                      <span className="text-sm text-[var(--muted)]">
                         {importFileName ? `${importRows.length} parsed rows from ${importFileName}` : "No spreadsheet loaded yet"}
                       </span>
                     </div>
                     {importRows.length > 0 ? (
                       <ul className="mt-1 grid gap-2">
                         {importRows.slice(0, 5).map((row) => (
-                          <li key={`${row.email}-${row.fullName}`} className="rounded-2xl bg-white px-3 py-2 text-sm text-[#2f3545]">
+                          <li key={`${row.email}-${row.fullName}`} className="rounded-2xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)]">
                             {row.fullName} · {row.email} · {row.role.toUpperCase()} · {row.positionTitle ?? defaultPositionTitle(row.role)}
                           </li>
                         ))}
-                        {importRows.length > 5 ? <li className="text-sm text-[#6b7280]">+ {importRows.length - 5} more rows</li> : null}
+                        {importRows.length > 5 ? <li className="text-sm text-[var(--muted)]">+ {importRows.length - 5} more rows</li> : null}
                       </ul>
                     ) : null}
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Member directory</p>
-                  <p className="mt-2 text-sm leading-6 text-[#6b7280]">Edit roles, positions, and reporting lines from one list. Drag-and-drop in the tree updates reporting lines too.</p>
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Member directory</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Edit roles, positions, and reporting lines from one list. Drag-and-drop in the tree updates reporting lines too.</p>
                   <div className="mt-4 space-y-3">
                     {sortedMembers.length > 0 ? pagedMembers.map((member) => {
                       const draft = memberDrafts[member.id] ?? {
@@ -1051,16 +1051,16 @@ export function CeoApprovalDashboard() {
                       };
 
                       return (
-                        <article key={member.id} className="rounded-2xl border border-[#ece7dd] bg-white p-3">
+                        <article key={member.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
                           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                             <div className="min-w-0">
-                              <p className="font-semibold text-[#121826]">{member.full_name}</p>
-                              <p className="break-all text-xs text-[#6b7280]">{member.email}</p>
+                              <p className="font-semibold text-[var(--ink)]">{member.full_name}</p>
+                              <p className="break-all text-xs text-[var(--muted)]">{member.email}</p>
                               <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#8b8f97]">{member.status ?? "active"}</p>
                             </div>
                             <div className="grid gap-2 md:grid-cols-2 xl:w-[680px] xl:grid-cols-4">
                               <select
-                                className="rounded-2xl border border-[#ddd6c8] bg-[#fbfaf7] px-3 py-2 text-sm text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                                className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                                 value={draft.role}
                                 onChange={(event) => setMemberDrafts((current) => ({
                                   ...current,
@@ -1073,7 +1073,7 @@ export function CeoApprovalDashboard() {
                                 <option value="worker">Worker</option>
                               </select>
                               <select
-                                className="rounded-2xl border border-[#ddd6c8] bg-[#fbfaf7] px-3 py-2 text-sm text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                                className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                                 value={draft.position_id ?? ""}
                                 onChange={(event) => setMemberDrafts((current) => ({
                                   ...current,
@@ -1088,7 +1088,7 @@ export function CeoApprovalDashboard() {
                                 ))}
                               </select>
                               <input
-                                className="rounded-2xl border border-[#ddd6c8] bg-[#fbfaf7] px-3 py-2 text-sm text-[#121826] outline-none transition focus:border-[#ff6b35]"
+                                className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                                 type="text"
                                 value={draft.department}
                                 onChange={(event) => setMemberDrafts((current) => ({
@@ -1101,7 +1101,7 @@ export function CeoApprovalDashboard() {
                                 type="button"
                                 onClick={() => void saveMemberStructure(member.id)}
                                 disabled={actionId === member.id}
-                                className="rounded-2xl bg-[#121826] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                                className="rounded-2xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#0f1115] disabled:opacity-60"
                               >
                                 {actionId === member.id ? "Saving..." : "Save"}
                               </button>
@@ -1110,10 +1110,10 @@ export function CeoApprovalDashboard() {
                         </article>
                       );
                     }) : (
-                      <p className="rounded-2xl border border-dashed border-[#ddd6c8] bg-white px-4 py-5 text-sm text-[#6b7280]">No members loaded yet.</p>
+                      <p className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-5 text-sm text-[var(--muted)]">No members loaded yet.</p>
                     )}
                     {sortedMembers.length > 0 ? (
-                      <div className="flex items-center justify-between rounded-2xl border border-[#ece7dd] bg-white px-3 py-2 text-sm text-[#6b7280]">
+                      <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]">
                         <span>
                           Showing {(memberPage - 1) * MEMBERS_PAGE_SIZE + 1}-{Math.min(memberPage * MEMBERS_PAGE_SIZE, sortedMembers.length)} of {sortedMembers.length}
                         </span>
@@ -1122,7 +1122,7 @@ export function CeoApprovalDashboard() {
                             type="button"
                             onClick={() => setMemberPage((current) => Math.max(1, current - 1))}
                             disabled={memberPage <= 1}
-                            className="rounded-xl border border-[#ddd6c8] bg-[#fbfaf7] px-3 py-1.5 text-xs font-semibold text-[#121826] disabled:opacity-50"
+                            className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
                           >
                             Prev
                           </button>
@@ -1131,7 +1131,7 @@ export function CeoApprovalDashboard() {
                             type="button"
                             onClick={() => setMemberPage((current) => Math.min(memberPageCount, current + 1))}
                             disabled={memberPage >= memberPageCount}
-                            className="rounded-xl border border-[#ddd6c8] bg-[#fbfaf7] px-3 py-1.5 text-xs font-semibold text-[#121826] disabled:opacity-50"
+                            className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] disabled:opacity-50"
                           >
                             Next
                           </button>
@@ -1144,22 +1144,22 @@ export function CeoApprovalDashboard() {
             )}
           </div>
 
-          <aside className="rounded-[2rem] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.1)]">
-            <h2 className="text-2xl font-semibold text-[#121826]">People onboarding</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6b7280]">
+          <aside className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+            <h2 className="text-2xl font-semibold text-[var(--ink)]">People onboarding</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
               Members join through the onboarding flow, then appear in Approvals for your decision. Once approved, manage structure in Org Tree.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setView("approvals")}
-                className="inline-flex items-center rounded-2xl border border-[#ddd6c8] bg-white px-4 py-2.5 text-sm font-semibold text-[#121826] transition hover:bg-[#f8f5ef]"
+                className="inline-flex items-center rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface)]"
               >
                 Open approvals
               </button>
               <Link
                 href="/dashboard/org-tree"
-                className="inline-flex items-center rounded-2xl border border-[#ddd6c8] bg-white px-4 py-2.5 text-sm font-semibold text-[#121826] transition hover:bg-[#f8f5ef]"
+                className="inline-flex items-center rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)] transition hover:bg-[var(--surface)]"
               >
                 Open org tree
               </Link>
@@ -1263,22 +1263,22 @@ export function CeoApprovalDashboard() {
         </section>
       ) : (
         <section className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
-          <div className="rounded-[2rem] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.1)]">
+          <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-[#121826]">Pending approvals</h2>
-                <p className="mt-1 text-sm text-[#6b7280]">Review onboarding requests and assign access by organization needs.</p>
+                <h2 className="text-2xl font-semibold text-[var(--ink)]">Pending approvals</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">Review onboarding requests and assign access by organization needs.</p>
               </div>
-              {loading ? <span className="text-sm text-[#6b7280]">Syncing...</span> : null}
+              {loading ? <span className="text-sm text-[var(--muted)]">Syncing...</span> : null}
             </div>
 
             <div className="mt-6 space-y-3">
               {pendingMembers.map((member) => (
-                <article key={member.id} className="min-w-0 rounded-3xl border border-[#ece7dd] bg-[#faf8f4] p-4">
+                <article key={member.id} className="min-w-0 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
-                      <p className="text-lg font-semibold text-[#121826]">{member.full_name}</p>
-                      <p className="break-all text-sm text-[#6b7280]">{member.email}</p>
+                      <p className="text-lg font-semibold text-[var(--ink)]">{member.full_name}</p>
+                      <p className="break-all text-sm text-[var(--muted)]">{member.email}</p>
                       <p className="mt-1 break-all text-xs uppercase tracking-[0.08em] text-[#8b8f97] sm:tracking-[0.2em]">
                         {member.position_id ? `Position ${member.position_id}` : "No position selected"}
                       </p>
@@ -1306,51 +1306,51 @@ export function CeoApprovalDashboard() {
               ))}
 
               {pendingMembers.length === 0 ? (
-                <p className="rounded-3xl border border-dashed border-[#ddd6c8] bg-[#fbfaf7] px-4 py-6 text-sm text-[#6b7280]">
+                <p className="rounded-3xl border border-dashed border-[var(--border)] bg-[var(--surface-2)] px-4 py-6 text-sm text-[var(--muted)]">
                   No pending approvals at the moment.
                 </p>
               ) : null}
             </div>
 
             <div className="mt-8 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Recent goals</p>
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Recent goals</p>
                 <div className="mt-3 space-y-3">
                   {recentGoals.map((goal) => (
-                    <article key={goal.id} className="rounded-2xl bg-white p-3 shadow-sm">
-                      <p className="font-semibold text-[#121826]">{goal.title}</p>
-                      <p className="mt-1 text-sm text-[#6b7280]">{goal.priority} · {goal.status}</p>
+                    <article key={goal.id} className="rounded-2xl bg-[var(--surface)] p-3 shadow-sm">
+                      <p className="font-semibold text-[var(--ink)]">{goal.title}</p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">{goal.priority} · {goal.status}</p>
                     </article>
                   ))}
-                  {recentGoals.length === 0 ? <p className="text-sm text-[#6b7280]">No goals loaded.</p> : null}
+                  {recentGoals.length === 0 ? <p className="text-sm text-[var(--muted)]">No goals loaded.</p> : null}
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Recent reports</p>
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Recent reports</p>
                 <div className="mt-3 space-y-3">
                   {recentReports.map((report) => (
-                    <article key={report.id} className="rounded-2xl bg-white p-3 shadow-sm">
-                      <p className="font-semibold text-[#121826]">{report.status}</p>
-                      <p className="mt-1 text-sm text-[#6b7280]">Confidence {report.confidence.toFixed(2)}</p>
+                    <article key={report.id} className="rounded-2xl bg-[var(--surface)] p-3 shadow-sm">
+                      <p className="font-semibold text-[var(--ink)]">{report.status}</p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">Confidence {report.confidence.toFixed(2)}</p>
                     </article>
                   ))}
-                  {recentReports.length === 0 ? <p className="text-sm text-[#6b7280]">No reports loaded.</p> : null}
+                  {recentReports.length === 0 ? <p className="text-sm text-[var(--muted)]">No reports loaded.</p> : null}
                 </div>
               </div>
             </div>
           </div>
 
-          <aside className="rounded-[2rem] border border-white/70 bg-white/90 p-6 shadow-[0_24px_80px_rgba(18,24,38,0.1)]">
-            <h2 className="text-2xl font-semibold text-[#121826]">Approval activity</h2>
+          <aside className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)]">
+            <h2 className="text-2xl font-semibold text-[var(--ink)]">Approval activity</h2>
             <div className="mt-5 space-y-3">
               {activity.map((item) => (
-                <article key={item.id} className="min-w-0 rounded-2xl border border-[#ece7dd] bg-[#fbfaf7] p-4">
+                <article key={item.id} className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                   <div className="flex items-start gap-3">
                     <span className={`mt-1 inline-flex h-2.5 w-2.5 rounded-full ${toneClass(item.tone)}`} />
                     <div className="min-w-0">
-                      <p className="font-semibold text-[#121826]">{item.title}</p>
-                      <p className="mt-1 break-words text-sm leading-6 text-[#6b7280]">{item.description}</p>
+                      <p className="font-semibold text-[var(--ink)]">{item.title}</p>
+                      <p className="mt-1 break-words text-sm leading-6 text-[var(--muted)]">{item.description}</p>
                     </div>
                   </div>
                 </article>

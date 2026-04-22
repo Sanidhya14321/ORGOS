@@ -149,7 +149,7 @@ export async function start() {
       await new Promise<void>((resolve, reject) => {
         const timeoutMs = 1200;
         const socket = tlsMode
-          ? tls.connect({ host: redisUrl.hostname, port, rejectUnauthorized: false })
+          ? tls.connect({ host: redisUrl.hostname, port })
           : net.createConnection({ host: redisUrl.hostname, port });
 
         const onError = (error: Error) => {

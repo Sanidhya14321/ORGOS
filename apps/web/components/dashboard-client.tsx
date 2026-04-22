@@ -413,7 +413,7 @@ export function DashboardClient({ role }: DashboardClientProps) {
             <p className="text-sm uppercase tracking-[0.25em] text-white/60">Reports</p>
             <div className="mt-3 space-y-3">
               {reports.slice(0, 3).map((report) => (
-                <div key={report.id} className="min-w-0 rounded-2xl bg-white/8 p-4">
+                <div key={report.id} className="min-w-0 rounded-2xl bg-[var(--surface)]/70 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold">{report.status}</span>
                     <span className="text-sm text-white/70">{mapReportTone(report)}</span>

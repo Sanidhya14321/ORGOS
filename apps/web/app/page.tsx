@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { CyberneticBentoGrid } from "@/components/ui/cybernetic-bento-grid";
+import OrgosFeatures, { CustomersTableCard } from "@/components/ui/features";
 
 export default function HomePage() {
   return (
@@ -39,7 +41,9 @@ export default function HomePage() {
               </Link>
             </div>
           </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[#0f1115] p-5">
+          <div className="space-y-4">
+            <CustomersTableCard />
+            <div className="rounded-2xl border border-[var(--border)] bg-[#0f1115] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">How ORGOS works</p>
             <ol className="mt-3 space-y-3 text-sm leading-6 text-[var(--ink)]">
               <li>1. Define the organization tree and position levels for your company.</li>
@@ -47,23 +51,13 @@ export default function HomePage() {
               <li>3. Route execution downward with manager accountability.</li>
               <li>4. Approve high-impact outputs at executive checkpoints.</li>
             </ol>
+            </div>
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <article className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <h3 className="text-lg font-semibold">Organization Intelligence</h3>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Visualize reporting + department networks with dynamic levels that adapt to every company structure.</p>
-          </article>
-          <article className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <h3 className="text-lg font-semibold">Execution Governance</h3>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Ensure workers execute, managers coordinate, and executives approve where strategic control is required.</p>
-          </article>
-          <article className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <h3 className="text-lg font-semibold">Operational Clarity</h3>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Track tasks, goals, and reports in real time with role-aware dashboards and structured decision points.</p>
-          </article>
-        </section>
+        <CyberneticBentoGrid />
+
+        <OrgosFeatures />
       </main>
 
       <footer className="border-t border-[var(--border)] bg-[var(--surface)]">

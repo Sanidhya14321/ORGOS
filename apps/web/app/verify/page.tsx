@@ -89,7 +89,7 @@ function VerifyPageContent() {
 
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<p className="px-6 py-8 text-sm text-[#6b7280]">Loading verification details...</p>}>
+    <Suspense fallback={<p className="px-6 py-8 text-sm text-[var(--muted)]">Loading verification details...</p>}>
       <VerifyPageContent />
     </Suspense>
   );

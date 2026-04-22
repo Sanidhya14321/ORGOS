@@ -1,0 +1,99 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+type DemoRole = "ceo" | "cfo" | "manager" | "worker";
+
+const ROLE_FLOW: Record<DemoRole, string> = {
+  ceo: "Goal approval and strategic checkpoint",
+  cfo: "Budget and risk validation",
+  manager: "Task decomposition and delegation",
+  worker: "Execution and report submission"
+};
+
+export function HeroDemo() {
+  const [employees, setEmployees] = useState(42);
+  const [role, setRole] = useState<DemoRole>("manager");
+  const [simulateTick, setSimulateTick] = useState(0);
+
+  const simulation = useMemo(() => {
+    const managers = Math.max(1, Math.round(employees * 0.14));
+    const workers = Math.max(1, Math.round(employees * 0.68));
+    const executives = Math.max(2, employees - managers - workers);
+    const tasks = Math.max(4, Math.round(workers * 1.6));
+    const reports = Math.max(2, Math.round(tasks * 0.34));
+
+    return {
+      managers,
+      workers,
+      executives,
+      tasks,
+      reports,
+      roleStep: ROLE_FLOW[role]
+    };
+  }, [employees, role, simulateTick]);
+
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[#0f1115] p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Live ORGOS Demo</p>
+        <button
+          type="button"
+          onClick={() => setSimulateTick((value) => value + 1)}
+          className="rounded-xl bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-[#0f1115]"
+        >
+          Simulate
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <label className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Organization size</span>
+          <input
+            type="range"
+            min={10}
+            max={300}
+            value={employees}
+            onChange={(event) => setEmployees(Number(event.target.value))}
+            className="w-full accent-[var(--accent)]"
+          />
+          <p className="text-sm text-[var(--ink)]">{employees} members</p>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Focus role</span>
+          <select
+            value={role}
+            onChange={(event) => setRole(event.target.value as DemoRole)}
+            className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)]"
+          >
+            <option value="ceo">CEO</option>
+            <option value="cfo">CFO</option>
+            <option value="manager">Manager</option>
+            <option value="worker">Worker</option>
+          </select>
+          <p className="text-sm text-[var(--muted)]">{simulation.roleStep}</p>
+        </label>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <p className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Execs</p>
+          <p className="mt-1 text-lg font-semibold text-[var(--ink)]">{simulation.executives}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <p className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Managers</p>
+          <p className="mt-1 text-lg font-semibold text-[var(--ink)]">{simulation.managers}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <p className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Workers</p>
+          <p className="mt-1 text-lg font-semibold text-[var(--ink)]">{simulation.workers}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
+        Projected execution cycle: <span className="font-semibold text-[var(--ink)]">{simulation.tasks} active tasks</span> {"->"} <span className="font-semibold text-[var(--ink)]">{simulation.reports} report checkpoints</span>
+      </div>
+    </div>
+  );
+}

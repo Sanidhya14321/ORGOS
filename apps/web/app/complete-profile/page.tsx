@@ -223,7 +223,7 @@ export default function CompleteProfilePage() {
         title="Setting things up"
         description="Loading your workspace context..."
       >
-        <div className="rounded-2xl border border-[#e2ddd2] bg-[#f9f7f2] p-4 text-sm text-[#4b5563]">Please wait...</div>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">Please wait...</div>
       </AppShell>
     );
   }
@@ -235,15 +235,15 @@ export default function CompleteProfilePage() {
       description="Pick your company, confirm role details, and continue. CEO organization setup now happens in the CEO dashboard."
     >
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="rounded-2xl border border-[#e2ddd2] bg-[#f9f7f2] p-4 text-sm text-[#4b5563]">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">
           This step links your account to an organization. If you are a CEO/CFO, you can manage organization setup from your CEO dashboard.
         </div>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Find organization</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Find organization</span>
           <div className="flex gap-2">
             <input
-              className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
               type="text"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -253,7 +253,7 @@ export default function CompleteProfilePage() {
               type="button"
               onClick={searchOrganizations}
               disabled={searching}
-              className="rounded-2xl bg-[#121826] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0f1115] disabled:opacity-60"
             >
               {searching ? "Searching..." : "Search"}
             </button>
@@ -261,9 +261,9 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Organization</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Organization</span>
           <select
-            className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
             value={orgId}
             onChange={(event) => setOrgId(event.target.value)}
             required
@@ -278,9 +278,9 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Position (optional)</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Position (optional)</span>
           <select
-            className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
             value={positionId}
             onChange={(event) => setPositionId(event.target.value)}
           >
@@ -294,9 +294,9 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Reports to (optional user ID)</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Reports to (optional user ID)</span>
           <input
-            className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
             type="text"
             value={reportsTo}
             onChange={(event) => setReportsTo(event.target.value)}
@@ -305,9 +305,9 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Department</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Department</span>
           <input
-            className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
             type="text"
             value={department}
             onChange={(event) => setDepartment(event.target.value)}
@@ -316,9 +316,9 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6b7280]">Skills (comma separated)</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Skills (comma separated)</span>
           <input
-            className="w-full rounded-2xl border border-[#ddd6c8] bg-white px-4 py-3 text-[#121826] outline-none transition focus:border-[#ff6b35]"
+            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
             type="text"
             value={skills}
             onChange={(event) => setSkills(event.target.value)}
@@ -326,13 +326,13 @@ export default function CompleteProfilePage() {
           />
         </label>
 
-        {error ? <p className="rounded-2xl bg-[#fff0e6] px-4 py-3 text-sm text-[#9f4f20]">{error}</p> : null}
-        {message ? <p className="rounded-2xl bg-[#ebfff3] px-4 py-3 text-sm text-[#0f7b45]">{message}</p> : null}
+        {error ? <p className="rounded-2xl border border-[var(--warn)]/30 bg-[var(--warn)]/10 px-4 py-3 text-sm text-[var(--warn)]">{error}</p> : null}
+        {message ? <p className="rounded-2xl border border-[#3fa37a]/30 bg-[#3fa37a]/10 px-4 py-3 text-sm text-[#8de2bc]">{message}</p> : null}
 
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex w-full items-center justify-center rounded-2xl bg-[#121826] px-4 py-3 font-semibold text-white transition hover:bg-[#1c2538] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center rounded-2xl bg-[var(--accent)] px-4 py-3 font-semibold text-[#0f1115] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? "Submitting..." : "Continue"}
         </button>
