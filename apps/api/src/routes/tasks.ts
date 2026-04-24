@@ -43,7 +43,39 @@ const CreateTaskBodySchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   assignedRole: z.enum(["ceo", "cfo", "manager", "worker"]),
   depth: z.union([z.literal(0), z.literal(1), z.literal(2)]).default(0),
-  deadline: z.string().datetime().optional()
+  deadline: z.string().datetime().optional(),
+  ownerId: z.string().uuid().optional(),
+  assignees: z.array(z.string().uuid()).max(20).optional(),
+  watchers: z.array(z.string().uuid()).max(30).optional(),
+  dependsOn: z.array(z.string().uuid()).max(30).optional(),
+  recurrenceCron: z.string().trim().max(100).optional(),
+  recurrenceEnabled: z.boolean().default(false),
+  recurrenceTimezone: z.string().trim().max(60).default("UTC"),
+  requiresEvidence: z.boolean().default(false),
+  estimatedEffortHours: z.number().positive().max(10000).optional()
+});
+
+const CreateAttachmentBodySchema = z.object({
+  attachmentType: z.enum(["file", "link", "form"]),
+  storagePath: z.string().trim().max(500).optional(),
+  externalUrl: z.string().url().optional(),
+  title: z.string().trim().max(200).optional(),
+  mimeType: z.string().trim().max(120).optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  metadata: z.record(z.any()).optional()
+}).superRefine((payload, ctx) => {
+  if (payload.attachmentType === "file" && !payload.storagePath) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "storagePath is required for file attachments", path: ["storagePath"] });
+  }
+  if ((payload.attachmentType === "link" || payload.attachmentType === "form") && !payload.externalUrl) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "externalUrl is required for link/form attachments", path: ["externalUrl"] });
+  }
+});
+
+const CreateCommentBodySchema = z.object({
+  body: z.string().trim().min(1).max(4000),
+  parentCommentId: z.string().uuid().optional(),
+  mentions: z.array(z.string().uuid()).max(30).optional()
 });
 
 const RoutingSuggestionBodySchema = z.object({
@@ -79,8 +111,12 @@ function isMissingSchemaCache(error: { code?: string } | null | undefined): bool
 }
 
 const allowedTransitions: Record<string, string[]> = {
-  pending: ["in_progress"],
-  in_progress: ["blocked", "completed"]
+  pending: ["active", "in_progress", "blocked", "completed"],
+  routing: ["active", "in_progress", "blocked"],
+  active: ["in_progress", "blocked", "completed"],
+  in_progress: ["blocked", "active", "completed"],
+  blocked: ["active", "in_progress"],
+  rejected: ["active", "in_progress"]
 };
 
 async function getTaskWithScope(fastify: Parameters<FastifyPluginAsync>[0], taskId: string, userId: string, userRole: string | null) {
@@ -123,7 +159,11 @@ async function getTaskWithScope(fastify: Parameters<FastifyPluginAsync>[0], task
     return { task: null, reason: "forbidden" as const };
   }
 
-  if (task.assigned_to !== userId) {
+  const ownerId = (task.owner_id as string | null | undefined) ?? null;
+  const assignees = Array.isArray(task.assignees) ? (task.assignees as string[]) : [];
+  const watchers = Array.isArray(task.watchers) ? (task.watchers as string[]) : [];
+
+  if (task.assigned_to !== userId && ownerId !== userId && !assignees.includes(userId) && !watchers.includes(userId)) {
     return { task: null, reason: "forbidden" as const };
   }
 
@@ -307,6 +347,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       .insert({
         org_id: targetOrgId,
         created_by: userId,
+        owner_id: payload.ownerId ?? userId,
         goal_id: payload.goalId,
         parent_task_id: payload.parentTaskId,
         parent_id: payload.parentTaskId,
@@ -317,6 +358,15 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         required_skills: payload.requiredSkills,
         priority: payload.priority,
         assigned_role: payload.assignedRole,
+        assigned_to: payload.assignees?.[0] ?? null,
+        assignees: payload.assignees ?? [],
+        watchers: payload.watchers ?? [],
+        depends_on: payload.dependsOn ?? [],
+        recurrence_cron: payload.recurrenceCron ?? null,
+        recurrence_enabled: payload.recurrenceEnabled,
+        recurrence_timezone: payload.recurrenceTimezone,
+        requires_evidence: payload.requiresEvidence,
+        estimated_effort_hours: payload.estimatedEffortHours ?? null,
         is_agent_task: false,
         status: "routing",
         routing_confirmed: false,
@@ -513,9 +563,9 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.send({ page, limit, total: 0, items: [] });
         }
 
-        query = query.in("assigned_to", ids);
+        query = query.or(`assigned_to.in.(${ids.join(",")}),owner_id.in.(${ids.join(",")})`);
       } else {
-        query = query.eq("assigned_to", userId);
+        query = query.or(`assigned_to.eq.${userId},owner_id.eq.${userId},assignees.cs.{${userId}},watchers.cs.{${userId}}`);
       }
     }
 
@@ -547,6 +597,77 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({ page, limit, total: count ?? 0, items: data ?? [] });
+  });
+
+  fastify.get("/tasks/workload/capacity", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(userId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("id, full_name, department, role")
+      .eq("org_id", requesterOrgId);
+
+    if (usersResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch org users");
+    }
+
+    const tasksResult = await fastify.supabaseService
+      .from("tasks")
+      .select("assigned_to, assignees, status, estimated_effort_hours")
+      .eq("org_id", requesterOrgId)
+      .in("status", ["pending", "routing", "active", "in_progress", "blocked"]);
+
+    if (tasksResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch workload tasks");
+    }
+
+    const loadByUser = new Map<string, { taskCount: number; effortHours: number }>();
+    for (const row of tasksResult.data ?? []) {
+      const effort = Number(row.estimated_effort_hours ?? 1);
+      const uniqueAssignees = new Set<string>();
+      if (row.assigned_to) {
+        uniqueAssignees.add(row.assigned_to as string);
+      }
+      if (Array.isArray(row.assignees)) {
+        for (const assignee of row.assignees as string[]) {
+          uniqueAssignees.add(assignee);
+        }
+      }
+
+      for (const assigneeId of uniqueAssignees) {
+        const current = loadByUser.get(assigneeId) ?? { taskCount: 0, effortHours: 0 };
+        current.taskCount += 1;
+        current.effortHours += effort;
+        loadByUser.set(assigneeId, current);
+      }
+    }
+
+    const defaultCapacityHours = 40;
+    const items = (usersResult.data ?? []).map((user) => {
+      const load = loadByUser.get(user.id as string) ?? { taskCount: 0, effortHours: 0 };
+      const capacityScore = Number((load.effortHours / defaultCapacityHours).toFixed(2));
+      return {
+        userId: user.id,
+        name: user.full_name,
+        department: user.department,
+        role: user.role,
+        openTasks: load.taskCount,
+        effortHours: Number(load.effortHours.toFixed(2)),
+        capacityHours: defaultCapacityHours,
+        capacityScore,
+        heat: capacityScore >= 1 ? "high" : capacityScore >= 0.8 ? "medium" : "low"
+      };
+    });
+
+    return reply.send({ items });
   });
 
   fastify.get("/tasks/:id", async (request, reply) => {
@@ -602,7 +723,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data: task, error } = await fastify.supabaseService
       .from("tasks")
-      .select("id, status, assigned_to")
+      .select("id, status, assigned_to, assigned_role, requires_evidence, completion_approved, blocked_by_count")
       .eq("id", params.data.id)
       .maybeSingle();
 
@@ -610,7 +731,9 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Task not found");
     }
 
-    if (task.assigned_to !== userId) {
+    const role = request.userRole;
+    const canUpdate = task.assigned_to === userId || role === "ceo" || role === "cfo";
+    if (!canUpdate) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Only assignee can update task status");
     }
 
@@ -624,8 +747,42 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     let targetStatus = body.data.status;
     let suggestedFixes: string | null = null;
+    let completionApproved = task.completion_approved === true;
+    let completionApprovedBy: string | null = null;
+    let completionApprovedAt: string | null = null;
+    let completionNotes: string | null = null;
 
     if (body.data.status === "completed") {
+      if (Number(task.blocked_by_count ?? 0) > 0) {
+        return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Task is blocked by unresolved dependencies");
+      }
+
+      if (task.requires_evidence) {
+        const attachmentsResult = await fastify.supabaseService
+          .from("task_attachments")
+          .select("id", { count: "exact", head: true })
+          .eq("task_id", task.id);
+
+        if (attachmentsResult.error) {
+          return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to verify task evidence");
+        }
+
+        if ((attachmentsResult.count ?? 0) === 0) {
+          return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Evidence is required before completing this task");
+        }
+
+        if (role === "ceo" || role === "cfo") {
+          completionApproved = true;
+          completionApprovedBy = userId;
+          completionApprovedAt = new Date().toISOString();
+          completionNotes = "Auto-approved by executive completion action";
+        } else {
+          targetStatus = "pending";
+          completionApproved = false;
+          completionNotes = "Awaiting manager approval after evidence submission";
+        }
+      }
+
       const assigneeRoleResult = await fastify.supabaseService
         .from("users")
         .select("role")
@@ -636,12 +793,21 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       if (assigneeRole === "manager") {
         targetStatus = "pending";
         suggestedFixes = "Awaiting executive approval for manager-completed task";
+        completionApproved = false;
       }
     }
 
     const { data: updated, error: updateError } = await fastify.supabaseService
       .from("tasks")
-      .update({ status: targetStatus, suggested_fixes: suggestedFixes, updated_at: new Date().toISOString() })
+      .update({
+        status: targetStatus,
+        suggested_fixes: suggestedFixes,
+        completion_approved: completionApproved,
+        completion_approved_by: completionApprovedBy,
+        completion_approved_at: completionApprovedAt,
+        completion_notes: completionNotes,
+        updated_at: new Date().toISOString()
+      })
       .eq("id", task.id)
       .select("*")
       .single();
@@ -714,6 +880,10 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       .from("tasks")
       .update({
         status: approvedStatus,
+        completion_approved: body.data.approved,
+        completion_approved_by: requesterId,
+        completion_approved_at: new Date().toISOString(),
+        completion_notes: body.data.notes ?? null,
         rejection_reason: body.data.approved ? null : (body.data.notes || "Rejected during executive review"),
         suggested_fixes: body.data.approved ? null : (body.data.notes || "Revise task output and resubmit for review"),
         updated_at: new Date().toISOString()
@@ -734,6 +904,152 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send(updated.data);
+  });
+
+  fastify.get("/tasks/:id/attachments", async (request, reply) => {
+    const params = IdParamSchema.safeParse(request.params);
+    if (!params.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task id", { field: "id" });
+    }
+
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scopedTask = await getTaskWithScope(fastify, params.data.id, userId, request.userRole);
+    if (scopedTask.reason !== "ok" || !scopedTask.task) {
+      return sendApiError(reply, request, scopedTask.reason === "not_found" ? 404 : 403, scopedTask.reason === "not_found" ? "NOT_FOUND" : "FORBIDDEN", scopedTask.reason === "not_found" ? "Task not found" : "Task not accessible");
+    }
+
+    const result = await fastify.supabaseService
+      .from("task_attachments")
+      .select("*")
+      .eq("task_id", params.data.id)
+      .order("created_at", { ascending: false });
+
+    if (result.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch task attachments");
+    }
+
+    return reply.send({ items: result.data ?? [] });
+  });
+
+  fastify.post("/tasks/:id/attachments", async (request, reply) => {
+    const params = IdParamSchema.safeParse(request.params);
+    const body = CreateAttachmentBodySchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task attachment payload", {
+        details: body.success ? undefined : body.error.flatten()
+      });
+    }
+
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scopedTask = await getTaskWithScope(fastify, params.data.id, userId, request.userRole);
+    if (scopedTask.reason !== "ok" || !scopedTask.task) {
+      return sendApiError(reply, request, scopedTask.reason === "not_found" ? 404 : 403, scopedTask.reason === "not_found" ? "NOT_FOUND" : "FORBIDDEN", scopedTask.reason === "not_found" ? "Task not found" : "Task not accessible");
+    }
+
+    const insertResult = await fastify.supabaseService
+      .from("task_attachments")
+      .insert({
+        task_id: params.data.id,
+        uploaded_by: userId,
+        attachment_type: body.data.attachmentType,
+        storage_path: body.data.storagePath ?? null,
+        external_url: body.data.externalUrl ?? null,
+        title: body.data.title ?? null,
+        mime_type: body.data.mimeType ?? null,
+        size_bytes: body.data.sizeBytes ?? null,
+        metadata: body.data.metadata ?? {}
+      })
+      .select("*")
+      .single();
+
+    if (insertResult.error || !insertResult.data) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create task attachment");
+    }
+
+    return reply.status(201).send(insertResult.data);
+  });
+
+  fastify.get("/tasks/:id/comments", async (request, reply) => {
+    const params = IdParamSchema.safeParse(request.params);
+    if (!params.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task id", { field: "id" });
+    }
+
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scopedTask = await getTaskWithScope(fastify, params.data.id, userId, request.userRole);
+    if (scopedTask.reason !== "ok" || !scopedTask.task) {
+      return sendApiError(reply, request, scopedTask.reason === "not_found" ? 404 : 403, scopedTask.reason === "not_found" ? "NOT_FOUND" : "FORBIDDEN", scopedTask.reason === "not_found" ? "Task not found" : "Task not accessible");
+    }
+
+    const commentsResult = await fastify.supabaseService
+      .from("task_comments")
+      .select("*")
+      .eq("task_id", params.data.id)
+      .order("created_at", { ascending: true });
+
+    if (commentsResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch task comments");
+    }
+
+    return reply.send({ items: commentsResult.data ?? [] });
+  });
+
+  fastify.post("/tasks/:id/comments", async (request, reply) => {
+    const params = IdParamSchema.safeParse(request.params);
+    const body = CreateCommentBodySchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task comment payload", {
+        details: body.success ? undefined : body.error.flatten()
+      });
+    }
+
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scopedTask = await getTaskWithScope(fastify, params.data.id, userId, request.userRole);
+    if (scopedTask.reason !== "ok" || !scopedTask.task) {
+      return sendApiError(reply, request, scopedTask.reason === "not_found" ? 404 : 403, scopedTask.reason === "not_found" ? "NOT_FOUND" : "FORBIDDEN", scopedTask.reason === "not_found" ? "Task not found" : "Task not accessible");
+    }
+
+    const insertResult = await fastify.supabaseService
+      .from("task_comments")
+      .insert({
+        task_id: params.data.id,
+        parent_comment_id: body.data.parentCommentId ?? null,
+        author_id: userId,
+        body: body.data.body,
+        mentions: body.data.mentions ?? []
+      })
+      .select("*")
+      .single();
+
+    if (insertResult.error || !insertResult.data) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create task comment");
+    }
+
+    for (const mentionId of body.data.mentions ?? []) {
+      emitToUser(mentionId, "task:mentioned", {
+        taskId: params.data.id,
+        commentId: insertResult.data.id,
+        by: userId
+      });
+    }
+
+    return reply.status(201).send(insertResult.data);
   });
 
   fastify.post("/tasks/:id/delegate", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
@@ -789,18 +1105,27 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
       const taskForAssignment: Task = {
         id: task.id as string,
+        org_id: (task.org_id as string | null) ?? undefined,
+        created_by: (task.created_by as string | null) ?? undefined,
         goal_id: task.goal_id as string,
         parent_id: (task.parent_id as string | null) ?? null,
+        parent_task_id: (task.parent_task_id as string | null) ?? null,
         depth: Number(task.depth) as 0 | 1 | 2,
         title: String(task.title),
         description: (task.description as string | null) ?? undefined,
         success_criteria: String(task.success_criteria),
         required_skills: (task.required_skills as string[] | null) ?? undefined,
+        priority: (task.priority as "low" | "medium" | "high" | "critical" | null) ?? undefined,
         assigned_to: (task.assigned_to as string | null) ?? null,
         assigned_role: (body.data.role ?? task.assigned_role) as "ceo" | "cfo" | "manager" | "worker",
         is_agent_task: Boolean(task.is_agent_task),
-        status: task.status as "pending" | "in_progress" | "blocked" | "completed" | "cancelled",
-        deadline: (task.deadline as string | null) ?? undefined
+        routing_confirmed: (task.routing_confirmed as boolean | null) ?? undefined,
+        status: task.status as "pending" | "routing" | "active" | "in_progress" | "blocked" | "rejected" | "completed" | "cancelled",
+        deadline: (task.deadline as string | null) ?? undefined,
+        sla_deadline: (task.sla_deadline as string | null) ?? undefined,
+        sla_status: (task.sla_status as "on_track" | "at_risk" | "breached" | null) ?? undefined,
+        rejection_reason: (task.rejection_reason as string | null) ?? undefined,
+        suggested_fixes: (task.suggested_fixes as string | null) ?? undefined
       };
 
       const reassigned = await assignTask({

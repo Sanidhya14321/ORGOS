@@ -34,17 +34,39 @@ export type TaskStatus = "pending" | "routing" | "active" | "in_progress" | "blo
 
 export interface Task {
   id: string;
+  org_id?: string;
+  created_by?: string | null;
+  owner_id?: string | null;
   goal_id: string;
   parent_id: string | null;
+  parent_task_id?: string | null;
   depth: 0 | 1 | 2;
   title: string;
   description?: string;
   success_criteria: string;
+  priority?: GoalPriority;
   assigned_to: string | null;
+  assignees?: string[];
+  watchers?: string[];
+  depends_on?: string[];
   assigned_role: Role;
   is_agent_task: boolean;
+  routing_confirmed?: boolean;
   status: TaskStatus;
   deadline?: string;
+  sla_deadline?: string;
+  sla_status?: "on_track" | "at_risk" | "breached";
+  recurrence_cron?: string | null;
+  recurrence_enabled?: boolean;
+  recurrence_timezone?: string;
+  next_run_at?: string | null;
+  requires_evidence?: boolean;
+  completion_approved?: boolean;
+  blocked_by_count?: number;
+  estimated_effort_hours?: number;
+  is_overdue?: boolean;
+  created_at?: string;
+  updated_at?: string;
   report_id?: string | null;
 }
 

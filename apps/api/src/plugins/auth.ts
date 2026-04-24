@@ -70,13 +70,23 @@ function normalizePath(url: string): string {
   return parsed.pathname;
 }
 
+function isDynamicPublicRoute(path: string): boolean {
+  if (/^\/api\/recruitment\/jobs\/[0-9a-fA-F-]{36}\/apply$/.test(path)) {
+    return true;
+  }
+  if (/^\/api\/recruitment\/referrals\/[a-zA-Z0-9_-]{12,128}\/apply$/.test(path)) {
+    return true;
+  }
+  return false;
+}
+
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("onRequest", async (request, reply) => {
     request.user = null;
     request.userRole = null;
 
     const path = normalizePath(request.url);
-    const isPublicRoute = PUBLIC_ROUTES.has(path);
+    const isPublicRoute = PUBLIC_ROUTES.has(path) || isDynamicPublicRoute(path);
 
     const headers = request.headers as unknown as Record<string, unknown>;
     const token = extractToken(headers);
