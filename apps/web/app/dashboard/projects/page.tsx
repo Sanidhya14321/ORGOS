@@ -1,5 +1,4 @@
 import ContributorsTable from "@/components/ui/ruixen-contributors-table"
-import { FirstTimeUserTour } from "@/components/ui/first-time-tour"
 
 export default function ProjectsDashboardPage() {
   return (
@@ -10,7 +9,6 @@ export default function ProjectsDashboardPage() {
             <h1 className="text-2xl font-bold">Projects & Goals</h1>
             <p className="text-sm text-muted-foreground">Manage your organization&apos;s goals and projects</p>
           </div>
-          <FirstTimeUserTour />
         </div>
       </div>
       <ContributorsTable />

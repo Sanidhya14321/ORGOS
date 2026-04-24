@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { RegisterForm } from "@/components/register-form";
+import OnboardingForm from "@/components/ui/multistep-form";
 
 export default function RegisterPage() {
   return (
@@ -8,7 +8,7 @@ export default function RegisterPage() {
       title="Create an executive account"
       description="Owners, CEOs, and CFOs can register here. Everyone else receives credentials from the company admin."
     >
-      <RegisterForm />
+      <OnboardingForm />
     </AppShell>
   );
 }

@@ -3,43 +3,58 @@
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ArrowLeft, ArrowRight } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 const tips = [
   {
     title: "Welcome to ORGOS",
-    description:
-      "This is your new workspace. Here you'll find all your organizational goals, recent activities, settings, and more.",
+    description: "This executive workspace connects goals, task routing, approvals, and reporting in one control surface.",
   },
   {
-    title: "Quick Actions",
-    description:
-      "Use the toolbar above to create new goals, invite team members, or access settings.",
+    title: "Approvals Queue",
+    description: "Review pending members first so your org can be onboarded with correct role and reporting structure.",
   },
   {
-    title: "Need Help?",
-    description:
-      "Click the support icon in the top right corner to access our help center and documentation.",
+    title: "Organization Setup",
+    description: "Create your org, define levels, and assign reporting lines before scaling execution workflows.",
   },
   {
-    title: "Keyboard Shortcuts",
-    description:
-      "Press ⌘K to open the command palette. Use arrow keys to navigate and Enter to select an action.",
+    title: "Projects and Goals",
+    description: "Track live goals, progress states, and contributor load from the projects table in this dashboard.",
   },
   {
-    title: "Stay Updated",
-    description:
-      "Enable notifications to receive updates about your goals, team activity, and important deadlines.",
+    title: "Execution Monitoring",
+    description: "Use Task Board and Org Tree views to monitor assignments, unblock teams, and optimize handoffs.",
   },
 ]
 
 function FirstTimeUserTour() {
   const [currentTip, setCurrentTip] = useState(0)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const hasSeenTour = window.localStorage.getItem("orgos_ceo_tour_seen")
+    if (!hasSeenTour) {
+      setOpen(true)
+    }
+  }, [])
 
   const handleNext = () => {
     if (currentTip < tips.length - 1) {
       setCurrentTip(currentTip + 1)
     }
+  }
+
+  const handleFinish = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("orgos_ceo_tour_seen", "true")
+    }
+    setOpen(false)
+    setCurrentTip(0)
   }
 
   const handlePrev = () => {
@@ -52,9 +67,9 @@ function FirstTimeUserTour() {
   const isLastTip = currentTip === tips.length - 1
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline">Learn About ORGOS</Button>
+        <Button variant="outline">Product Tour</Button>
       </PopoverTrigger>
       <PopoverContent className="max-w-[280px] py-3 shadow-none" side="top">
         <div className="space-y-3">
@@ -81,14 +96,19 @@ function FirstTimeUserTour() {
                 size="icon"
                 variant="ghost"
                 className="size-6"
-                onClick={handleNext}
-                disabled={isLastTip}
+                onClick={isLastTip ? handleFinish : handleNext}
                 aria-label="Next tip"
               >
                 <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
               </Button>
             </div>
           </div>
+
+          {isLastTip ? (
+            <Button size="sm" className="w-full" onClick={handleFinish}>
+              Finish tour
+            </Button>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

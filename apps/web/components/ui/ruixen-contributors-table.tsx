@@ -1,309 +1,252 @@
-"use client"
+"use client";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
-import { useState } from "react"
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { ApiError, apiFetch } from "@/lib/api";
+import type { Goal, GoalPriority, GoalStatus, Task, User } from "@/lib/models";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-type Contributor = {
-  name: string
-  email: string
-  avatar: string
-  role: string
-}
+type GoalWithDates = Goal & {
+  created_at?: string;
+};
 
-type Project = {
-  id: string
-  title: string
-  repo: string
-  status: "Active" | "Inactive" | "In Progress"
-  team: string
-  tech: string
-  createdAt: string
-  contributors: Contributor[]
-}
+type OrgTreeResponse = {
+  orgId: string;
+  nodes: User[];
+};
 
-const data: Project[] = [
-  {
-    id: "1",
-    title: "Strategic Roadmap",
-    repo: "https://github.com/orgos/strategy",
-    status: "Active",
-    team: "Strategy Guild",
-    tech: "Planning",
-    createdAt: "2024-06-01",
-    contributors: [
-      {
-        name: "Sarah Chen",
-        email: "sarah@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah",
-        role: "Strategy Lead",
-      },
-      {
-        name: "Marcus Johnson",
-        email: "marcus@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=marcus",
-        role: "Analyst",
-      },
-    ],
-  },
-  {
-    id: "2",
-    title: "Technology Stack",
-    repo: "https://github.com/orgos/tech-stack",
-    status: "In Progress",
-    team: "Engineering",
-    tech: "TypeScript",
-    createdAt: "2024-05-22",
-    contributors: [
-      {
-        name: "Alex Kumar",
-        email: "alex@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=alex",
-        role: "Tech Lead",
-      },
-      {
-        name: "Jamie Lee",
-        email: "jamie@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jamie",
-        role: "DevOps",
-      },
-      {
-        name: "Pat Wilson",
-        email: "pat@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=pat",
-        role: "Backend Engineer",
-      },
-    ],
-  },
-  {
-    id: "3",
-    title: "Market Research",
-    repo: "https://github.com/orgos/research",
-    status: "Active",
-    team: "Growth",
-    tech: "Analytics",
-    createdAt: "2024-06-05",
-    contributors: [
-      {
-        name: "Taylor Brown",
-        email: "taylor@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=taylor",
-        role: "Research Lead",
-      },
-    ],
-  },
-  {
-    id: "4",
-    title: "Brand Guidelines",
-    repo: "https://github.com/orgos/branding",
-    status: "Active",
-    team: "Design",
-    tech: "Design System",
-    createdAt: "2024-04-19",
-    contributors: [
-      {
-        name: "Casey Martinez",
-        email: "casey@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=casey",
-        role: "Brand Designer",
-      },
-      {
-        name: "Jordan Davis",
-        email: "jordan@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jordan",
-        role: "Creative Director",
-      },
-    ],
-  },
-  {
-    id: "5",
-    title: "KPI Dashboard",
-    repo: "https://github.com/orgos/metrics",
-    status: "Active",
-    team: "Analytics",
-    tech: "Data Science",
-    createdAt: "2024-03-30",
-    contributors: [
-      {
-        name: "Riley Chen",
-        email: "riley@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=riley",
-        role: "Data Engineer",
-      },
-    ],
-  },
-  {
-    id: "6",
-    title: "Communication Hub",
-    repo: "https://github.com/orgos/comms",
-    status: "Active",
-    team: "Infrastructure",
-    tech: "Real-time",
-    createdAt: "2024-06-03",
-    contributors: [
-      {
-        name: "Morgan White",
-        email: "morgan@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=morgan",
-        role: "Platform Engineer",
-      },
-      {
-        name: "Sam Green",
-        email: "sam@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sam",
-        role: "Infrastructure Lead",
-      },
-    ],
-  },
-  {
-    id: "7",
-    title: "Customization Engine",
-    repo: "https://github.com/orgos/customization",
-    status: "Active",
-    team: "Product",
-    tech: "React",
-    createdAt: "2024-05-10",
-    contributors: [
-      {
-        name: "Alex Turner",
-        email: "alex.t@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=alex-t",
-        role: "Product Engineer",
-      },
-    ],
-  },
-  {
-    id: "8",
-    title: "Admin Dashboard",
-    repo: "https://github.com/orgos/admin",
-    status: "Active",
-    team: "Platform",
-    tech: "Next.js",
-    createdAt: "2024-05-28",
-    contributors: [
-      {
-        name: "Casey Rodriguez",
-        email: "casey.r@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=casey-r",
-        role: "Full Stack",
-      },
-    ],
-  },
-  {
-    id: "9",
-    title: "Integration Layer",
-    repo: "https://github.com/orgos/integrations",
-    status: "Active",
-    team: "Platform",
-    tech: "Node.js",
-    createdAt: "2024-01-18",
-    contributors: [
-      {
-        name: "Devon Anderson",
-        email: "devon@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=devon",
-        role: "API Developer",
-      },
-      {
-        name: "Morgan Phillips",
-        email: "morgan.p@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=morgan-p",
-        role: "Architect",
-      },
-    ],
-  },
-  {
-    id: "10",
-    title: "Documentation",
-    repo: "https://github.com/orgos/docs",
-    status: "Active",
-    team: "Developer Experience",
-    tech: "Markdown",
-    createdAt: "2024-06-02",
-    contributors: [
-      {
-        name: "Reese Thompson",
-        email: "reese@orgos.com",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=reese",
-        role: "Technical Writer",
-      },
-    ],
-  },
-]
+type GoalRow = {
+  id: string;
+  title: string;
+  status: GoalStatus;
+  priority: GoalPriority;
+  createdAt: string;
+  taskCount: number;
+  departmentFocus: string;
+  contributors: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: User["role"];
+    department: string;
+  }>;
+};
 
 const allColumns = [
-  "Project",
-  "Repository",
-  "Team",
-  "Tech",
+  "Goal",
+  "Status",
+  "Priority",
+  "Department",
+  "Tasks",
   "Created At",
   "Contributors",
-  "Status",
-] as const
+  "Actions"
+] as const;
 
-function ContributorsTable() {
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([...allColumns])
-  const [statusFilter, setStatusFilter] = useState("")
-  const [techFilter, setTechFilter] = useState("")
+const statusOptions: GoalStatus[] = ["active", "paused", "completed", "cancelled"];
 
-  const filteredData = data.filter((project) => {
-    return (
-      (!statusFilter || project.status === statusFilter) &&
-      (!techFilter || project.tech.toLowerCase().includes(techFilter.toLowerCase()))
-    )
-  })
-
-  const toggleColumn = (col: string) => {
-    setVisibleColumns((prev) =>
-      prev.includes(col)
-        ? prev.filter((c) => c !== col)
-        : [...prev, col]
-    )
+function formatDate(input?: string): string {
+  if (!input) {
+    return "-";
   }
 
+  const value = new Date(input);
+  if (Number.isNaN(value.getTime())) {
+    return "-";
+  }
+
+  return value.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function goalStatusClass(status: GoalStatus): string {
+  switch (status) {
+    case "active":
+      return "bg-green-600 text-white";
+    case "paused":
+      return "bg-amber-500 text-white";
+    case "completed":
+      return "bg-blue-600 text-white";
+    default:
+      return "bg-slate-500 text-white";
+  }
+}
+
+function priorityClass(priority: GoalPriority): string {
+  switch (priority) {
+    case "critical":
+      return "bg-red-600 text-white";
+    case "high":
+      return "bg-orange-600 text-white";
+    case "medium":
+      return "bg-sky-600 text-white";
+    default:
+      return "bg-slate-400 text-white";
+  }
+}
+
+function ContributorsTable() {
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([...allColumns]);
+  const [statusFilter, setStatusFilter] = useState<GoalStatus | "all">("all");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<GoalRow[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadRows() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const me = await apiFetch<User>("/api/me");
+        if (!me.org_id) {
+          if (active) {
+            setRows([]);
+            setError("Organization is not configured yet. Complete org setup first.");
+          }
+          return;
+        }
+
+        const [goalsResponse, tasksResponse, treeResponse] = await Promise.all([
+          apiFetch<{ items: GoalWithDates[] }>("/api/goals?limit=200"),
+          apiFetch<{ items: Task[] }>("/api/tasks?limit=400").catch(() => ({ items: [] })),
+          apiFetch<OrgTreeResponse>(`/api/orgs/${me.org_id}/tree`).catch(() => ({ orgId: me.org_id as string, nodes: [] }))
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        const tasksByGoal = new Map<string, Task[]>();
+        for (const task of tasksResponse.items) {
+          const list = tasksByGoal.get(task.goal_id) ?? [];
+          list.push(task);
+          tasksByGoal.set(task.goal_id, list);
+        }
+
+        const userById = new Map(treeResponse.nodes.map((node) => [node.id, node]));
+
+        const mappedRows: GoalRow[] = goalsResponse.items.map((goal) => {
+          const goalTasks = tasksByGoal.get(goal.id) ?? [];
+          const contributorIds = new Set(goalTasks.map((task) => task.assigned_to).filter(Boolean) as string[]);
+
+          const contributors = Array.from(contributorIds)
+            .map((id) => userById.get(id))
+            .filter((user): user is User => Boolean(user))
+            .map((user) => ({
+              id: user.id,
+              name: user.full_name,
+              email: user.email,
+              role: user.role,
+              department: user.department ?? "Unassigned"
+            }));
+
+          const departmentFocus = Array.from(new Set(contributors.map((contributor) => contributor.department))).join(", ");
+
+          return {
+            id: goal.id,
+            title: goal.title,
+            status: goal.status,
+            priority: goal.priority,
+            createdAt: formatDate(goal.created_at),
+            taskCount: goal.task_count ?? goalTasks.length,
+            departmentFocus: departmentFocus || "Cross-functional",
+            contributors
+          };
+        });
+
+        setRows(mappedRows);
+      } catch (loadError) {
+        const message =
+          loadError instanceof ApiError
+            ? loadError.message
+            : loadError instanceof Error
+              ? loadError.message
+              : "Unable to load goals data";
+
+        if (active) {
+          setError(message);
+          setRows([]);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadRows();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((row) => {
+      const statusMatch = statusFilter === "all" ? true : row.status === statusFilter;
+      const search = searchFilter.trim().toLowerCase();
+      const searchMatch =
+        search.length === 0 ||
+        row.title.toLowerCase().includes(search) ||
+        row.departmentFocus.toLowerCase().includes(search) ||
+        row.contributors.some((contributor) => contributor.name.toLowerCase().includes(search));
+
+      return statusMatch && searchMatch;
+    });
+  }, [rows, searchFilter, statusFilter]);
+
+  const toggleColumn = (column: string) => {
+    setVisibleColumns((prev) => (prev.includes(column) ? prev.filter((entry) => entry !== column) : [...prev, column]));
+  };
+
   return (
-    <div className="container my-10 space-y-4 p-4 border border-border rounded-lg bg-background shadow-sm overflow-x-auto">
-      <div className="flex flex-wrap gap-4 items-center justify-between mb-6">
-        <div className="flex gap-2 flex-wrap">
+    <div className="my-8 space-y-4 overflow-x-auto rounded-lg border border-border bg-background p-4 shadow-sm">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h3 className="text-base font-semibold">Execution Goals</h3>
+          <p className="text-sm text-muted-foreground">Live backend data from /api/goals, /api/tasks, and /api/orgs/:id/tree.</p>
+        </div>
+
+        <Button variant="outline" size="sm" onClick={() => window.location.reload()} disabled={loading}>
+          Refresh
+        </Button>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
           <Input
-            placeholder="Filter by technology..."
-            value={techFilter}
-            onChange={(e) => setTechFilter(e.target.value)}
-            className="w-48"
+            placeholder="Search by goal, department, contributor..."
+            value={searchFilter}
+            onChange={(event) => setSearchFilter(event.target.value)}
+            className="w-72"
           />
-          <Input
-            placeholder="Filter by status..."
+
+          <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-48"
-          />
+            onChange={(event) => setStatusFilter(event.target.value as GoalStatus | "all")}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="all">All statuses</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
         </div>
 
         <DropdownMenu>
@@ -312,104 +255,105 @@ function ContributorsTable() {
               Columns
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-48">
-            {allColumns.map((col) => (
+          <DropdownMenuContent className="w-52">
+            {allColumns.map((column) => (
               <DropdownMenuCheckboxItem
-                key={col}
-                checked={visibleColumns.includes(col)}
-                onCheckedChange={() => toggleColumn(col)}
+                key={column}
+                checked={visibleColumns.includes(column)}
+                onCheckedChange={() => toggleColumn(column)}
               >
-                {col}
+                {column}
               </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
+      {error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
+
       <Table className="w-full">
         <TableHeader>
           <TableRow>
-            {visibleColumns.includes("Project") && <TableHead className="w-[180px]">Project</TableHead>}
-            {visibleColumns.includes("Repository") && <TableHead className="w-[220px]">Repository</TableHead>}
-            {visibleColumns.includes("Team") && <TableHead className="w-[150px]">Team</TableHead>}
-            {visibleColumns.includes("Tech") && <TableHead className="w-[150px]">Tech</TableHead>}
-            {visibleColumns.includes("Created At") && <TableHead className="w-[120px]">Created At</TableHead>}
-            {visibleColumns.includes("Contributors") && <TableHead className="w-[150px]">Contributors</TableHead>}
-            {visibleColumns.includes("Status") && <TableHead className="w-[100px]">Status</TableHead>}
+            {visibleColumns.includes("Goal") ? <TableHead className="min-w-[240px]">Goal</TableHead> : null}
+            {visibleColumns.includes("Status") ? <TableHead className="min-w-[120px]">Status</TableHead> : null}
+            {visibleColumns.includes("Priority") ? <TableHead className="min-w-[120px]">Priority</TableHead> : null}
+            {visibleColumns.includes("Department") ? <TableHead className="min-w-[160px]">Department Focus</TableHead> : null}
+            {visibleColumns.includes("Tasks") ? <TableHead className="min-w-[90px]">Tasks</TableHead> : null}
+            {visibleColumns.includes("Created At") ? <TableHead className="min-w-[120px]">Created At</TableHead> : null}
+            {visibleColumns.includes("Contributors") ? <TableHead className="min-w-[170px]">Contributors</TableHead> : null}
+            {visibleColumns.includes("Actions") ? <TableHead className="min-w-[120px]">Actions</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredData.length ? (
-            filteredData.map((project) => (
-              <TableRow key={project.id}>
-                {visibleColumns.includes("Project") && (
-                  <TableCell className="font-medium whitespace-nowrap">{project.title}</TableCell>
-                )}
-                {visibleColumns.includes("Repository") && (
-                  <TableCell className="whitespace-nowrap">
-                    <a
-                      href={project.repo}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 underline"
-                    >
-                      {project.repo.replace("https://", "")}
-                    </a>
+          {loading ? (
+            <TableRow>
+              <TableCell colSpan={visibleColumns.length} className="py-6 text-center text-muted-foreground">
+                Loading goals and contributors...
+              </TableCell>
+            </TableRow>
+          ) : filteredRows.length > 0 ? (
+            filteredRows.map((row) => (
+              <TableRow key={row.id}>
+                {visibleColumns.includes("Goal") ? <TableCell className="font-medium">{row.title}</TableCell> : null}
+                {visibleColumns.includes("Status") ? (
+                  <TableCell>
+                    <Badge className={cn("capitalize", goalStatusClass(row.status))}>{row.status}</Badge>
                   </TableCell>
-                )}
-                {visibleColumns.includes("Team") && <TableCell className="whitespace-nowrap">{project.team}</TableCell>}
-                {visibleColumns.includes("Tech") && <TableCell className="whitespace-nowrap">{project.tech}</TableCell>}
-                {visibleColumns.includes("Created At") && <TableCell className="whitespace-nowrap">{project.createdAt}</TableCell>}
-                {visibleColumns.includes("Contributors") && (
-                  <TableCell className="min-w-[120px]">
-                    <div className="flex -space-x-2">
-                      <TooltipProvider>
-                        {project.contributors.map((contributor, idx) => (
-                          <Tooltip key={idx}>
-                            <TooltipTrigger asChild>
-                              <Avatar className="h-8 w-8 ring-2 ring-white hover:z-10">
-                                <AvatarImage src={contributor.avatar} alt={contributor.name} />
-                                <AvatarFallback>{contributor.name[0]}</AvatarFallback>
-                              </Avatar>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-sm">
-                              <p className="font-semibold">{contributor.name}</p>
-                              <p className="text-xs text-muted-foreground">{contributor.email}</p>
-                              <p className="text-xs italic">{contributor.role}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </TooltipProvider>
-                    </div>
+                ) : null}
+                {visibleColumns.includes("Priority") ? (
+                  <TableCell>
+                    <Badge className={cn("capitalize", priorityClass(row.priority))}>{row.priority}</Badge>
                   </TableCell>
-                )}
-                {visibleColumns.includes("Status") && (
-                  <TableCell className="whitespace-nowrap">
-                    <Badge
-                      className={cn(
-                        "whitespace-nowrap",
-                        project.status === "Active" && "bg-green-500 text-white",
-                        project.status === "Inactive" && "bg-gray-400 text-white",
-                        project.status === "In Progress" && "bg-yellow-500 text-white",
-                      )}
-                    >
-                      {project.status}
-                    </Badge>
+                ) : null}
+                {visibleColumns.includes("Department") ? <TableCell>{row.departmentFocus}</TableCell> : null}
+                {visibleColumns.includes("Tasks") ? <TableCell>{row.taskCount}</TableCell> : null}
+                {visibleColumns.includes("Created At") ? <TableCell>{row.createdAt}</TableCell> : null}
+                {visibleColumns.includes("Contributors") ? (
+                  <TableCell>
+                    {row.contributors.length > 0 ? (
+                      <div className="flex -space-x-2">
+                        <TooltipProvider>
+                          {row.contributors.map((contributor) => (
+                            <Tooltip key={contributor.id}>
+                              <TooltipTrigger asChild>
+                                <Avatar className="h-8 w-8 border border-background hover:z-10">
+                                  <AvatarFallback>{contributor.name.charAt(0).toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-sm">
+                                <p className="font-semibold">{contributor.name}</p>
+                                <p className="text-xs text-muted-foreground">{contributor.email}</p>
+                                <p className="text-xs">{contributor.role.toUpperCase()} - {contributor.department}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </TooltipProvider>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No assignees yet</span>
+                    )}
                   </TableCell>
-                )}
+                ) : null}
+                {visibleColumns.includes("Actions") ? (
+                  <TableCell>
+                    <Link href={`/dashboard/task-board?goalId=${row.id}`} className="text-sm font-medium text-primary hover:underline">
+                      Open board
+                    </Link>
+                  </TableCell>
+                ) : null}
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={visibleColumns.length} className="text-center py-6">
-                No results found.
+              <TableCell colSpan={visibleColumns.length} className="py-6 text-center text-muted-foreground">
+                No goals found for the selected filters.
               </TableCell>
             </TableRow>
           )}
         </TableBody>
       </Table>
     </div>
-  )
+  );
 }
 
-export default ContributorsTable
+export default ContributorsTable;
