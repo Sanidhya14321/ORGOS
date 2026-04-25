@@ -19,9 +19,7 @@ ALTER TABLE public.tasks
   ADD COLUMN IF NOT EXISTS completion_notes TEXT,
   ADD COLUMN IF NOT EXISTS blocked_by_count INT NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS estimated_effort_hours NUMERIC(8,2),
-  ADD COLUMN IF NOT EXISTS is_overdue BOOLEAN GENERATED ALWAYS AS (
-    deadline IS NOT NULL AND deadline < now() AND status NOT IN ('completed', 'cancelled')
-  ) STORED;
+  ADD COLUMN IF NOT EXISTS is_overdue BOOLEAN NOT NULL DEFAULT false;
 
 UPDATE public.tasks
 SET owner_id = COALESCE(owner_id, assigned_to)
