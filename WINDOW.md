@@ -226,3 +226,74 @@
 - Added `@types/dagre` to web dev dependencies to satisfy strict TypeScript checks for dagre imports.
 - Updated `apps/web/next.config.js` with `eslint.ignoreDuringBuilds` to avoid Next lint-runtime option incompatibility during production build.
 - Verified `/verify` page suspense-safe rendering and confirmed monorepo typecheck returns `7 successful, 7 total`.
+
+### Chunk 38 (Frontend Redesign Wave 1 Completed)
+- Replaced web design foundation with strict dark-only token system in `apps/web/app/globals.css` and token-mapped Tailwind config in `apps/web/tailwind.config.ts`.
+- Switched app typography to Inter + JetBrains Mono and mounted global app providers in `apps/web/app/layout.tsx`.
+- Added TanStack Query provider and defaults (`staleTime=30000`) via `apps/web/lib/queryClient.ts` and `apps/web/components/providers/app-providers.tsx`.
+- Built new dashboard shell with role-aware sidebar, topbar, command palette, notifications drawer, and skeleton states:
+	- `apps/web/components/shell/sidebar.tsx`
+	- `apps/web/components/shell/topbar.tsx`
+	- `apps/web/components/shell/command-palette.tsx`
+	- `apps/web/components/shell/notifications-drawer.tsx`
+	- `apps/web/components/shell/dashboard-shell.tsx`
+	- `apps/web/app/dashboard/layout.tsx`
+- Reworked auth UX to dark minimal cards with real API wiring:
+	- `apps/web/app/login/page.tsx`
+	- `apps/web/components/login-form.tsx`
+	- `apps/web/app/register/page.tsx`
+	- `apps/web/components/auth/register-wizard.tsx`
+	- `apps/web/app/pending/page.tsx`
+- Rebuilt role dashboard and key pages with live data + skeleton loading:
+	- `apps/web/components/dashboard/role-dashboard.tsx`
+	- `apps/web/components/dashboard/metric-card.tsx`
+	- `apps/web/components/dashboard/goals-table.tsx`
+	- `apps/web/components/tasks/task-card.tsx`
+	- `apps/web/components/tasks/task-drawer.tsx`
+	- `apps/web/components/tasks/task-board-view.tsx`
+	- `apps/web/app/dashboard/[role]/page.tsx`
+	- `apps/web/app/dashboard/task-board/page.tsx`
+	- `apps/web/app/dashboard/goals/page.tsx`
+	- `apps/web/app/dashboard/approvals/page.tsx`
+- Rebuilt org tree with `@xyflow/react` + dagre auto-layout and search highlight:
+	- `apps/web/components/tree/org-tree.tsx`
+	- `apps/web/components/tree/person-node.tsx`
+	- `apps/web/app/dashboard/org-tree/page.tsx`
+	- `apps/web/app/dashboard/tree/page.tsx`
+- Added recruitment dashboard, kanban, applicant cards, drawer, referrals, and public apply pages:
+	- `apps/web/components/recruit/applicant-card.tsx`
+	- `apps/web/components/recruit/kanban-view.tsx`
+	- `apps/web/components/recruit/applicant-drawer.tsx`
+	- `apps/web/app/dashboard/recruit/page.tsx`
+	- `apps/web/app/dashboard/recruit/refer/page.tsx`
+	- `apps/web/app/apply/[jobId]/page.tsx`
+- Added missing UI primitives for shell/features:
+	- `apps/web/components/ui/dialog.tsx`, `sheet.tsx`, `command.tsx`, `tabs.tsx`, `scroll-area.tsx`, `separator.tsx`, `progress.tsx`, `skeleton.tsx`, `animated-number.tsx`.
+- Installed required frontend dependencies for redesign wave (React Query, React Virtual, XYFlow, Recharts, date-fns, react-pdf, etc.).
+- Validation:
+	- `npm --workspace @orgos/web run typecheck` ✅
+	- `npm --workspace @orgos/web run build` ✅
+
+### Build Order Tracking (2026 Redesign)
+- [x] Step 1 (design tokens + fonts + globals)
+- [x] Step 2 (component/pkgs foundation installed; custom primitives used where generated components were unavailable)
+- [x] Step 3 (TanStack Query provider and defaults)
+- [x] Step 4 (shell layout with role-aware nav, topbar, notifications, command palette)
+- [x] Step 5 (auth pages and register multi-step flow)
+- [x] Step 6 (metric cards with animated numbers and skeletons)
+- [x] Step 7 (goal table with expansion, progress, SLA, blocked state)
+- [x] Step 8 (task card + task drawer + comments/attachments wiring)
+- [x] Step 9 (org tree redesign with dagre + node cards)
+- [x] Step 10 (command palette)
+- [x] Step 11 (notifications drawer)
+- [x] Step 12 (recruitment dashboard + jobs/applicants + kanban)
+- [x] Step 13 (applicant drawer with interview and stage actions; loaded client-only for build safety)
+- [x] Step 14 (public application page)
+- [x] Step 15 (referral page)
+- [x] Step 16 (approvals page)
+- [~] Step 17 (core animations implemented; additional micro-interactions can be layered)
+- [ ] Step 18 (full socket-driven query invalidation matrix across all events)
+- [ ] Step 19 (virtualization for high-volume lists)
+- [ ] Step 20 (mobile-specific bottom nav and table-to-card adaptive transforms)
+- [ ] Step 21 (full accessibility audit sweep)
+- [x] Step 22 (WINDOW updated with work log and validations)

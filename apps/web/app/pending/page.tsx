@@ -1,36 +1,13 @@
-import Link from "next/link";
-import { AppShell } from "@/components/app-shell";
-
 export default function PendingPage() {
   return (
-    <AppShell
-      eyebrow="ORGOS onboarding"
-      title="Approval pending"
-      description="Your profile is submitted and waiting for CEO/CFO approval. You will get access once activated."
-    >
-      <div className="space-y-4 text-sm text-[var(--muted)]">
-        <p>
-          Your account is currently in pending state. An executive in your organization needs to approve your membership
-          before dashboard access is enabled.
+    <main className="flex min-h-screen items-center justify-center bg-bg-base p-6">
+      <div className="w-full max-w-lg rounded-lg border border-border bg-bg-surface p-8 text-center">
+        <div className="mx-auto mb-4 h-10 w-10 rounded-full bg-success-subtle text-success flex items-center justify-center">✓</div>
+        <h1 className="text-xl font-semibold text-text-primary">You are in the queue</h1>
+        <p className="mt-2 text-sm text-text-secondary">
+          Your request has been sent to the organization admin. You will receive an email once approved.
         </p>
-        <p>
-          If you were approved already, sign out and sign in again to refresh your session role and status claims.
-        </p>
-        <div className="flex gap-3">
-          <Link
-            href="/login"
-            className="inline-flex items-center justify-center rounded-2xl bg-[#f59e0b] px-4 py-3 font-semibold text-[#0f1115] transition hover:bg-[#d97706]"
-          >
-            Back to sign in
-          </Link>
-          <Link
-            href="/complete-profile"
-            className="inline-flex items-center justify-center rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 font-semibold text-[#eef2ff]"
-          >
-            Edit profile
-          </Link>
-        </div>
       </div>
-    </AppShell>
+    </main>
   );
 }

@@ -4,8 +4,11 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { setRoleCookie } from "@/lib/auth";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export function LoginForm() {
   const router = useRouter();
@@ -13,6 +16,7 @@ export function LoginForm() {
   const initialEmail = useMemo(() => searchParams.get("email") ?? "", [searchParams]);
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -52,9 +56,10 @@ export function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <label className="block space-y-2">
-        <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Email</span>
-        <input
-          className="w-full rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 text-[#eef2ff] outline-none transition focus:border-[#f59e0b]"
+        <Label htmlFor="email" className="text-sm font-medium text-text-secondary">Email</Label>
+        <Input
+          id="email"
+          className="border-border bg-bg-subtle text-text-primary"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -65,31 +70,38 @@ export function LoginForm() {
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Password</span>
-        <input
-          className="w-full rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 text-[#eef2ff] outline-none transition focus:border-[#f59e0b]"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Your password"
-          autoComplete="current-password"
-          required
-        />
+        <Label htmlFor="password" className="text-sm font-medium text-text-secondary">Password</Label>
+        <div className="relative">
+          <Input
+            id="password"
+            className="border-border bg-bg-subtle pr-10 text-text-primary"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Your password"
+            autoComplete="current-password"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((value) => !value)}
+            className="focus-ring absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </label>
 
-      {error ? <p className="rounded-2xl border border-[#3a2f1f] bg-[#25170f] px-4 py-3 text-sm text-[#fdba74]">{error}</p> : null}
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
 
-      <button
+      <Button
         type="submit"
         disabled={pending}
-        className="inline-flex w-full items-center justify-center rounded-2xl bg-[#f59e0b] px-4 py-3 font-semibold text-[#0f1115] transition hover:bg-[#d97706] disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full bg-accent text-white hover:bg-accent-hover"
       >
         {pending ? "Signing in..." : "Sign in"}
-      </button>
-
-      <p className="text-center text-sm text-[var(--muted)]">
-        New here? <Link href="/register" className="font-semibold text-[#eef2ff] underline-offset-4 hover:underline">Create an account</Link>
-      </p>
+      </Button>
     </form>
   );
 }

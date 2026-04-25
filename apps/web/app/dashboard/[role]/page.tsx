@@ -1,12 +1,12 @@
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
-import { AppShell } from "@/components/app-shell";
-import { DashboardClient } from "@/components/dashboard-client";
+import { lazy, Suspense } from "react";
 import { ROLE_COOKIE } from "@/lib/auth";
 import type { Role } from "@/lib/models";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const roles: Role[] = ["ceo", "cfo", "manager", "worker"];
+const RoleDashboard = lazy(() => import("@/components/dashboard/role-dashboard").then((m) => ({ default: m.RoleDashboard })));
 
 type DashboardRolePageProps = {
   params: { role: string };
@@ -29,36 +29,16 @@ export default function DashboardRolePage({ params }: DashboardRolePageProps) {
   }
 
   return (
-    <AppShell
-      layout="stack"
-      role={role}
-      eyebrow="Role dashboard"
-      title={`${role.toUpperCase()} command center`}
-      description="Live ORGOS dashboards combine tasks, goals, and reports with realtime event delivery."
-    >
-      <div className="min-w-0 space-y-3 text-sm leading-6 text-[var(--muted)]">
-        <p>Realtime updates are pushed via Socket.IO and merged into the dashboard feed as the queue advances.</p>
-        <p>Continue into the live workspace to monitor task assignments, report submissions, and escalation events.</p>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <Link
-            href="/dashboard/task-board"
-              className="inline-flex items-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink)]"
-          >
-            Open task board
-          </Link>
-          {(role === "ceo" || role === "cfo" || role === "manager") ? (
-            <Link
-              href="/dashboard/org-tree"
-              className="inline-flex items-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink)]"
-            >
-              Open org tree
-            </Link>
-          ) : null}
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
         </div>
-      </div>
-      <div className="mt-5 min-w-0 rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface-2)] p-3 sm:p-4">
-        <DashboardClient role={role} />
-      </div>
-    </AppShell>
+      }
+    >
+      <RoleDashboard role={role} />
+    </Suspense>
   );
 }

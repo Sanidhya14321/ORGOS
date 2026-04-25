@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Space_Grotesk } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import { AppProviders } from "@/components/providers/app-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,14 +8,14 @@ export const metadata: Metadata = {
   description: "AI Organizational Operating System"
 };
 
-const grotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-grotesk" });
-const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-serif" });
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${grotesk.variable} ${display.variable}`}>
-      <body className="min-h-screen antialiased">
-        {children}
+    <html lang="en" className={`${inter.variable} ${jetBrainsMono.variable}`}>
+      <body className="min-h-screen bg-bg-base text-text-primary antialiased">
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

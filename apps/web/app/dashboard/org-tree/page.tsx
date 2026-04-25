@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
-import { OrgTreeCanvas } from "@/components/org-tree-canvas";
+import { OrgTree } from "@/components/tree/org-tree";
 import { ROLE_COOKIE } from "@/lib/auth";
 import type { Role } from "@/lib/models";
 
@@ -18,15 +17,5 @@ export default function OrgTreePage() {
     redirect(`/dashboard/${cookieRole}`);
   }
 
-  return (
-    <AppShell
-      layout="stack"
-      role={cookieRole}
-      eyebrow="Org structure"
-      title="Organization tree"
-      description="Interactive hierarchy map of your organization, including reporting lines and position levels."
-    >
-      <OrgTreeCanvas />
-    </AppShell>
-  );
+  return <OrgTree />;
 }

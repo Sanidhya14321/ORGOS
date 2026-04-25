@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
-import { TaskBoard } from "@/components/task-board";
+import { TaskBoardView } from "@/components/tasks/task-board-view";
 import { ROLE_COOKIE } from "@/lib/auth";
 import type { Role } from "@/lib/models";
 
@@ -18,15 +17,5 @@ export default function TaskBoardPage() {
     redirect("/dashboard");
   }
 
-  return (
-    <AppShell
-      layout="stack"
-      role={cookieRole}
-      eyebrow="Task operations"
-      title="Role-aware task board"
-      description="Manage routing, delegation, and execution status in one board tailored to your role permissions."
-    >
-      <TaskBoard />
-    </AppShell>
-  );
+  return <TaskBoardView />;
 }

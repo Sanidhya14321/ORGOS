@@ -28,6 +28,10 @@ export interface Goal {
   deadline?: string;
   simulation: boolean;
   task_count?: number;
+  completion_pct?: number;
+  blocked_count?: number;
+  contributors?: Array<{ id: string; full_name: string }>;
+  sla_status?: "on_track" | "at_risk" | "breached";
 }
 
 export type TaskStatus = "pending" | "routing" | "active" | "in_progress" | "blocked" | "rejected" | "completed" | "cancelled";
@@ -103,4 +107,37 @@ export interface PendingMember {
   reports_to?: string | null;
   status: "pending";
   created_at?: string;
+}
+
+export type JobStatus = "open" | "paused" | "closed";
+export type ApplicantStage = "applied" | "screening" | "interview" | "offer" | "hired" | "rejected";
+
+export interface Job {
+  id: string;
+  org_id: string;
+  title: string;
+  department: string;
+  description: string;
+  required_skills: string[];
+  experience_years?: number;
+  employment_type?: string;
+  location?: string;
+  salary_min?: number;
+  salary_max?: number;
+  status: JobStatus;
+  closes_at?: string;
+}
+
+export interface Applicant {
+  id: string;
+  job_id: string;
+  org_id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  source: "direct" | "referral" | "linkedin" | "job_board";
+  stage: ApplicantStage;
+  ai_score?: number;
+  ai_summary?: string;
+  applied_at: string;
 }

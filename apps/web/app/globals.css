@@ -3,32 +3,40 @@
 @tailwind utilities;
 
 :root {
-  /* Design Style: Dark Premium
-     Theme: slate-charcoal
-     Fonts: Display -> Space Grotesk | Body -> Space Grotesk
-  */
-  --bg-main: #0f1115;
-  --surface: #171a21;
-  --surface-2: #1f2430;
-  --ink: #eef2ff;
-  --accent: #f59e0b;
-  --accent-2: #22c55e;
-  --muted: #94a3b8;
-  --ok: #22c55e;
-  --warn: #fb923c;
-  --border: #2c3240;
+  --bg-base: #0a0a0b;
+  --bg-surface: #111113;
+  --bg-elevated: #18181b;
+  --bg-subtle: #1c1c1f;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-subtle: #1e1b4b;
+  --success: #22c55e;
+  --success-subtle: #052e16;
+  --warning: #f59e0b;
+  --warning-subtle: #1c1003;
+  --danger: #ef4444;
+  --danger-subtle: #1c0303;
+  --info: #38bdf8;
+  --info-subtle: #082030;
 }
 
 html,
 body {
-  background: var(--bg-main);
+  background: var(--bg-base);
   min-height: 100%;
-  color: var(--ink);
-  font-family: var(--font-grotesk), "Segoe UI", sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-sans), "Inter", sans-serif;
+  font-size: 14px;
 }
 
 * {
   box-sizing: border-box;
+  border-color: var(--border);
 }
 
 a {
@@ -36,10 +44,84 @@ a {
   text-decoration: none;
 }
 
-::selection {
-  background: rgba(245, 158, 11, 0.24);
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
-.font-serif {
-  font-family: var(--font-serif), Georgia, serif;
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.focus-ring {
+  @apply outline-none ring-0 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black;
+  --tw-ring-color: var(--accent);
+}
+
+.surface-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes agentPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+
+.agent-pulse {
+  animation: agentPulse 2s infinite;
 }

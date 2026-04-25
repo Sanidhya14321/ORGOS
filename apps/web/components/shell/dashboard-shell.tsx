@@ -1,0 +1,64 @@
+"use client";
+
+import { useMemo } from "react";
+import { usePathname } from "next/navigation";
+import { useRealtimeQueryInvalidation, useSocket } from "@/lib/socket";
+import { Sidebar } from "@/components/shell/sidebar";
+import { Topbar } from "@/components/shell/topbar";
+import { MobileBottomNav } from "@/components/shell/mobile-bottom-nav";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useGoalsQuery, useMeQuery, useOrgAccountsQuery, usePendingMembersQuery, useTasksQuery } from "@/lib/queries";
+import type { Applicant } from "@/lib/models";
+
+function titleFromPath(pathname: string): string {
+  if (pathname.startsWith("/dashboard/task-board")) return "My Tasks";
+  if (pathname.startsWith("/dashboard/org-tree")) return "Org Tree";
+  if (pathname.startsWith("/dashboard/goals")) return "Goals";
+  if (pathname.startsWith("/dashboard/recruit")) return "Recruitment";
+  if (pathname.startsWith("/dashboard/approvals")) return "Approvals";
+  return "Dashboard";
+}
+
+export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const socket = useSocket();
+  useRealtimeQueryInvalidation(true);
+  const pageTitle = titleFromPath(pathname);
+
+  const meQuery = useMeQuery();
+  const tasksQuery = useTasksQuery();
+  const goalsQuery = useGoalsQuery(meQuery.data?.role !== "worker");
+  const pendingQuery = usePendingMembersQuery(meQuery.data?.role);
+  const peopleQuery = useOrgAccountsQuery(meQuery.data?.org_id ?? undefined, meQuery.data?.role);
+
+  const applicants: Applicant[] = useMemo(() => [], []);
+
+  const isLoading = meQuery.isLoading;
+
+  return (
+    <div className="min-h-screen bg-bg-base">
+      <Sidebar user={meQuery.data} isLoading={isLoading} />
+      <Topbar
+        pageTitle={pageTitle}
+        tasks={tasksQuery.data ?? []}
+        goals={goalsQuery.data ?? []}
+        people={peopleQuery.data ?? []}
+        applicants={applicants}
+        pendingMembers={pendingQuery.data ?? []}
+        agentRunning={socket.connected}
+      />
+      <main className="mx-auto w-full max-w-[1400px] px-4 pb-24 pt-6 md:pb-10 md:pl-[244px] md:pr-6">
+        {isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : (
+          children
+        )}
+      </main>
+      <MobileBottomNav />
+    </div>
+  );
+}
