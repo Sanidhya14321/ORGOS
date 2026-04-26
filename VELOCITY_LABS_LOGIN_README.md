@@ -13,7 +13,8 @@ This file lists seeded login identifiers for the ORGOS Velocity Labs organizatio
 
 | # | Full Name | Role | Department | Login Email | Password |
 |---|-----------|------|------------|-------------|----------|
-| 1 | Jordan Vale | ceo | - | ceo@velocity-labs.orgos.ai | same as Login Email |
+| 1 | Jordan Vale | ceo | - | 404
+This page could not be found. | same as Login Email |
 | 2 | Morgan Lee | cfo | Finance | cfo@velocity-labs.orgos.ai | same as Login Email |
 | 3 | Engineering Manager 1 | manager | Engineering | manager.engineering@velocity-labs.orgos.ai | same as Login Email |
 | 4 | Product Manager 2 | manager | Product | manager.product@velocity-labs.orgos.ai | same as Login Email |

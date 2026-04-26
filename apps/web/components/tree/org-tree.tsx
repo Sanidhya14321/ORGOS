@@ -16,6 +16,10 @@ import { apiFetch } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PersonNode } from "@/components/tree/person-node";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ZoomIn, ZoomOut, Download } from "lucide-react";
 
 const nodeTypes = { person: PersonNode } as const;
 
@@ -25,22 +29,25 @@ type TreeNode = {
   role: string;
   reports_to?: string | null;
   position_id?: string | null;
+  current_load?: number;
+  max_load?: number;
+  sla_status?: "on_track" | "at_risk" | "breached";
 };
 
 type Position = { id: string; title: string; level: number };
 
 function layout(nodes: Node[], edges: Edge[]) {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 40 });
+  g.setGraph({ rankdir: "TB", ranksep: 120, nodesep: 50 });
   g.setDefaultEdgeLabel(() => ({}));
 
-  nodes.forEach((n) => g.setNode(n.id, { width: 200, height: 72 }));
+  nodes.forEach((n) => g.setNode(n.id, { width: 240, height: 140 }));
   edges.forEach((e) => g.setEdge(e.source, e.target));
   dagre.layout(g);
 
   return nodes.map((n) => {
     const p = g.node(n.id);
-    return { ...n, position: { x: p.x - 100, y: p.y - 36 } };
+    return { ...n, position: { x: p.x - 120, y: p.y - 70 } };
   });
 }
 
@@ -66,7 +73,9 @@ export function OrgTree() {
         role: node.role,
         positionTitle: node.position_id ? positionsById.get(node.position_id)?.title : node.role,
         activeTasks: 2,
-        slaStatus: "on_track"
+        slaStatus: node.sla_status ?? "on_track",
+        currentLoad: node.current_load ?? 0,
+        maxLoad: node.max_load ?? 10
       },
       position: { x: 0, y: 0 }
     })) as Node[];
@@ -78,8 +87,8 @@ export function OrgTree() {
         source: node.reports_to as string,
         target: node.id,
         type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed, color: "#3f3f46" },
-        style: { stroke: "#3f3f46", strokeWidth: 1.5 }
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#818cf8" },
+        style: { stroke: "#818cf8", strokeWidth: 2 }
       })) as Edge[];
 
     const laidOut = layout(rawNodes, rawEdges);
@@ -91,7 +100,8 @@ export function OrgTree() {
         return {
           ...n,
           style: {
-            opacity: matched ? 1 : 0.3
+            opacity: matched ? 1 : 0.3,
+            transition: "opacity 0.2s ease-in-out"
           }
         };
       }),
@@ -104,28 +114,65 @@ export function OrgTree() {
       <div className="space-y-3">
         <Skeleton className="h-10 w-72" />
         <div className="space-y-3 rounded-md border border-border bg-bg-surface p-4">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[72px] w-[200px]" />)}
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[140px] w-[240px]" />)}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search people" className="max-w-sm border-border bg-bg-subtle" />
+    <div className="space-y-3 h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <Input 
+            value={search} 
+            onChange={(e) => setSearch(e.target.value)} 
+            placeholder="Search people..." 
+            className="max-w-sm border-border bg-bg-subtle text-text-primary" 
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="border-border hover:bg-bg-elevated">
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </div>
       </div>
-      <div className="h-[calc(100vh-220px)] rounded-md border border-border bg-bg-base">
+
+      {/* Legend */}
+      <Card className="border border-border bg-bg-surface p-3">
+        <div className="flex flex-wrap items-center gap-6 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-success"></span>
+            <span className="text-text-secondary">On Track</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-warning"></span>
+            <span className="text-text-secondary">At Risk</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-danger"></span>
+            <span className="text-text-secondary">SLA Breached</span>
+          </div>
+          <div className="ml-auto text-xs text-text-secondary">
+            {(treeQuery.data?.nodes ?? []).length} members
+          </div>
+        </div>
+      </Card>
+
+      {/* Tree Container */}
+      <div className="relative h-[calc(100vh-300px)] rounded-lg border border-border bg-bg-base overflow-hidden">
         <ReactFlow
           nodes={graph.nodes}
           edges={graph.edges}
           nodeTypes={nodeTypes as never}
           fitView
           minZoom={0.4}
-          maxZoom={1.5}
+          maxZoom={2}
         >
           <Background color="#27272a" gap={18} />
-          <Controls showInteractive={false} />
+          <Controls showInteractive={true} />
         </ReactFlow>
       </div>
     </div>

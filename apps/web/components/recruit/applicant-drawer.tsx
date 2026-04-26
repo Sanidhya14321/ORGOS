@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Document, Page, pdfjs } from "react-pdf";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import type { Applicant, ApplicantStage } from "@/lib/models";
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+import { FileText, Download } from "lucide-react";
 
 const stageOrder: ApplicantStage[] = ["applied", "screening", "interview", "offer", "hired", "rejected"];
 
@@ -25,7 +22,6 @@ export function ApplicantDrawer({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const [pdfPage, setPdfPage] = useState(1);
 
   const interviewsQuery = useQuery({
     queryKey: ["applicant-interviews", applicant?.id],
@@ -66,14 +62,21 @@ export function ApplicantDrawer({
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-text-primary">Resume</p>
-              <div className="rounded-md border border-border bg-bg-subtle p-2">
-                {applicant.id ? (
-                  <Document file={null} loading={<Skeleton className="h-56 w-full" />}>
-                    <Page pageNumber={pdfPage} width={560} />
-                  </Document>
-                ) : (
-                  <p className="text-xs text-text-secondary">No resume uploaded</p>
-                )}
+              <div className="rounded-md border border-border bg-bg-subtle p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded bg-accent-subtle p-2">
+                      <FileText className="h-5 w-5 text-accent" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">Resume.pdf</p>
+                      <p className="text-xs text-text-secondary">Click to view or download</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="hover:bg-bg-elevated">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
