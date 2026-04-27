@@ -30,6 +30,49 @@ type RoutingPayload = {
   candidates?: RoutingCandidate[];
 };
 
+function buildNonAssignFallbackContent(context?: LLMLogContext): string {
+  if (context?.action === "decompose") {
+    if (context.agentType === "ceo_agent") {
+      return JSON.stringify({
+        kpi: "Fallback planning path activated",
+        feasibility: "medium",
+        confidence: 0.4,
+        summary: "LLM providers unavailable; returning a safe executive fallback.",
+        sub_directives: [],
+        escalate: true
+      });
+    }
+
+    if (context.agentType === "manager_agent") {
+      return JSON.stringify([]);
+    }
+  }
+
+  if (context?.action === "execute") {
+    return JSON.stringify({
+      acknowledged: true,
+      eta_hours: 24,
+      questions: ["Please clarify blockers while providers recover."],
+      confidence: 0.4
+    });
+  }
+
+  if (context?.action === "synthesize") {
+    return JSON.stringify({
+      summary: "LLM providers unavailable; generated fallback synthesis.",
+      key_findings: ["Source reports should be reviewed manually."],
+      contradictions: [],
+      recommended_action: "Escalate to manager for manual synthesis review.",
+      flagged_items: ["fallback_mode"]
+    });
+  }
+
+  return JSON.stringify({
+    message: "LLM providers unavailable; fallback response generated.",
+    escalate: true
+  });
+}
+
 function tokenize(value: string | null | undefined): string[] {
   if (!value) {
     return [];
@@ -61,6 +104,16 @@ async function buildRuleBasedFallback(
   context?: LLMLogContext
 ): Promise<LLMResponse> {
   const startedAt = Date.now();
+
+  if (context?.action !== "assign") {
+    return {
+      content: buildNonAssignFallbackContent(context),
+      promptTokens: 0,
+      compTokens: 0,
+      latencyMs: Date.now() - startedAt
+    };
+  }
+
   const payload = extractRoutingPayload(messages);
 
   const safeDefault = {
@@ -80,7 +133,7 @@ async function buildRuleBasedFallback(
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRole || context?.action !== "assign") {
+  if (!supabaseUrl || !serviceRole) {
     return {
       content: JSON.stringify({
         suggestions: [
@@ -255,51 +308,57 @@ export async function callLLM(
   context?: LLMLogContext
 ): Promise<LLMResponse> {
   const failures: string[] = [];
+  const groqStartedAt = Date.now();
 
   try {
     const result = await groqProvider.complete(messages, opts);
     await logLLMCall(groqProvider.name, messages, result, context);
     return result;
   } catch (error) {
+    const elapsed = Date.now() - groqStartedAt;
     const err = error instanceof Error ? error : new Error("Unknown Groq error");
     failures.push(`${groqProvider.name}: ${err.message}`);
     await logLLMCall(groqProvider.name, messages, {
       content: "",
       promptTokens: 0,
       compTokens: 0,
-      latencyMs: 0
+      latencyMs: elapsed
     }, context, err.message);
     console.warn("[llm-router] groq failed, trying gemini", err.message);
   }
 
+  const geminiStartedAt = Date.now();
   try {
     const result = await geminiProvider.complete(messages, opts);
     await logLLMCall(geminiProvider.name, messages, result, context);
     return result;
   } catch (error) {
+    const elapsed = Date.now() - geminiStartedAt;
     const err = error instanceof Error ? error : new Error("Unknown Gemini error");
     failures.push(`${geminiProvider.name}: ${err.message}`);
     await logLLMCall(geminiProvider.name, messages, {
       content: "",
       promptTokens: 0,
       compTokens: 0,
-      latencyMs: 0
+      latencyMs: elapsed
     }, context, err.message);
     console.warn("[llm-router] gemini failed, trying rule-based fallback", err.message);
   }
 
+  const fallbackStartedAt = Date.now();
   try {
     const fallback = await buildRuleBasedFallback(messages, context);
     await logLLMCall("rule-based", messages, fallback, context);
     return fallback;
   } catch (error) {
+    const elapsed = Date.now() - fallbackStartedAt;
     const err = error instanceof Error ? error : new Error("Unknown rule-based fallback error");
     failures.push(`rule-based: ${err.message}`);
     await logLLMCall("rule-based", messages, {
       content: "",
       promptTokens: 0,
       compTokens: 0,
-      latencyMs: 0
+      latencyMs: elapsed
     }, context, err.message);
   }
 

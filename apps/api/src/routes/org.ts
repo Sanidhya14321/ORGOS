@@ -14,13 +14,22 @@ const SearchOrgQuerySchema = z.object({
   q: z.string().trim().min(1).max(120)
 });
 
-const CreateOrgBodySchema = z.object({
-  name: z.string().trim().min(2).max(200),
-  domain: z.string().trim().min(1).max(120).optional(),
-  industry: z.enum(IndustryValues).default("tech"),
-  companySize: z.enum(CompanySizeValues).default("startup"),
-  makeCreatorCeo: z.boolean().default(true)
-});
+const CreateOrgBodySchema = z
+  .object({
+    name: z.string().trim().min(2).max(200),
+    domain: z.string().trim().min(1).max(120).optional(),
+    industry: z.enum(IndustryValues).default("tech"),
+    companySize: z.enum(CompanySizeValues).optional(),
+    company_size: z.enum(CompanySizeValues).optional(),
+    makeCreatorCeo: z.boolean().default(true)
+  })
+  .transform((value) => ({
+    name: value.name,
+    domain: value.domain,
+    industry: value.industry,
+    companySize: value.companySize ?? value.company_size ?? "startup",
+    makeCreatorCeo: value.makeCreatorCeo
+  }));
 
 const OrgIdParamSchema = z.object({
   id: z.string().uuid()

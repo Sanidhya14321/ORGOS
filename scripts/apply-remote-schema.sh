@@ -44,13 +44,12 @@ fi
 echo "Linking Supabase project: $project_ref"
 SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" npx supabase link --project-ref "$project_ref" --password "$DB_PASSWORD"
 
-echo "Applying schema/001_initial.sql"
-SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" SUPABASE_DB_PASSWORD="$DB_PASSWORD" npx supabase db query --linked --file packages/db/schema/001_initial.sql
+schema_files=($(ls packages/db/schema/*.sql | sort))
 
-echo "Applying schema/002_orgos_foundation.sql"
-SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" SUPABASE_DB_PASSWORD="$DB_PASSWORD" npx supabase db query --linked --file packages/db/schema/002_orgos_foundation.sql
-
-echo "Applying schema/003_ancestors_rls.sql"
-SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" SUPABASE_DB_PASSWORD="$DB_PASSWORD" npx supabase db query --linked --file packages/db/schema/003_ancestors_rls.sql
+for schema_file in "${schema_files[@]}"; do
+  file_name="$(basename "$schema_file")"
+  echo "Applying schema/$file_name"
+  SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" SUPABASE_DB_PASSWORD="$DB_PASSWORD" npx supabase db query --linked --file "$schema_file"
+done
 
 echo "Remote schema apply complete."

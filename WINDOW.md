@@ -259,6 +259,63 @@
 - Wired cache read/write flow into routing suggestion generation in `apps/api/src/services/agentService.ts`.
 - Added org-level cache invalidation on org/member mutation paths in `apps/api/src/routes/org.ts`.
 
+## Strategic Upgrade Prompt (Ordered Execution)
+
+- [x] Step 1: Industry-aware org bootstrap (schema + API + UI + workflow defaults)
+- [x] Step 2: LLM router fallback hardening + full attempt observability
+- [ ] Step 3
+- [ ] Step 4
+- [ ] Step 5
+- [ ] Step 6
+- [ ] Step 7
+- [ ] Step 8
+- [ ] Step 9
+- [ ] Step 10
+- [ ] Step 11
+- [ ] Step 12
+- [ ] Step 13
+- [ ] Step 14
+- [ ] Step 15
+- [ ] Step 16
+- [ ] Step 17
+- [ ] Step 18
+- [ ] Step 19
+- [ ] Step 20
+- [ ] Step 21
+- [ ] Step 22
+- [ ] Step 23
+- [ ] Step 24
+- [ ] Step 25
+
+### Chunk 29 (Strategic Step 1 Completed)
+- Added migration `packages/db/schema/006_org_settings_industry_setup.sql`:
+  - `org_settings` table with industry/company-size, timezone/workweek, fiscal/branding fields.
+  - `workflow_definitions` table for entity workflow templates.
+  - Org-scoped RLS + indexes + unique default-workflow constraints.
+- Added `apps/api/src/services/orgIndustrySetup.ts` with 10-industry config and deterministic default setup:
+  - seeds baseline positions by industry.
+  - seeds default workflow definitions by entity (`task`, `approval`, `report`).
+  - upserts org settings and defaults idempotently.
+- Updated `POST /api/orgs/create` in `apps/api/src/routes/org.ts`:
+  - accepts `industry` + `companySize` (and compatibility alias `company_size`).
+  - executes org industry setup after org creation.
+  - returns `settings` payload from setup service.
+- Updated registration org-create wizard `apps/web/components/auth/register-wizard.tsx` with industry/company-size selection and payload wiring.
+- Updated CEO org setup flow `apps/web/components/ceo-approval-dashboard.tsx` with industry/company-size fields and payload wiring.
+- Updated remote schema apply script `scripts/apply-remote-schema.sh` to apply all SQL files in `packages/db/schema` in sorted order (includes `006`).
+- Validation:
+  - `npm --workspace @orgos/api run typecheck` ✅
+  - `npm --workspace @orgos/web run typecheck` ✅
+
+### Chunk 30 (Strategic Step 2 Completed)
+- Hardened `packages/agent-core/src/llm/router.ts` fallback behavior to be action-aware instead of routing-only:
+  - `decompose` + CEO returns schema-valid executive fallback with `escalate: true`.
+  - `decompose` + Manager returns schema-valid empty task array fallback.
+  - `execute` (individual worker) returns schema-valid acknowledgment object.
+  - `synthesize` returns schema-valid synthesis object.
+- Preserved rule-based assignment fallback for `assign` actions (history + keyword overlap scoring).
+- Improved observability by logging real per-provider failure latency (`groq`, `gemini`, `rule-based`) to `agent_logs` instead of zeroed values.
+
 ### Chunk 29 (Step 5 Completed)
 - Enforced optimistic routing suggestion flow in `POST /tasks/:id/routing-suggest`: when suggestions are omitted, API now enqueues async manager queue job and returns `202` immediately.
 - Added manager queue support for `routing_suggest` jobs in `apps/api/src/queue/workers/decompose.manager.worker.ts`.

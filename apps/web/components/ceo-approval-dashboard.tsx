@@ -24,6 +24,8 @@ type FeedItem = {
 };
 
 type OrgItem = { id: string; name: string; domain?: string | null };
+type Industry = "tech" | "legal" | "healthcare" | "construction" | "finance" | "retail" | "manufacturing" | "education" | "nonprofit" | "hospitality";
+type CompanySize = "startup" | "mid" | "enterprise";
 type PositionItem = { id: string; title: string; level: number; confirmed?: boolean };
 type PositionCreateResponse = PositionItem & {
   credentials?: {
@@ -183,6 +185,8 @@ export function CeoApprovalDashboard() {
 
   const [orgName, setOrgName] = useState("");
   const [orgDomain, setOrgDomain] = useState("");
+  const [orgIndustry, setOrgIndustry] = useState<Industry>("tech");
+  const [orgCompanySize, setOrgCompanySize] = useState<CompanySize>("startup");
   const [creatingOrg, setCreatingOrg] = useState(false);
 
   const [newPositionTitle, setNewPositionTitle] = useState("");
@@ -498,6 +502,8 @@ export function CeoApprovalDashboard() {
         body: JSON.stringify({
           name: orgName.trim(),
           ...(orgDomain.trim() ? { domain: orgDomain.trim() } : {}),
+          industry: orgIndustry,
+          companySize: orgCompanySize,
           makeCreatorCeo: true
         })
       });
@@ -912,6 +918,39 @@ export function CeoApprovalDashboard() {
                     onChange={(event) => setOrgDomain(event.target.value)}
                     placeholder="velocity-labs.orgos.ai"
                   />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1 text-sm text-[var(--muted)]">
+                    <span className="block">Industry</span>
+                    <select
+                      className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+                      value={orgIndustry}
+                      onChange={(event) => setOrgIndustry(event.target.value as Industry)}
+                    >
+                      <option value="tech">Tech</option>
+                      <option value="legal">Legal</option>
+                      <option value="healthcare">Healthcare</option>
+                      <option value="construction">Construction</option>
+                      <option value="finance">Finance</option>
+                      <option value="retail">Retail</option>
+                      <option value="manufacturing">Manufacturing</option>
+                      <option value="education">Education</option>
+                      <option value="nonprofit">Nonprofit</option>
+                      <option value="hospitality">Hospitality</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm text-[var(--muted)]">
+                    <span className="block">Company size</span>
+                    <select
+                      className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+                      value={orgCompanySize}
+                      onChange={(event) => setOrgCompanySize(event.target.value as CompanySize)}
+                    >
+                      <option value="startup">Startup (1-50)</option>
+                      <option value="mid">Mid (51-500)</option>
+                      <option value="enterprise">Enterprise (500+)</option>
+                    </select>
+                  </label>
                 </div>
                 <button
                   type="button"
