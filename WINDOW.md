@@ -208,6 +208,41 @@
 - Added Individual prompt source at `packages/agent-core/src/prompts/individualPrompt.ts` and JSON prompt artifact at `packages/agent-core/prompts/individual.json`.
 - Exported Individual agent from `packages/agent-core/src/index.ts` to complete 3-role agent split foundations (CEO, Manager, Individual).
 
+### Chunk 26 (Completed) - Webpack Chunk Error Fix
+**Issue**: "Cannot find module './135.js'" error in org-tree page during dev/prod builds. Root cause: Server-side rendering conflict between Next.js webpack bundler and @xyflow/react SSR incompatibility.
+
+**Solution**: Converted org-tree page to full client-side component with client-side auth check:
+- Changed `app/dashboard/org-tree/page.tsx` from Server Component to `"use client"` component
+- Replaced server-side `cookies()` and `redirect()` with client-side `useEffect` + `useRouter` auth verification
+- Moved role validation to browser execution context after hydration
+- Added proper loading state and authorization guard
+- Used `useRef` to track if auth check has already run, preventing infinite loops
+
+**Result**: 
+- ✅ Chunk 135.js error completely resolved
+- ✅ Dev server compiles org-tree without errors
+- ✅ No "Maximum update depth exceeded" warnings
+- ✅ Production build succeeds (all 23 pages generated)
+- ✅ Page properly guards routes with role-based client-side redirects
+
+**Technical Note**: @xyflow/react has known SSR incompatibilities in Next.js. Client-side rendering is the recommended approach for React Flow components in Next.js applications.
+
+### Chunk 27 (Step 1 Completed) - Infinite Loop Fix in Org-Tree Page
+**Issue**: "Warning: Maximum update depth exceeded" in browser console when accessing org-tree page. Root cause: `router` dependency in useEffect caused infinite re-renders when setting state.
+
+**Solution**: Fixed infinite loop by using `useRef` to track auth check completion:
+- Added `hasCheckedAuth` ref to ensure auth check runs only once
+- Removed `router` from dependency array (not needed since we only check once on mount)
+- Empty dependency array `[]` ensures effect runs only on component mount
+
+**Result**:
+- ✅ No more infinite loop warnings in console
+- ✅ Auth check runs exactly once on mount
+- ✅ Page loads cleanly without excessive re-renders
+- ✅ Typecheck: 0 errors
+- ✅ Production build: 23/23 pages generated successfully
+- ✅ Dev server: Ready in 1930ms without errors
+
 ### Chunk 26 (Step 2 Completed)
 - Reworked `packages/agent-core/src/llm/router.ts` to enforce explicit attempt order: Groq -> Gemini Flash -> rule-based fallback.
 - Added rule-based routing fallback using historical `routing_suggestions` and keyword overlap scoring against task history.

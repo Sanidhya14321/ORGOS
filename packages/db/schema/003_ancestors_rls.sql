@@ -91,6 +91,7 @@ WHEN (OLD.reports_to IS DISTINCT FROM NEW.reports_to)
 EXECUTE FUNCTION public.users_refresh_descendants_after_reports_to_change();
 
 DROP POLICY IF EXISTS tasks_select_manager_dept ON public.tasks;
+DROP POLICY IF EXISTS tasks_select_manager_subtree ON public.tasks;
 CREATE POLICY tasks_select_manager_subtree ON public.tasks
   FOR SELECT USING (
     EXISTS (

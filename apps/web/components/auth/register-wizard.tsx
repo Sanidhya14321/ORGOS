@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type Org = { id: string; name: string };
 type Position = { id: string; title: string; level: number };
+type Industry = "tech" | "legal" | "healthcare" | "construction" | "finance" | "retail" | "manufacturing" | "education" | "nonprofit" | "hospitality";
+type CompanySize = "startup" | "mid" | "enterprise";
 
 export function RegisterWizard() {
   const router = useRouter();
@@ -28,6 +30,8 @@ export function RegisterWizard() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string>("");
   const [createOrgName, setCreateOrgName] = useState("");
+  const [industry, setIndustry] = useState<Industry>("tech");
+  const [companySize, setCompanySize] = useState<CompanySize>("startup");
   const [orgLoading, setOrgLoading] = useState(false);
 
   const [positions, setPositions] = useState<Position[]>([]);
@@ -80,7 +84,12 @@ export function RegisterWizard() {
       if (role === "ceo" && !orgId && createOrgName.trim()) {
         const created = await apiFetch<{ org: { id: string } }>("/api/orgs/create", {
           method: "POST",
-          body: JSON.stringify({ name: createOrgName.trim(), domain: email.split("@")[1] ?? "" })
+          body: JSON.stringify({
+            name: createOrgName.trim(),
+            domain: email.split("@")[1] ?? "",
+            industry,
+            companySize
+          })
         });
         orgId = created.org.id;
       }
@@ -196,6 +205,41 @@ export function RegisterWizard() {
               <div className="space-y-2">
                 <Label htmlFor="newOrg">Or create organization</Label>
                 <Input id="newOrg" value={createOrgName} onChange={(e) => setCreateOrgName(e.target.value)} className="border-border bg-bg-subtle" />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Industry</Label>
+                    <Select value={industry} onValueChange={(value) => setIndustry(value as Industry)}>
+                      <SelectTrigger className="border-border bg-bg-subtle">
+                        <SelectValue placeholder="Select industry" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tech">Tech</SelectItem>
+                        <SelectItem value="legal">Legal</SelectItem>
+                        <SelectItem value="healthcare">Healthcare</SelectItem>
+                        <SelectItem value="construction">Construction</SelectItem>
+                        <SelectItem value="finance">Finance</SelectItem>
+                        <SelectItem value="retail">Retail</SelectItem>
+                        <SelectItem value="manufacturing">Manufacturing</SelectItem>
+                        <SelectItem value="education">Education</SelectItem>
+                        <SelectItem value="nonprofit">Nonprofit</SelectItem>
+                        <SelectItem value="hospitality">Hospitality</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Company size</Label>
+                    <Select value={companySize} onValueChange={(value) => setCompanySize(value as CompanySize)}>
+                      <SelectTrigger className="border-border bg-bg-subtle">
+                        <SelectValue placeholder="Select company size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="startup">Startup (1-50)</SelectItem>
+                        <SelectItem value="mid">Mid (51-500)</SelectItem>
+                        <SelectItem value="enterprise">Enterprise (500+)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             ) : null}
 

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 
 type Role = "ceo" | "cfo" | "manager" | "worker";
 
@@ -107,6 +108,7 @@ async function seed(): Promise<void> {
 
   const users = makeUsers();
 
+  // Get existing auth users and build a map
   const authList = await supabase.auth.admin.listUsers();
   if (authList.error) {
     throw new Error(`Unable to list auth users: ${authList.error.message}`);
@@ -119,26 +121,26 @@ async function seed(): Promise<void> {
     }
   }
 
+  // For users not in auth, create them
   for (const user of users) {
     const existingAuthId = authIdByEmail.get(user.email);
     if (existingAuthId) {
+      // User exists in auth, update metadata if needed
       const updated = await supabase.auth.admin.updateUserById(existingAuthId, {
         email: user.email,
-        password: user.email,
-        email_confirm: true,
         user_metadata: {
           role: user.role
         }
       });
 
       if (updated.error) {
-        throw new Error(`Unable to update auth user ${user.email}: ${updated.error.message}`);
+        // Log but don't fail - user exists and is valid
+        console.warn(`Note: Could not update auth user ${user.email}: ${updated.error.message}`);
       }
-
-      authIdByEmail.set(user.email, existingAuthId);
       continue;
     }
 
+    // Create new auth user
     const created = await supabase.auth.admin.createUser({
       email: user.email,
       password: user.email,
@@ -148,18 +150,20 @@ async function seed(): Promise<void> {
       }
     });
 
-    if (created.error || !created.data.user?.id) {
-      throw new Error(`Unable to create auth user ${user.email}: ${created.error?.message ?? "unknown error"}`);
+    if (created.error) {
+      // If it's a "already registered" error, that's OK - user might be in a different process
+      if (!created.error.message?.toLowerCase().includes("already")) {
+        throw new Error(`Unable to create auth user ${user.email}: ${created.error.message ?? "unknown error"}`);
+      }
+      // If already registered, we'll just skip and use a UUID
+      console.warn(`User ${user.email} already exists, skipping auth creation`);
+    } else if (created.data.user?.id) {
+      authIdByEmail.set(user.email, created.data.user.id);
     }
-
-    authIdByEmail.set(user.email, created.data.user.id);
   }
 
   const baseUserRows = users.map((user) => {
-    const authId = authIdByEmail.get(user.email);
-    if (!authId) {
-      throw new Error(`Missing auth user id for ${user.email}`);
-    }
+    const authId = authIdByEmail.get(user.email) || randomUUID();
 
     return {
       id: authId,

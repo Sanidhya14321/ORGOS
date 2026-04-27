@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useState, useEffect } from "react";
 import { OrgTree } from "@/components/tree/org-tree";
 import { ROLE_COOKIE } from "@/lib/auth";
 import type { Role } from "@/lib/models";
@@ -7,14 +8,44 @@ import type { Role } from "@/lib/models";
 const allowedRoles: Role[] = ["ceo", "cfo", "manager"];
 
 export default function OrgTreePage() {
-  const cookieRole = cookies().get(ROLE_COOKIE)?.value as Role | undefined;
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
-  if (!cookieRole) {
-    redirect("/login");
+  useEffect(() => {
+    // Read cookie and check authorization
+    const cookieRole = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith(ROLE_COOKIE + "="))
+      ?.split("=")[1] as Role | undefined;
+
+    const authorized = Boolean(cookieRole && allowedRoles.includes(cookieRole));
+    setIsAuthorized(authorized);
+  }, []);
+
+  // Loading state
+  if (isAuthorized === null) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
-  if (!allowedRoles.includes(cookieRole)) {
-    redirect(`/dashboard/${cookieRole}`);
+  // Unauthorized - show message instead of redirecting
+  if (!isAuthorized) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You do not have permission to view the organization tree.</p>
+          <a href="/dashboard" className="text-indigo-600 hover:text-indigo-700 font-medium">
+            Return to Dashboard
+          </a>
+        </div>
+      </div>
+    );
   }
 
   return <OrgTree />;

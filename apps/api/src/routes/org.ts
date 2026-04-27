@@ -4,6 +4,11 @@ import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { invalidateOrgPromptCache } from "../services/promptCache.js";
+import {
+  CompanySizeValues,
+  IndustryValues,
+  setupOrgForIndustry
+} from "../services/orgIndustrySetup.js";
 
 const SearchOrgQuerySchema = z.object({
   q: z.string().trim().min(1).max(120)
@@ -12,6 +17,8 @@ const SearchOrgQuerySchema = z.object({
 const CreateOrgBodySchema = z.object({
   name: z.string().trim().min(2).max(200),
   domain: z.string().trim().min(1).max(120).optional(),
+  industry: z.enum(IndustryValues).default("tech"),
+  companySize: z.enum(CompanySizeValues).default("startup"),
   makeCreatorCeo: z.boolean().default(true)
 });
 
@@ -172,7 +179,7 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    const { name, domain, makeCreatorCeo } = parsed.data;
+    const { name, domain, industry, companySize, makeCreatorCeo } = parsed.data;
 
     const requesterProfile = await fastify.supabaseService
       .from("users")
@@ -203,12 +210,22 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create organization");
     }
 
-    // Seed a minimal position set for immediate onboarding.
-    await fastify.supabaseService.from("positions").insert([
-      { org_id: createdOrg.data.id, title: "CEO", level: 0, is_custom: false, confirmed: true },
-      { org_id: createdOrg.data.id, title: "Manager", level: 1, is_custom: false, confirmed: true },
-      { org_id: createdOrg.data.id, title: "Individual Contributor", level: 2, is_custom: false, confirmed: true }
-    ]);
+    try {
+      await setupOrgForIndustry(fastify, {
+        orgId: createdOrg.data.id,
+        industry,
+        companySize
+      });
+    } catch (setupError) {
+      request.log.error({ err: setupError }, "Industry-specific org setup failed");
+      return sendApiError(
+        reply,
+        request,
+        503,
+        "SERVICE_UNAVAILABLE",
+        "Organization created, but industry setup failed. Apply latest DB migrations and retry org setup."
+      );
+    }
 
     const updateUserPayload: Record<string, unknown> = {
       org_id: createdOrg.data.id,
@@ -234,6 +251,10 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.status(201).send({
       org: createdOrg.data,
+      settings: {
+        industry,
+        company_size: companySize
+      },
       user: userUpdate.data ?? null
     });
   });

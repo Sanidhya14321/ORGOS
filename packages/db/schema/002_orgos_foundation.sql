@@ -27,9 +27,18 @@ ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS current_load INT NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
 
-ALTER TABLE public.orgs
-  ADD CONSTRAINT orgs_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'orgs_created_by_fkey'
+  ) THEN
+    ALTER TABLE public.orgs
+      ADD CONSTRAINT orgs_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 ALTER TABLE public.tasks
   ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES public.orgs(id) ON DELETE CASCADE,
