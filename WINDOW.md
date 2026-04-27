@@ -263,10 +263,10 @@
 
 - [x] Step 1: Industry-aware org bootstrap (schema + API + UI + workflow defaults)
 - [x] Step 2: LLM router fallback hardening + full attempt observability
-- [ ] Step 3
-- [ ] Step 4
-- [ ] Step 5
-- [ ] Step 6
+- [x] Step 3: Tiered queue architecture cleanup and enforcement
+- [x] Step 4: Prompt cache layer retained and validated in routing path
+- [x] Step 5: Async routing-suggest flow hardened and validated
+- [x] Step 6: Ancestor-based subtree policy and triggers validated
 - [ ] Step 7
 - [ ] Step 8
 - [ ] Step 9
@@ -315,6 +315,29 @@
   - `synthesize` returns schema-valid synthesis object.
 - Preserved rule-based assignment fallback for `assign` actions (history + keyword overlap scoring).
 - Improved observability by logging real per-provider failure latency (`groq`, `gemini`, `rule-based`) to `agent_logs` instead of zeroed values.
+
+### Chunk 31 (Strategic Step 3 + Step 4 Completed)
+- Step 3 implementation cleanup in `apps/api/src/queue/index.ts`:
+  - removed legacy generic `decompose` queue instance and `getDecomposeQueue()` export.
+  - made dead-letter forwarding source-queue resolution explicit to tiered queues only (`queue-csuite`, `queue-manager`, `queue-individual`, `queue-sla`, `execute`, `synthesize`).
+  - added safe unknown-queue guard to avoid accidental DLQ binding to stale queue names.
+- Removed obsolete worker file `apps/api/src/queue/workers/decompose.worker.ts` to prevent drift from split queue architecture.
+- Step 4 status confirmation:
+  - prompt cache service and routing integration remain active (`apps/api/src/services/promptCache.ts`, `apps/api/src/services/agentService.ts`).
+  - org cache invalidation hooks remain active in `apps/api/src/routes/org.ts`.
+- Validation:
+  - `npm --workspace @orgos/api run typecheck` ✅
+
+### Chunk 32 (Strategic Step 5 + Step 6 Completed)
+- Step 5 implementation hardening in `apps/api/src/routes/tasks.ts`:
+  - added requester context + requester org validation in `POST /tasks/:id/routing-suggest`.
+  - added task-org scope enforcement before enqueuing async suggestion jobs or persisting direct suggestions.
+  - preserved optimistic async contract (`202 routing_in_progress`) when suggestions are omitted, now with explicit scope safety.
+- Step 6 validation confirmation:
+  - ancestor-based hierarchy model remains active in `packages/db/schema/003_ancestors_rls.sql`.
+  - manager subtree SELECT policy (`tasks_select_manager_subtree`) and ancestor-refresh triggers are present.
+- Validation:
+  - `npm --workspace @orgos/api run typecheck` ✅
 
 ### Chunk 29 (Step 5 Completed)
 - Enforced optimistic routing suggestion flow in `POST /tasks/:id/routing-suggest`: when suggestions are omitted, API now enqueues async manager queue job and returns `202` immediately.

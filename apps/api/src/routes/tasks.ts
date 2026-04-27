@@ -394,6 +394,27 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid routing suggestion payload");
     }
 
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
+    const scopedTask = await fastify.supabaseService
+      .from("tasks")
+      .select("id, org_id")
+      .eq("id", params.data.id)
+      .maybeSingle();
+
+    const taskOrgId = (scopedTask.data?.org_id as string | null | undefined) ?? null;
+    if (!taskOrgId || taskOrgId !== requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot create routing suggestion outside requester organization");
+    }
+
     let suggestions = body.data.suggestions;
     if (!suggestions) {
       await getManagerQueue().add("routing_suggest", {

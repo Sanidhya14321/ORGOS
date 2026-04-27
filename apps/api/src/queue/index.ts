@@ -17,7 +17,6 @@ let csuiteQueueInstance: Queue;
 let managerQueueInstance: Queue;
 let individualQueueInstance: Queue;
 let slaQueueInstance: Queue;
-let decomposeQueueInstance: Queue;
 let executeQueueInstance: Queue;
 let synthesizeQueueInstance: Queue;
 let redisConnectionInstance: RedisConnection;
@@ -75,11 +74,6 @@ function initializeQueues() {
     defaultJobOptions: defaultJobOptionsInstance
   });
 
-  decomposeQueueInstance = new Queue("decompose", {
-    connection: redisConnectionInstance,
-    defaultJobOptions: defaultJobOptionsInstance
-  });
-
   executeQueueInstance = new Queue("execute", {
     connection: redisConnectionInstance,
     defaultJobOptions: defaultJobOptionsInstance
@@ -116,11 +110,6 @@ export function getIndividualQueue(): Queue {
 export function getSlaQueue(): Queue {
   initializeQueues();
   return slaQueueInstance;
-}
-
-export function getDecomposeQueue(): Queue {
-  initializeQueues();
-  return decomposeQueueInstance;
 }
 
 export function getExecuteQueue(): Queue {
@@ -162,7 +151,11 @@ async function setupDeadLetterForwarding(queueName: string): Promise<void> {
               ? executeQueueInstance
               : queueName === "synthesize"
                 ? synthesizeQueueInstance
-                : decomposeQueueInstance;
+                : null;
+
+    if (!sourceQueue) {
+      return;
+    }
 
     if (!jobId) {
       return;
