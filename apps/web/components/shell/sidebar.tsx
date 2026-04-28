@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, CheckSquare, Network, Users, Target, BriefcaseBusiness, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, CheckSquare, Network, Users, Target, BriefcaseBusiness, Settings, LogOut, Clock, Sparkles, Search } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { Role, User } from "@/lib/models";
@@ -26,10 +26,17 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, show: () => true },
   { href: "/dashboard/task-board", label: "My Tasks", icon: CheckSquare, show: () => true },
+  { href: "/dashboard/capture", label: "Smart Input", icon: Target, show: () => true },
+  { href: "/dashboard/inbox", label: "Inbox", icon: BriefcaseBusiness, show: () => true },
+  { href: "/dashboard/time", label: "Time", icon: Clock, show: () => true },
+  { href: "/dashboard/forecast", label: "Forecast", icon: Target, show: (role) => role !== "worker" },
+  { href: "/dashboard/analytics", label: "Analytics", icon: Network, show: (role) => role !== "worker" },
+  { href: "/dashboard/assistant", label: "Assistant", icon: Sparkles, show: () => true },
   { href: "/dashboard/org-tree", label: "Org Tree", icon: Network, show: (role) => role !== "worker" },
   { href: "/dashboard/team", label: "Team", icon: Users, show: (role) => role === "manager" || role === "ceo" || role === "cfo" },
   { href: "/dashboard/goals", label: "Goals", icon: Target, show: (role) => role === "manager" || role === "ceo" || role === "cfo" },
   { href: "/dashboard/recruit", label: "Recruitment", icon: BriefcaseBusiness, show: (role) => role === "ceo" || role === "cfo" || role === "manager" },
+  { href: "/dashboard/shortcuts", label: "Shortcuts", icon: Search, show: () => true },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, show: (role) => role === "ceo" || role === "cfo" }
 ];
 

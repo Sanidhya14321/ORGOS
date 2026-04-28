@@ -1,12 +1,16 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { sendApiError } from "../lib/errors.js";
+import { hashSessionToken, MFA_VERIFIED_COOKIE, getRoleSessionTimeoutMs } from "../lib/session-security.js";
 
 const PUBLIC_ROUTES = new Set([
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/verify",
   "/api/auth/refresh",
+  "/api/auth/mfa-status",
+  "/api/auth/mfa-enroll",
+  "/api/auth/mfa-verify",
   "/api/orgs/search",
   "/health",
   "/healthz"
@@ -50,6 +54,10 @@ function extractToken(headers: Record<string, unknown>): string | null {
   const cookieHeader = readFirstHeaderValue(headers.cookie);
   const cookieToken = extractCookieValue(cookieHeader, ACCESS_TOKEN_COOKIE);
   return bearerToken || cookieToken;
+}
+
+function isMfaBypassPath(path: string): boolean {
+  return path.startsWith("/api/auth/mfa-") || path === "/api/auth/logout";
 }
 
 function originMatchesWebOrigin(originHeader: string | undefined, webOrigin: string): boolean {
@@ -120,13 +128,46 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
     const profile = await fastify.supabaseService
       .from("users")
-      .select("role")
+      .select("role, mfa_enabled")
       .eq("id", data.user.id)
       .maybeSingle();
 
     const profileRole = normalizeRole(profile.data?.role);
     const metadataRole = normalizeRole(data.user.user_metadata?.role);
     request.userRole = profileRole ?? metadataRole;
+
+    const mfaEnabled = profile.data?.mfa_enabled === true;
+    if ((request.userRole === "ceo" || request.userRole === "cfo") && mfaEnabled && !isMfaBypassPath(path)) {
+      const mfaVerified = extractCookieValue(cookieHeader, MFA_VERIFIED_COOKIE) === "1";
+      if (!mfaVerified) {
+        return sendApiError(reply, request, 403, "MFA_REQUIRED", "MFA verification required", {
+          setupPath: "/setup-mfa"
+        });
+      }
+    }
+
+    const sessionTokenHash = hashSessionToken(token);
+    const sessionResult = await fastify.supabaseService
+      .from("sessions")
+      .select("id, revoked, last_active, created_at")
+      .eq("session_token_hash", sessionTokenHash)
+      .maybeSingle();
+
+    if (!sessionResult.error && sessionResult.data) {
+      const timeoutMs = getRoleSessionTimeoutMs(request.userRole);
+      const lastActive = sessionResult.data.last_active ? new Date(String(sessionResult.data.last_active)) : null;
+      const createdAt = sessionResult.data.created_at ? new Date(String(sessionResult.data.created_at)) : null;
+      const sessionAgeMs = Date.now() - (lastActive?.getTime() ?? createdAt?.getTime() ?? Date.now());
+
+      if (sessionResult.data.revoked || sessionAgeMs > timeoutMs) {
+        return sendApiError(reply, request, 401, "SESSION_EXPIRED", "Session expired");
+      }
+
+      await fastify.supabaseService
+        .from("sessions")
+        .update({ last_active: new Date().toISOString() })
+        .eq("id", sessionResult.data.id);
+    }
   });
 };
 

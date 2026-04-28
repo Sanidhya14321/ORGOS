@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,7 @@ interface PreferenceSettings {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationSettings>({
     email: true,
     taskAssigned: true,
@@ -162,7 +164,7 @@ export default function SettingsPage() {
             <Zap className="mr-2 h-4 w-4" />
             Manage API Keys
           </Button>
-          <Button variant="outline" className="w-full justify-start border-border hover:bg-bg-elevated">
+          <Button variant="outline" className="w-full justify-start border-border hover:bg-bg-elevated" onClick={() => router.push('/settings/security')}>
             <Clock className="mr-2 h-4 w-4" />
             Active Sessions
           </Button>

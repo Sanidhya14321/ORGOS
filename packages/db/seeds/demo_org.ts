@@ -212,6 +212,26 @@ async function seed(): Promise<void> {
     throw new Error("Unable to resolve executive IDs after upsert");
   }
 
+  const purgeOldSeededTasks = await supabase
+    .from("tasks")
+    .delete()
+    .eq("org_id", orgId)
+    .ilike("title", "Seed Task %");
+
+  if (purgeOldSeededTasks.error) {
+    throw new Error(`Unable to purge old seeded tasks: ${purgeOldSeededTasks.error.message}`);
+  }
+
+  const purgeOldSeededGoals = await supabase
+    .from("goals")
+    .delete()
+    .in("created_by", [ceoId, cfoId])
+    .ilike("title", "Demo Goal %");
+
+  if (purgeOldSeededGoals.error) {
+    throw new Error(`Unable to purge old seeded goals: ${purgeOldSeededGoals.error.message}`);
+  }
+
   const goalsPayload = Array.from({ length: 10 }).map((_, index) => ({
     created_by: index % 2 === 0 ? ceoId : cfoId,
     title: `Demo Goal ${index + 1}`,

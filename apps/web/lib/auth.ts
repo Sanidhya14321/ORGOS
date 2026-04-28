@@ -1,12 +1,18 @@
 export const ACCESS_TOKEN_COOKIE = "orgos_access_token";
 export const ROLE_COOKIE = "orgos_role";
+export const MFA_VERIFIED_COOKIE = "orgos_mfa_verified";
 
 export function setRoleCookie(role: string): void {
   document.cookie = `${ROLE_COOKIE}=${encodeURIComponent(role)}; Path=/; SameSite=Lax`;
 }
 
+export function setMfaVerifiedCookie(): void {
+  document.cookie = `${MFA_VERIFIED_COOKIE}=1; Path=/; SameSite=Lax`;
+}
+
 export function clearAuthCookies(): void {
   document.cookie = `${ROLE_COOKIE}=; Path=/; Max-Age=0`;
+  document.cookie = `${MFA_VERIFIED_COOKIE}=; Path=/; Max-Age=0`;
 }
 
 export function getRoleFromBrowser(): string | null {

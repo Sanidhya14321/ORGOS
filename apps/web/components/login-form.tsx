@@ -40,7 +40,9 @@ export function LoginForm() {
 
       const data = await response.json() as { user: { role: string; status?: string } };
       setRoleCookie(data.user.role);
-      if (data.user.status === "pending") {
+      if (data.user.role === "ceo" || data.user.role === "cfo") {
+        router.push("/setup-mfa");
+      } else if (data.user.status === "pending") {
         router.push("/pending");
       } else {
         router.push(`/dashboard/${data.user.role}`);

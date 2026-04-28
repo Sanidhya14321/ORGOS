@@ -8,7 +8,10 @@ export type ApiErrorCode =
   | "VALIDATION_ERROR"
   | "INTERNAL_ERROR"
   | "SERVICE_UNAVAILABLE"
-  | "RATE_LIMITED";
+  | "RATE_LIMITED"
+  | "MFA_REQUIRED"
+  | "SESSION_EXPIRED"
+  | "SESSION_LIMITED";
 
 export function sendApiError(
   reply: FastifyReply,

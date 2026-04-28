@@ -114,6 +114,10 @@ export async function fetchRoutingMemoryContext(
   },
   candidateIds: Set<string>
 ): Promise<RoutingMemoryContext> {
+  if (candidateIds.size === 0) {
+    return { sampleSize: 0, topSignals: [] };
+  }
+
   if (!task.org_id) {
     return { sampleSize: 0, topSignals: [] };
   }

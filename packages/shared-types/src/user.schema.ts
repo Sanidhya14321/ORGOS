@@ -15,6 +15,7 @@ export const UserSchema = z.object({
   skills: z.array(z.string()).optional(),
   current_load: z.number().int().nonnegative().optional(),
   email_verified: z.boolean().optional(),
+  mfa_enabled: z.boolean().optional(),
   agent_enabled: z.boolean()
 });
 

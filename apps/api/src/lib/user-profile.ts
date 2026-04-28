@@ -60,7 +60,7 @@ export function buildUserProfileFromAuthUser(authUser: SupabaseAuthUser): User {
 export async function loadUserProfile(fastify: FastifyInstance, authUser: SupabaseAuthUser): Promise<User> {
   const profileQuery = await fastify.supabaseService
     .from("users")
-    .select("id, email, full_name, role, status, org_id, position_id, reports_to, department, skills, open_task_count, agent_enabled")
+    .select("id, email, full_name, role, status, org_id, position_id, reports_to, department, skills, open_task_count, agent_enabled, mfa_enabled")
     .eq("id", authUser.id)
     .maybeSingle();
 
@@ -69,7 +69,8 @@ export async function loadUserProfile(fastify: FastifyInstance, authUser: Supaba
       ...profileQuery.data,
       department: profileQuery.data.department ?? undefined,
       skills: Array.isArray(profileQuery.data.skills) ? profileQuery.data.skills : undefined,
-      current_load: typeof profileQuery.data.open_task_count === "number" ? profileQuery.data.open_task_count : undefined
+      current_load: typeof profileQuery.data.open_task_count === "number" ? profileQuery.data.open_task_count : undefined,
+      mfa_enabled: typeof profileQuery.data.mfa_enabled === "boolean" ? profileQuery.data.mfa_enabled : undefined
     };
 
     const parsed = UserSchema.safeParse(normalized);

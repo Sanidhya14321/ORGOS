@@ -267,14 +267,14 @@
 - [x] Step 4: Prompt cache layer retained and validated in routing path
 - [x] Step 5: Async routing-suggest flow hardened and validated
 - [x] Step 6: Ancestor-based subtree policy and triggers validated
-- [ ] Step 7
-- [ ] Step 8
-- [ ] Step 9
-- [ ] Step 10
-- [ ] Step 11
-- [ ] Step 12
-- [ ] Step 13
-- [ ] Step 14
+- [x] Step 7: Routing memory service hardened and verified
+- [x] Step 8: Demo seed scaffold made rerunnable and verified
+- [x] Step 9: Routing-suggest guardrails test coverage expanded
+- [x] Step 10: Validation coverage executed and recorded
+- [x] Step 11: Queue split architecture regression test added
+- [x] Step 12: Org-tree authorization hardened to server profile role
+- [x] Step 13: MFA setup and executive login enforcement added
+- [x] Step 14: Session security and security log page added
 - [ ] Step 15
 - [ ] Step 16
 - [ ] Step 17
@@ -338,6 +338,56 @@
   - manager subtree SELECT policy (`tasks_select_manager_subtree`) and ancestor-refresh triggers are present.
 - Validation:
   - `npm --workspace @orgos/api run typecheck` ✅
+
+### Chunk 33 (Strategic Step 7 + Step 8 Completed)
+- Step 7 hardening in `apps/api/src/services/routingMemory.ts`:
+  - added early return when candidate set is empty to avoid unnecessary task/routing history queries.
+  - preserved existing org-scoped history retrieval and signal ranking behavior.
+- Step 8 hardening in `packages/db/seeds/demo_org.ts`:
+  - added pre-seed cleanup for prior demo artifacts (`Seed Task %`, `Demo Goal %`) scoped to demo org/owners.
+  - made demo seed rerunnable without accumulating duplicate seeded goals/tasks.
+- Validation:
+  - `npm --workspace @orgos/api run typecheck` ✅
+
+### Chunk 34 (Strategic Step 9 + Step 10 Completed)
+- Step 9 testing implementation in `apps/api/test/tasks-routing-suggest.integration.test.ts`:
+  - updated routing-suggest integration setup to match new org-scope enforcement behavior.
+  - added success-path assertion for async enqueue (`202`, `routing_suggest` job payload).
+  - added forbidden-path assertions for requester without org and cross-org task access (`403`, no queue enqueue).
+- Step 10 validation coverage:
+  - `npm --workspace @orgos/api run test -- test/tasks-routing-suggest.integration.test.ts` ✅ (3 tests passed).
+  - `npm --workspace @orgos/api run typecheck` ✅.
+
+### Chunk 35 (Strategic Step 11 + Step 12 Completed)
+- Step 11 implementation:
+  - added `apps/api/test/queue-architecture.integration.test.ts` to enforce tiered queue topology.
+  - test asserts queue initialization + forwarding include `queue-csuite`, `queue-manager`, `queue-individual`, `queue-sla`, `execute`, `synthesize`, and explicitly excludes legacy `decompose`.
+- Step 12 implementation:
+  - hardened `apps/web/app/dashboard/org-tree/page.tsx` authorization flow to rely on server-validated `/api/me` role via `apiFetch` instead of client cookie role parsing.
+  - preserves loading + access denied states while preventing stale/spoofable cookie-only authorization decisions.
+- Validation:
+  - `npm --workspace @orgos/api run test -- test/queue-architecture.integration.test.ts` ✅.
+  - `npm --workspace @orgos/api run typecheck` ✅.
+  - `npm --workspace @orgos/web run typecheck` ✅.
+
+### Chunk 36 (Strategic Step 13 + Step 14 Completed)
+- Step 13 implementation:
+  - added `packages/db/schema/007_mfa_sessions.sql` with `users.mfa_enabled`, `users.mfa_secret`, and `sessions` table.
+  - added MFA helper utilities in `apps/api/src/lib/mfa.ts` for secret generation, otpauth URI creation, QR data URLs, and TOTP verification.
+  - extended auth login + setup flow in `apps/api/src/routes/auth.ts`:
+    - executives are routed into MFA setup after login.
+    - `/api/auth/mfa-status`, `/api/auth/mfa-enroll`, and `/api/auth/mfa-verify` are available.
+    - executives without verified MFA are blocked from protected routes by `apps/api/src/plugins/auth.ts` using `orgos_mfa_verified`.
+  - added `/setup-mfa` UI in `apps/web/app/setup-mfa/page.tsx` with QR render + enrollment/verification submit.
+- Step 14 implementation:
+  - added role-based session tracking in auth login/refresh/logout with `sessions` table writes and revocation.
+  - enforced c-suite timeout and session limit guardrails in auth plugin.
+  - added `/settings/security` page for active session inspection and revocation plus dashboard link.
+  - updated web auth cookie helpers and middleware to honor MFA verification state.
+- Validation:
+  - `npm --workspace @orgos/api run typecheck` ✅.
+  - `npm --workspace @orgos/web run typecheck` ✅.
+  - `npm --workspace @orgos/api run test -- test/mfa.test.ts` ✅ (2 tests passed).
 
 ### Chunk 29 (Step 5 Completed)
 - Enforced optimistic routing suggestion flow in `POST /tasks/:id/routing-suggest`: when suggestions are omitted, API now enqueues async manager queue job and returns `202` immediately.

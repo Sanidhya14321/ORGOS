@@ -21,6 +21,7 @@ export interface Goal {
   id: string;
   title: string;
   description?: string;
+  description_ciphertext?: string | null;
   raw_input: string;
   status: GoalStatus;
   priority: GoalPriority;
@@ -47,6 +48,7 @@ export interface Task {
   depth: 0 | 1 | 2;
   title: string;
   description?: string;
+  description_ciphertext?: string | null;
   success_criteria: string;
   priority?: GoalPriority;
   assigned_to: string | null;
@@ -68,6 +70,12 @@ export interface Task {
   completion_approved?: boolean;
   blocked_by_count?: number;
   estimated_effort_hours?: number;
+  estimated_hours?: number;
+  actual_hours?: number;
+  priority_score?: number;
+  meeting_source?: string | null;
+  workflow_id?: string | null;
+  workflow_stage?: string | null;
   is_overdue?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -140,4 +148,86 @@ export interface Applicant {
   ai_score?: number;
   ai_summary?: string;
   applied_at: string;
+}
+
+export interface TimeLog {
+  id: string;
+  org_id: string;
+  task_id?: string | null;
+  user_id?: string | null;
+  source: "manual" | "timer" | "meeting" | "import";
+  meeting_source?: string | null;
+  started_at: string;
+  ended_at?: string | null;
+  minutes?: number | null;
+  notes?: string | null;
+  billable: boolean;
+  created_at?: string;
+}
+
+export interface GoalTemplate {
+  id: string;
+  org_id: string;
+  created_by?: string | null;
+  name: string;
+  description?: string | null;
+  default_priority: GoalPriority;
+  template: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Integration {
+  id: string;
+  org_id: string;
+  provider: "slack" | "teams" | "google_calendar" | "zapier" | "webhook";
+  status: "inactive" | "active" | "error";
+  config: Record<string, unknown>;
+  last_synced_at?: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  org_id?: string | null;
+  actor_id?: string | null;
+  action: string;
+  entity: string;
+  entity_id?: string | null;
+  category: "general" | "security" | "auth" | "integration" | "analytics" | "billing";
+  severity?: "debug" | "info" | "warn" | "error" | "critical";
+  metadata?: Record<string, unknown>;
+  user_agent?: string | null;
+  ip_address?: string | null;
+  path?: string | null;
+  created_at?: string;
+}
+
+export interface AnalyticsOverview {
+  overview: {
+    totalGoals: number;
+    totalTasks: number;
+    completedTasks: number;
+    activeTasks: number;
+    blockedTasks: number;
+    completionRate: number;
+    billableHours: number;
+    estimateVarianceHours: number;
+    latestSnapshot: Record<string, unknown> | null;
+  };
+}
+
+export interface ForecastResponse {
+  horizonDays: number;
+  byPriority: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  openEffortHours: number;
+  forecast: Array<{
+    bucket: string;
+    expectedCompletion: number;
+    remainingHours: number;
+  }>;
 }

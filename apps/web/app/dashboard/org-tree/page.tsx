@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { OrgTree } from "@/components/tree/org-tree";
-import { ROLE_COOKIE } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 import type { Role } from "@/lib/models";
 
 const allowedRoles: Role[] = ["ceo", "cfo", "manager"];
@@ -11,14 +11,26 @@ export default function OrgTreePage() {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Read cookie and check authorization
-    const cookieRole = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith(ROLE_COOKIE + "="))
-      ?.split("=")[1] as Role | undefined;
+    let mounted = true;
 
-    const authorized = Boolean(cookieRole && allowedRoles.includes(cookieRole));
-    setIsAuthorized(authorized);
+    void (async () => {
+      try {
+        const me = await apiFetch<{ role?: Role }>("/api/me");
+        if (!mounted) {
+          return;
+        }
+        setIsAuthorized(Boolean(me.role && allowedRoles.includes(me.role)));
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setIsAuthorized(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Loading state
