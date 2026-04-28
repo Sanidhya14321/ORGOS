@@ -49,6 +49,9 @@ export function decryptText(value: string | null | undefined): string | null {
   }
 
   const [ivPart, tagPart, payloadPart] = encoded;
+  if (!ivPart || !tagPart || !payloadPart) {
+    return null;
+  }
   const decipher = crypto.createDecipheriv(ALGORITHM, deriveKey(keyMaterial), Buffer.from(ivPart, "base64url"));
   decipher.setAuthTag(Buffer.from(tagPart, "base64url"));
   const decrypted = Buffer.concat([

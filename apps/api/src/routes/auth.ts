@@ -37,7 +37,6 @@ const RegisterBodySchema = z.object({
   department: z.preprocess(
     (value) => {
       if (typeof value !== "string") {
-import { writeAuditEvent } from "../lib/audit.js";
         return undefined;
       }
 
@@ -101,20 +100,6 @@ function extractCookieValue(cookieHeader: string | undefined, name: string): str
       const value = rest.join("=");
       return value ? decodeURIComponent(value) : null;
     }
-
-    await writeAuditEvent(fastify, {
-      orgId: (userProfile as { org_id?: string | null }).org_id ?? null,
-      actorId: data.user.id,
-      category: "auth",
-      severity: "info",
-      action: "login_success",
-      entity: "session",
-      entityId: data.user.id,
-      metadata: { mfaRequired: isExecutive && mfaEnabled },
-      path: request.url,
-      userAgent: request.headers["user-agent"] as string | undefined,
-      ipAddress: request.ip
-    });
   }
 
   return null;
@@ -158,18 +143,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (!sessionQuery.error && Array.isArray(sessionQuery.data)) {
       const now = Date.now();
       const recentCount = sessionQuery.data.filter((row) => {
-
-    await writeAuditEvent(fastify, {
-      actorId: authUser.id,
-      category: "security",
-      severity: "info",
-      action: "mfa_enrolled",
-      entity: "user",
-      entityId: authUser.id,
-      path: request.url,
-      userAgent: request.headers["user-agent"] as string | undefined,
-      ipAddress: request.ip
-    });
         const lastActiveValue = row.last_active ? new Date(String(row.last_active)).getTime() : now;
         return now - lastActiveValue <= getRoleSessionTimeoutMs(userProfile.role);
       }).length;
@@ -211,18 +184,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const parsed = RegisterBodySchema.safeParse(request.body);
 
     if (!parsed.success) {
-
-    await writeAuditEvent(fastify, {
-      actorId: authUser.id,
-      category: "security",
-      severity: "info",
-      action: "mfa_verified",
-      entity: "user",
-      entityId: authUser.id,
-      path: request.url,
-      userAgent: request.headers["user-agent"] as string | undefined,
-      ipAddress: request.ip
-    });
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid registration payload", {
         details: parsed.error.flatten()
       });
@@ -251,18 +212,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (createResult.error || !createResult.data.user) {
       const message = createResult.error?.message ?? "Unable to create account";
       const lowered = message.toLowerCase();
-
-    await writeAuditEvent(fastify, {
-      actorId: authUser.id,
-      category: "security",
-      severity: "info",
-      action: "session_revoked",
-      entity: "session",
-      entityId: params.data.id,
-      path: request.url,
-      userAgent: request.headers["user-agent"] as string | undefined,
-      ipAddress: request.ip
-    });
       const isConflict = lowered.includes("already") || lowered.includes("exists");
       const isValidation = lowered.includes("invalid") || lowered.includes("email") || lowered.includes("password");
       const status = isConflict ? 409 : isValidation ? 400 : 500;
@@ -283,20 +232,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       requiresVerification: true,
       message: "Verification email sent"
     });
-
-    if (request.user?.id) {
-      await writeAuditEvent(fastify, {
-        actorId: request.user.id,
-        category: "auth",
-        severity: "info",
-        action: "logout",
-        entity: "session",
-        entityId: request.user.id,
-        path: request.url,
-        userAgent: request.headers["user-agent"] as string | undefined,
-        ipAddress: request.ip
-      });
-    }
   });
 
   fastify.post("/auth/verify", async (request, reply) => {
@@ -425,33 +360,47 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    const { data, error } = await fastify.supabaseService
+    const baseProfile = await fastify.supabaseService
       .from("users")
-      .select("id, email, full_name, role, mfa_enabled, mfa_secret")
+      .select("id, email, full_name, role")
       .eq("id", authUser.id)
       .maybeSingle();
 
-    if (error) {
-      if (isMissingTableSchemaCache(error)) {
+    if (baseProfile.error) {
+      if (isMissingTableSchemaCache(baseProfile.error)) {
         return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "MFA tables are not available yet; apply DB migrations first");
       }
-      request.log.error({ err: error }, "Failed to load MFA status");
+      request.log.error({ err: baseProfile.error }, "Failed to load MFA status");
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load MFA status");
     }
 
-    const role = data?.role;
+    const role = baseProfile.data?.role;
     const isExecutive = role === "ceo" || role === "cfo";
     if (!isExecutive) {
       return reply.send({ required: false, enabled: false, role });
     }
 
-    if (data?.mfa_enabled && data.mfa_secret) {
-      return reply.send({ required: true, enabled: true, role, email: data.email, fullName: data.full_name });
+    const mfaProfile = await fastify.supabaseService
+      .from("users")
+      .select("mfa_enabled, mfa_secret, email, full_name")
+      .eq("id", authUser.id)
+      .maybeSingle();
+
+    if (mfaProfile.error) {
+      if (isMissingTableSchemaCache(mfaProfile.error)) {
+        return reply.send({ required: true, enabled: false, role, email: baseProfile.data?.email, fullName: baseProfile.data?.full_name });
+      }
+      request.log.warn({ err: mfaProfile.error }, "Falling back to unenrolled MFA state");
+      return reply.send({ required: true, enabled: false, role, email: baseProfile.data?.email, fullName: baseProfile.data?.full_name });
+    }
+
+    if (mfaProfile.data?.mfa_enabled && mfaProfile.data.mfa_secret) {
+      return reply.send({ required: true, enabled: true, role, email: mfaProfile.data.email ?? baseProfile.data?.email, fullName: mfaProfile.data.full_name ?? baseProfile.data?.full_name });
     }
 
     const secret = generateMfaSecret();
     const issuer = "ORGOS";
-    const accountName = data?.email ?? authUser.email ?? `${authUser.id}@orgos.local`;
+    const accountName = mfaProfile.data?.email ?? baseProfile.data?.email ?? authUser.email ?? `${authUser.id}@orgos.local`;
     const otpauthUri = buildOtpauthUri({ secret, issuer, accountName });
     const qrCodeDataUrl = await buildMfaQrCodeDataUrl(otpauthUri);
 
@@ -459,8 +408,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       required: true,
       enabled: false,
       role,
-      email: data?.email ?? authUser.email,
-      fullName: data?.full_name,
+      email: mfaProfile.data?.email ?? baseProfile.data?.email ?? authUser.email,
+      fullName: mfaProfile.data?.full_name ?? baseProfile.data?.full_name,
       secret,
       otpauthUri,
       qrCodeDataUrl

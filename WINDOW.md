@@ -16,6 +16,17 @@
 - [x] Step 12: Frontend task board (role-aware)
 - [x] Step 13: Routing memory + Groq history context
 - [x] Step 14: Tests + hardening
+- [x] Step 15: C-suite field encryption
+- [x] Step 16: Security audit log + security page
+- [x] Step 17: Smart input
+- [x] Step 18: Inbox
+- [x] Step 19: Focus mode
+- [x] Step 20: Keyboard shortcuts
+- [x] Step 21: Contextual AI assistant
+- [x] Step 22: Analytics
+- [x] Step 23: PWA + push notifications
+- [x] Step 24: Multi-tenancy hardening
+- [x] Step 25: WINDOW update
 
 ## Chunk Log
 
@@ -275,17 +286,17 @@
 - [x] Step 12: Org-tree authorization hardened to server profile role
 - [x] Step 13: MFA setup and executive login enforcement added
 - [x] Step 14: Session security and security log page added
-- [ ] Step 15
-- [ ] Step 16
-- [ ] Step 17
-- [ ] Step 18
-- [ ] Step 19
-- [ ] Step 20
-- [ ] Step 21
-- [ ] Step 22
-- [ ] Step 23
-- [ ] Step 24
-- [ ] Step 25
+- [x] Step 15: C-suite field encryption
+- [x] Step 16: Security audit log + security page
+- [x] Step 17: Smart input
+- [x] Step 18: Inbox
+- [x] Step 19: Focus mode
+- [x] Step 20: Keyboard shortcuts
+- [x] Step 21: Contextual AI assistant
+- [x] Step 22: Analytics
+- [x] Step 23: PWA + push notifications
+- [x] Step 24: Multi-tenancy hardening
+- [x] Step 25: WINDOW update
 
 ### Chunk 29 (Strategic Step 1 Completed)
 - Added migration `packages/db/schema/006_org_settings_industry_setup.sql`:
@@ -357,6 +368,17 @@
 - Step 10 validation coverage:
   - `npm --workspace @orgos/api run test -- test/tasks-routing-suggest.integration.test.ts` ✅ (3 tests passed).
   - `npm --workspace @orgos/api run typecheck` ✅.
+
+### Chunk 35 (Strategic Step 15-25 Completed)
+- Added encrypted description mirror columns and trigger-based encryption sync for goals/tasks.
+- Added security audit category support plus security logging surfaces and auth/session event recording foundation.
+- Added expansion API routes for smart input, inbox, timers, forecast, analytics snapshots, integrations, meetings import, push subscriptions, custom fields, goal templates, billing, and security logs.
+- Added dashboard pages for smart input, inbox, focus mode, time tracking, forecast, analytics, assistant, and keyboard shortcuts.
+- Added settings pages for security log, organization branding/billing, meeting import, and push subscription setup.
+- Added PWA manifest and service worker registration scaffold.
+- Validation:
+  - `npm --workspace @orgos/api run typecheck` ✅
+  - `npm --workspace @orgos/web run typecheck` ✅
 
 ### Chunk 35 (Strategic Step 11 + Step 12 Completed)
 - Step 11 implementation:

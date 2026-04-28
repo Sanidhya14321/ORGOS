@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireRole } from "../plugins/rbac.js";
 import { sendApiError } from "../lib/errors.js";
 import { writeAuditEvent } from "../lib/audit.js";
+import type { AuditEventInput } from "../lib/audit.js";
 
 const OrgParamSchema = z.object({ orgId: z.string().uuid() });
 const TaskParamSchema = z.object({ id: z.string().uuid() });
@@ -144,7 +145,7 @@ function parseActionFromInput(text: string): { kind: "goal" | "task" | "meeting"
 
 async function createSecurityAudit(fastify: Parameters<FastifyPluginAsync>[0], request: { user?: { id: string } | null; userRole?: string | null; headers: Record<string, unknown>; url: string; ip: string }, action: string, entity: string, entityId?: string | null, metadata?: Record<string, unknown>) {
   const orgContext = request.user?.id ? await resolveOrgContext(fastify, request.user.id) : { orgId: null, role: null };
-  await writeAuditEvent(fastify, {
+  const auditPayload: AuditEventInput = {
     orgId: orgContext.orgId,
     actorId: request.user?.id ?? null,
     category: "security",
@@ -152,11 +153,16 @@ async function createSecurityAudit(fastify: Parameters<FastifyPluginAsync>[0], r
     action,
     entity,
     entityId: entityId ?? null,
-    metadata,
     path: request.url,
     userAgent: getHeaderValue(request.headers["user-agent"]),
     ipAddress: request.ip
-  });
+  } as const;
+
+  if (metadata) {
+    auditPayload.metadata = metadata;
+  }
+
+  await writeAuditEvent(fastify, auditPayload);
 }
 
 const expansionRoutes: FastifyPluginAsync = async (fastify) => {
