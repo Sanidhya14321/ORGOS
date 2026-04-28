@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { sendApiError } from "../lib/errors.js";
 import { hashSessionToken, MFA_VERIFIED_COOKIE, getRoleSessionTimeoutMs } from "../lib/session-security.js";
+import { isLocalDevelopmentEnv } from "../config/env.js";
 
 const PUBLIC_ROUTES = new Set([
   "/api/auth/login",
@@ -92,6 +93,10 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("onRequest", async (request, reply) => {
     request.user = null;
     request.userRole = null;
+
+    if (isLocalDevelopmentEnv(fastify.env)) {
+      return;
+    }
 
     const path = normalizePath(request.url);
     const isPublicRoute = PUBLIC_ROUTES.has(path) || isDynamicPublicRoute(path);

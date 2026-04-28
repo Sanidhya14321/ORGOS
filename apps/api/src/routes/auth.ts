@@ -11,6 +11,7 @@ import {
   getRoleSessionLimit,
   getRoleSessionTimeoutMs
 } from "../lib/session-security.js";
+import { isLocalDevelopmentEnv } from "../config/env.js";
 
 const ACCESS_TOKEN_COOKIE = "orgos_access_token";
 
@@ -131,6 +132,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const userProfile = await loadUserProfile(fastify, data.user);
     const isExecutive = userProfile.role === "ceo" || userProfile.role === "cfo";
+    const localBypass = isLocalDevelopmentEnv(fastify.env);
     const mfaEnabled = (userProfile as { mfa_enabled?: boolean }).mfa_enabled === true;
     const secureCookie = fastify.env.NODE_ENV === "production";
 
@@ -175,8 +177,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({
       user: userProfile,
-      mfaRequired: isExecutive && mfaEnabled,
-      mfaSetupRequired: isExecutive && !mfaEnabled
+      mfaRequired: !localBypass && isExecutive && mfaEnabled,
+      mfaSetupRequired: !localBypass && isExecutive && !mfaEnabled
     });
   });
 
@@ -297,6 +299,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
+    if (isLocalDevelopmentEnv(fastify.env)) {
+      return reply.send({ required: false, enabled: false, role: request.userRole ?? "ceo" });
+    }
+
     const requesterRole = request.userRole;
     const nextStatus = requesterRole === "ceo" || requesterRole === "cfo" ? "active" : "pending";
 
@@ -358,6 +364,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const authUser = request.user;
     if (!authUser?.id) {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    if (isLocalDevelopmentEnv(fastify.env)) {
+      return reply.send({ enrolled: true });
     }
 
     const baseProfile = await fastify.supabaseService
@@ -427,6 +437,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const authUser = request.user;
     if (!authUser?.id) {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    if (isLocalDevelopmentEnv(fastify.env)) {
+      return reply.send({ verified: true, role: request.userRole ?? "ceo" });
     }
 
     if (!verifyTotp(parsed.data.secret, parsed.data.code)) {

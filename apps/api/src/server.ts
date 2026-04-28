@@ -28,6 +28,7 @@ import { startExecuteWorker } from "./queue/workers/execute.worker.js";
 import { ensureSlaSchedule, startSlaWorker } from "./queue/workers/sla.worker.js";
 import { startSynthesizeWorker } from "./queue/workers/synthesize.worker.js";
 import { initializeNotifier } from "./services/notifier.js";
+import { isLocalDevelopmentEnv } from "./config/env.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -91,6 +92,10 @@ export async function buildServer() {
   });
 
   fastify.addHook("preHandler", async (request, reply) => {
+    if (isLocalDevelopmentEnv(fastify.env)) {
+      return;
+    }
+
     if (request.method === "POST") {
       const path = request.url.split("?")[0];
       if (path === "/api/auth/login" || path === "/api/auth/register" || path === "/api/auth/refresh") {

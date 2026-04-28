@@ -19,3 +19,16 @@ export type Env = z.infer<typeof EnvSchema>;
 export function readEnv(): Env {
   return EnvSchema.parse(process.env);
 }
+
+export function isLocalDevelopmentEnv(env: Env): boolean {
+  if (env.NODE_ENV === "production") {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(env.WEB_ORIGIN).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0";
+  } catch {
+    return false;
+  }
+}
