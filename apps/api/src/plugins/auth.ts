@@ -93,10 +93,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("onRequest", async (request, reply) => {
     request.user = null;
     request.userRole = null;
-
-    if (isLocalDevelopmentEnv(fastify.env)) {
-      return;
-    }
+    const localDevelopment = isLocalDevelopmentEnv(fastify.env);
 
     const path = normalizePath(request.url);
     const isPublicRoute = PUBLIC_ROUTES.has(path) || isDynamicPublicRoute(path);
@@ -114,7 +111,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     const authHeader = readFirstHeaderValue(headers.authorization);
     const cookieHeader = readFirstHeaderValue(headers.cookie);
     const usingCookieAuth = !authHeader && !!extractCookieValue(cookieHeader, ACCESS_TOKEN_COOKIE);
-    if (usingCookieAuth && MUTATING_METHODS.has(request.method) && !isPublicRoute) {
+    if (!localDevelopment && usingCookieAuth && MUTATING_METHODS.has(request.method) && !isPublicRoute) {
       const originHeader = request.headers.origin;
       if (!originMatchesWebOrigin(originHeader, fastify.env.WEB_ORIGIN)) {
         return sendApiError(reply, request, 403, "FORBIDDEN", "Invalid request origin");
@@ -142,7 +139,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     request.userRole = profileRole ?? metadataRole;
 
     const mfaEnabled = profile.data?.mfa_enabled === true;
-    if ((request.userRole === "ceo" || request.userRole === "cfo") && mfaEnabled && !isMfaBypassPath(path)) {
+    if (!localDevelopment && (request.userRole === "ceo" || request.userRole === "cfo") && mfaEnabled && !isMfaBypassPath(path)) {
       const mfaVerified = extractCookieValue(cookieHeader, MFA_VERIFIED_COOKIE) === "1";
       if (!mfaVerified) {
         return sendApiError(reply, request, 403, "MFA_REQUIRED", "MFA verification required", {

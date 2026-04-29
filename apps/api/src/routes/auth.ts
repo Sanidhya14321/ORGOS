@@ -367,7 +367,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (isLocalDevelopmentEnv(fastify.env)) {
-      return reply.send({ enrolled: true });
+      return reply.send({ required: false, enabled: false, role: request.userRole ?? "ceo" });
     }
 
     const baseProfile = await fastify.supabaseService

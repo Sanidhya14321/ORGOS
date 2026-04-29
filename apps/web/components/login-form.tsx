@@ -38,9 +38,14 @@ export function LoginForm() {
         throw new Error(body?.error?.message ?? "Login failed");
       }
 
-      const data = await response.json() as { user: { role: string; status?: string } };
+      const data = await response.json() as {
+        user: { role: string; status?: string };
+        mfaRequired?: boolean;
+        mfaSetupRequired?: boolean;
+      };
       setRoleCookie(data.user.role);
-      if (data.user.role === "ceo" || data.user.role === "cfo") {
+      const localDevelopment = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      if (!localDevelopment && (data.mfaRequired || data.mfaSetupRequired) && (data.user.role === "ceo" || data.user.role === "cfo")) {
         router.push("/setup-mfa");
       } else if (data.user.status === "pending") {
         router.push("/pending");

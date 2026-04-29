@@ -38,6 +38,12 @@ export default function SetupMfaPage() {
           return;
         }
         setStatus(nextStatus);
+
+        if (!nextStatus.required) {
+          router.push(`/dashboard/${nextStatus.role ?? "ceo"}`);
+          router.refresh();
+          return;
+        }
       } catch (requestError) {
         if (!mounted) {
           return;
@@ -53,7 +59,7 @@ export default function SetupMfaPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [router]);
 
   const title = useMemo(() => {
     if (!status) {

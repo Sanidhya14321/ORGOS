@@ -9,6 +9,12 @@ function hasProtectedPrefix(pathname: string): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const localDevelopment = request.nextUrl.hostname === "localhost" || request.nextUrl.hostname === "127.0.0.1";
+
+  if (localDevelopment) {
+    return NextResponse.next();
+  }
+
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const role = request.cookies.get(ROLE_COOKIE)?.value;
   const mfaVerified = request.cookies.get(MFA_VERIFIED_COOKIE)?.value === "1";
