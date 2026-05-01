@@ -19,6 +19,7 @@ import orgRoutes from "./routes/org.js";
 import reportsRoutes from "./routes/reports.js";
 import recruitmentRoutes from "./routes/recruitment.js";
 import expansionRoutes from "./routes/expansion.js";
+import settingsRoutes from "./routes/settings.js";
 import tasksRoutes from "./routes/tasks.js";
 import { initializeQueueForwarding } from "./queue/index.js";
 import { startCsuiteDecomposeWorker } from "./queue/workers/decompose.csuite.worker.js";
@@ -139,6 +140,7 @@ export async function buildServer() {
     await api.register(tasksRoutes);
     await api.register(reportsRoutes);
     await api.register(recruitmentRoutes);
+    await api.register(settingsRoutes);
   }, { prefix: "/api" });
 
   return fastify;
