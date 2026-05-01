@@ -34,13 +34,13 @@ export function HeroDemo() {
   }, [employees, role, simulateTick]);
 
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[#0f1115] p-5">
+    <div className="rounded-2xl border border-[var(--border)] bg-[#0f1115] p-6 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Live ORGOS Demo</p>
         <button
           type="button"
           onClick={() => setSimulateTick((value) => value + 1)}
-          className="rounded-xl bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-[#0f1115]"
+          className="rounded-xl bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-[#0f1115] transition-all duration-200 hover:scale-[1.02]"
         >
           Simulate
         </button>
@@ -76,22 +76,22 @@ export function HeroDemo() {
         </label>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <p className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Execs</p>
           <p className="mt-1 text-lg font-semibold text-[var(--ink)]">{simulation.executives}</p>
         </div>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <p className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Managers</p>
           <p className="mt-1 text-lg font-semibold text-[var(--ink)]">{simulation.managers}</p>
         </div>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <p className="text-xs uppercase tracking-[0.12em] text-[var(--muted)]">Workers</p>
           <p className="mt-1 text-lg font-semibold text-[var(--ink)]">{simulation.workers}</p>
         </div>
       </div>
 
-      <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
+      <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
         Projected execution cycle: <span className="font-semibold text-[var(--ink)]">{simulation.tasks} active tasks</span> {"->"} <span className="font-semibold text-[var(--ink)]">{simulation.reports} report checkpoints</span>
       </div>
     </div>

@@ -12,7 +12,7 @@ export function ApplicantCard({ applicant, onOpen }: { applicant: Applicant; onO
     <button
       type="button"
       onClick={() => onOpen(applicant.id)}
-      className="w-full rounded-md border border-border bg-bg-surface p-4 text-left border-l-[3px] border-l-info hover:bg-bg-elevated"
+      className="w-full rounded-xl border border-border bg-bg-surface p-6 text-left border-l-[3px] border-l-info hover:bg-bg-elevated shadow-sm transition-all duration-200"
     >
       <div className="flex items-start justify-between gap-2">
         <div>

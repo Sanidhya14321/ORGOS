@@ -52,12 +52,12 @@ function normalizeDepartment(value: string | null | undefined): string {
 
 function getStatusColor(status: TreeUserNode["status"] | undefined): string {
   if (status === "active") {
-    return "#2a9d8f";
+    return "#22c55e";
   }
   if (status === "rejected") {
-    return "#ff6b35";
+    return "#ef4444";
   }
-  return "#e9c46a";
+  return "#f59e0b";
 }
 
 function buildGraph(tree: OrgTreeResponse, mode: ConnectionMode): { nodes: Node[]; edges: Edge[] } {
@@ -71,9 +71,9 @@ function buildGraph(tree: OrgTreeResponse, mode: ConnectionMode): { nodes: Node[
       target: node.id,
       animated: false,
       type: "smoothstep",
-      style: { stroke: "#74809a", strokeWidth: 1.75 },
+      style: { stroke: "#a1a1aa", strokeWidth: 1.75 },
       label: mode === "hybrid" ? "reports to" : undefined,
-      labelStyle: mode === "hybrid" ? { fill: "#94a3b8", fontSize: 10 } : undefined
+      labelStyle: mode === "hybrid" ? { fill: "#a1a1aa", fontSize: 10 } : undefined
     }));
 
   const departmentGroups = new Map<string, TreeUserNode[]>();
@@ -108,9 +108,9 @@ function buildGraph(tree: OrgTreeResponse, mode: ConnectionMode): { nodes: Node[
         target: member.id,
         animated: false,
         type: "smoothstep",
-        style: { stroke: "#22d3ee", strokeWidth: 1.25, strokeDasharray: "5 4" },
+        style: { stroke: "#38bdf8", strokeWidth: 1.25, strokeDasharray: "5 4" },
         label: mode === "department" ? departmentName : "department",
-        labelStyle: { fill: "#67e8f9", fontSize: 10 }
+        labelStyle: { fill: "#38bdf8", fontSize: 10 }
       });
     }
   }
@@ -182,8 +182,8 @@ function buildGraph(tree: OrgTreeResponse, mode: ConnectionMode): { nodes: Node[
           wordBreak: "break-word",
           fontSize: 13,
           lineHeight: 1.35,
-          background: "#171a21",
-          color: "#eef2ff",
+          background: "#18181b",
+          color: "#fafafa",
           boxShadow: "0 8px 24px rgba(0,0,0,0.26)"
         }
       } as Node;
@@ -440,11 +440,11 @@ export function OrgTreeCanvas() {
 
   if (error) {
     return (
-      <div className="space-y-3 rounded-2xl border border-[#2c3240] bg-[#171a21] px-4 py-4 text-sm text-[#fed7aa]">
+      <div className="space-y-3 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-4 py-4 text-sm text-[var(--warning)]">
         <p>{error}</p>
         <Link
           href="/dashboard/ceo"
-          className="inline-flex items-center rounded-xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f59e0b]"
+          className="inline-flex items-center rounded-xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--warning)]"
         >
           Open admin dashboard
         </Link>
@@ -482,11 +482,11 @@ export function OrgTreeCanvas() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 rounded-3xl border border-[#2c3240] bg-[#171a21] p-4 md:grid-cols-3">
+      <div className="grid gap-3 rounded-3xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-4 md:grid-cols-3">
         <label className="space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#94a3b8]">Connection mode</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Connection mode</p>
           <select
-            className="w-full rounded-2xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-sm text-[#eef2ff] outline-none focus:border-[#f59e0b]"
+            className="w-full rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--warning)]"
             value={connectionMode}
             onChange={(event) => setConnectionMode(event.target.value as ConnectionMode)}
           >
@@ -497,9 +497,9 @@ export function OrgTreeCanvas() {
         </label>
 
         <label className="space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#94a3b8]">Filter department</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--text-secondary)]">Filter department</p>
           <select
-            className="w-full rounded-2xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-sm text-[#eef2ff] outline-none focus:border-[#f59e0b]"
+            className="w-full rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--warning)]"
             value={departmentFilter}
             onChange={(event) => setDepartmentFilter(event.target.value)}
           >
@@ -512,15 +512,15 @@ export function OrgTreeCanvas() {
           </select>
         </label>
 
-        <div className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-xs text-[#94a3b8]">
+        <div className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-xs text-[var(--text-secondary)]">
           <p className="font-semibold uppercase tracking-[0.2em]">Guide</p>
           <p className="mt-1">
-            <span className="text-[#eef2ff]">Gray</span> edges are reporting lines. <span className="text-[#67e8f9]">Cyan dashed</span> edges connect members inside the same department. Double-click a gray edge to detach.
+            <span className="text-[var(--text-primary)]">Gray</span> edges are reporting lines. <span className="text-[var(--info)]">Cyan dashed</span> edges connect members inside the same department. Double-click a gray edge to detach.
           </p>
         </div>
       </div>
 
-      <div className="h-[68vh] w-full overflow-hidden rounded-3xl border border-[#2c3240] bg-[#0f1115]">
+      <div className="h-[68vh] w-full overflow-hidden rounded-3xl border border-[var(--border-strong)] bg-[var(--bg-subtle)]">
         <ReactFlow
           nodes={graph.nodes}
           edges={graph.edges}
@@ -534,21 +534,21 @@ export function OrgTreeCanvas() {
           nodesConnectable={canEditTree}
           edgesFocusable={canEditTree}
         >
-          <MiniMap pannable zoomable nodeColor={(node) => (node.id === selectedNodeId ? "#22d3ee" : "#f59e0b")} />
+          <MiniMap pannable zoomable nodeColor={(node) => (node.id === selectedNodeId ? "#38bdf8" : "#f59e0b")} />
           <Controls />
-          <Background color="#2c3240" gap={18} />
+          <Background color="#3f3f46" gap={18} />
         </ReactFlow>
       </div>
 
       {canEditTree && selectedNode ? (
-        <div className="rounded-3xl border border-[#2c3240] bg-[#171a21] p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#94a3b8]">Tree member editor</p>
-          <h3 className="mt-2 text-lg font-semibold text-[#eef2ff]">{selectedNode.full_name}</h3>
-          <p className="text-xs text-[#94a3b8]">{selectedNode.email ?? "No email on profile"}</p>
+        <div className="rounded-3xl border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-secondary)]">Tree member editor</p>
+          <h3 className="mt-2 text-lg font-semibold text-[var(--text-primary)]">{selectedNode.full_name}</h3>
+          <p className="text-xs text-[var(--text-secondary)]">{selectedNode.email ?? "No email on profile"}</p>
 
           <div className="mt-3 grid gap-2 md:grid-cols-4">
             <select
-              className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-sm text-[#eef2ff] outline-none focus:border-[#f59e0b]"
+              className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--warning)]"
               value={draftRole}
               onChange={(event) => setDraftRole(event.target.value as TreeUserNode["role"])}
             >
@@ -558,7 +558,7 @@ export function OrgTreeCanvas() {
               <option value="worker">Worker</option>
             </select>
             <select
-              className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-sm text-[#eef2ff] outline-none focus:border-[#f59e0b]"
+              className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--warning)]"
               value={draftPositionId}
               onChange={(event) => setDraftPositionId(event.target.value)}
             >
@@ -568,13 +568,13 @@ export function OrgTreeCanvas() {
               ))}
             </select>
             <input
-              className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-sm text-[#eef2ff] outline-none focus:border-[#f59e0b]"
+              className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--warning)]"
               value={draftDepartment}
               onChange={(event) => setDraftDepartment(event.target.value)}
               placeholder="Department"
             />
             <select
-              className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-3 py-2 text-sm text-[#eef2ff] outline-none focus:border-[#f59e0b]"
+              className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--warning)]"
               value={draftReportsTo}
               onChange={(event) => setDraftReportsTo(event.target.value)}
             >
@@ -595,28 +595,28 @@ export function OrgTreeCanvas() {
               type="button"
               onClick={() => void saveSelectedNode()}
               disabled={savingNode}
-              className="rounded-2xl bg-[#f59e0b] px-4 py-2 text-sm font-semibold text-[#0f1115] disabled:opacity-60"
+              className="rounded-2xl bg-[var(--warning)] px-4 py-2 text-sm font-semibold text-[var(--bg-base)] disabled:opacity-60"
             >
               {savingNode ? "Saving..." : "Save from tree"}
             </button>
             <button
               type="button"
               onClick={suggestDepartmentLead}
-              className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-2 text-sm font-semibold text-[#22d3ee]"
+              className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-4 py-2 text-sm font-semibold text-[var(--info)]"
             >
               Suggest dept lead
             </button>
             <button
               type="button"
               onClick={() => setDraftReportsTo("")}
-              className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-2 text-sm font-semibold text-[#eef2ff]"
+              className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)]"
             >
               Clear manager
             </button>
             <button
               type="button"
               onClick={() => setSelectedNodeId(null)}
-              className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-2 text-sm font-semibold text-[#eef2ff]"
+              className="rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-subtle)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)]"
             >
               Clear selection
             </button>

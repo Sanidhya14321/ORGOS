@@ -18,8 +18,8 @@ export function MetricCard({
 }) {
   if (loading) {
     return (
-      <Card className="border-border bg-bg-surface">
-        <CardContent className="space-y-3 p-5">
+      <Card className="border-border bg-bg-surface shadow-sm">
+        <CardContent className="space-y-3 p-6">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-10 w-32" />
           <Skeleton className="h-4 w-16" />
@@ -36,8 +36,8 @@ export function MetricCard({
   }[tone];
 
   return (
-    <Card className="border-border bg-bg-surface">
-      <CardContent className="space-y-2 p-5">
+    <Card className="border-border bg-bg-surface shadow-sm">
+      <CardContent className="space-y-2 p-6">
         <p className="text-sm text-text-secondary">{label}</p>
         <p className="text-3xl font-semibold text-text-primary"><AnimatedNumber value={value} /></p>
         {typeof trend === "number" ? (

@@ -17,7 +17,7 @@ export default function ForecastPage() {
   });
 
   return (
-    <AppShell eyebrow="Forecast" title="Delivery outlook" description="See how much work is open and where the pressure sits." role={meQuery.data?.role}>
+    <AppShell eyebrow="Forecast" title="Delivery outlook" description="See how much work is open and where the pressure sits." role={meQuery.data?.role} showNav={false}>
       <div className="space-y-4">
         <Card className="grid gap-4 border border-border bg-bg-surface p-4 md:grid-cols-4">
           <Metric label="Open effort" value={`${forecastQuery.data?.openEffortHours ?? 0}h`} />

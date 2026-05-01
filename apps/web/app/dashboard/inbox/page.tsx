@@ -30,7 +30,7 @@ export default function InboxPage() {
   const security = inboxQuery.data?.items.security ?? [];
 
   return (
-    <AppShell eyebrow="Inbox" title="Work waiting for you" description="Pending tasks, imported meetings, and the latest security events in one view." role={undefined as Role | undefined}>
+    <AppShell eyebrow="Inbox" title="Work waiting for you" description="Pending tasks, imported meetings, and the latest security events in one view." role={undefined as Role | undefined} showNav={false}>
       <div className="space-y-4">
         <div className="flex justify-end">
           <Button variant="outline" className="border-border" onClick={() => refreshMutation.mutate()}>Refresh</Button>

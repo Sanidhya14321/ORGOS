@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, CheckSquare, Network, Users, Target, BriefcaseBusiness, Settings, LogOut, Clock, Sparkles, Search } from "lucide-react";
+import { LayoutDashboard, CheckSquare, Network, Users, Target, BriefcaseBusiness, Settings, LogOut, Clock, Sparkles, Search, UserCheck, UserPlus } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { Role, User } from "@/lib/models";
@@ -36,6 +36,8 @@ const navItems: NavItem[] = [
   { href: "/dashboard/team", label: "Team", icon: Users, show: (role) => role === "manager" || role === "ceo" || role === "cfo" },
   { href: "/dashboard/goals", label: "Goals", icon: Target, show: (role) => role === "manager" || role === "ceo" || role === "cfo" },
   { href: "/dashboard/recruit", label: "Recruitment", icon: BriefcaseBusiness, show: (role) => role === "ceo" || role === "cfo" || role === "manager" },
+  { href: "/dashboard/recruit/refer", label: "Referrals", icon: UserPlus, show: (role) => role === "ceo" || role === "cfo" || role === "manager" },
+  { href: "/dashboard/approvals", label: "Approvals", icon: UserCheck, show: (role) => role === "ceo" || role === "cfo" || role === "manager" },
   { href: "/dashboard/shortcuts", label: "Shortcuts", icon: Search, show: () => true },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, show: (role) => role === "ceo" || role === "cfo" }
 ];

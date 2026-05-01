@@ -1,12 +1,17 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { apiFetch } from '@/lib/api';
+import Stepper, { Step } from '@/components/ui/stepper';
 import { Users, Plus, Mail, Phone, MapPin, TrendingUp, MoreVertical } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
@@ -31,6 +36,50 @@ export default function TeamPage() {
     queryKey: ['team'],
     queryFn: () => apiFetch('/api/team'),
   });
+
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState('Contributor');
+  const [newDept, setNewDept] = useState('');
+
+  const queryClient = useQueryClient();
+
+  const createMemberMutation = useMutation({
+    mutationFn: () =>
+      apiFetch('/api/team', {
+        method: 'POST',
+        body: JSON.stringify({ full_name: newName, email: newEmail, role: newRole, department: newDept })
+      }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['team'] });
+      const previous = queryClient.getQueryData<TeamResponse>(['team']);
+      const optimistic = {
+        id: `optimistic-${Date.now()}`,
+        full_name: newName,
+        email: newEmail,
+        role: newRole,
+        department: newDept,
+        status: 'active'
+      } as TeamMember;
+      queryClient.setQueryData<TeamResponse | undefined>(['team'], (old) => ({ members: [optimistic, ...(old?.members || [])] }));
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['team'], context.previous);
+      }
+    },
+    onSettled: () => {
+      setOpen(false);
+      setNewName('');
+      setNewEmail('');
+      setNewRole('Contributor');
+      setNewDept('');
+      queryClient.invalidateQueries({ queryKey: ['team'] });
+    }
+  });
+
 
   if (teamQuery.isLoading) {
     return (
@@ -59,10 +108,47 @@ export default function TeamPage() {
           <h1 className="text-3xl font-bold text-text-primary">Team</h1>
           <p className="mt-1 text-sm text-text-secondary">{team.length} members</p>
         </div>
-        <Button className="bg-accent hover:bg-accent-hover">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Member
-        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-accent hover:bg-accent-hover">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Member</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Stepper initialStep={1} onFinalStepCompleted={() => createMemberMutation.mutate()}>
+                <Step>
+                  <div className="space-y-3">
+                    <Input placeholder="Full name" value={newName} onChange={(e) => setNewName(e.target.value)} className="border-border bg-bg-subtle" />
+                    <Input placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="border-border bg-bg-subtle" />
+                  </div>
+                </Step>
+
+                <Step>
+                  <div className="space-y-3">
+                    <Input placeholder="Role (e.g. Contributor)" value={newRole} onChange={(e) => setNewRole(e.target.value)} className="border-border bg-bg-subtle" />
+                    <Input placeholder="Department" value={newDept} onChange={(e) => setNewDept(e.target.value)} className="border-border bg-bg-subtle" />
+                  </div>
+                </Step>
+
+                <Step>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">Review and confirm</p>
+                    <div className="rounded border border-border p-3">
+                      <p className="font-medium">{newName || '—'}</p>
+                      <p className="text-sm text-text-secondary">{newEmail || '—'}</p>
+                      <p className="text-sm text-text-secondary">{newRole} — {newDept || '—'}</p>
+                    </div>
+                  </div>
+                </Step>
+              </Stepper>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Team Overview Cards */}

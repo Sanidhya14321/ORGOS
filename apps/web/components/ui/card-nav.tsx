@@ -1,0 +1,227 @@
+"use client";
+
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { gsap } from "gsap";
+import {
+  ArrowRight,
+  BarChart3,
+  FolderKanban,
+  Goal,
+  Menu,
+  Settings,
+  Sparkles,
+  Target,
+  Users,
+  UserRound,
+  X
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const TOPBAR_HEIGHT = 56;
+const DESKTOP_EXPANDED_HEIGHT = 260;
+
+export interface CardNavLink {
+  label: string;
+  href: string;
+}
+
+export interface CardNavItem {
+  label: string;
+  links: CardNavLink[];
+}
+
+export interface CardNavProps {
+  items: CardNavItem[];
+  pageTitle?: string;
+  isAuthenticated?: boolean;
+  actions?: ReactNode;
+  className?: string;
+}
+
+function iconForLink(label: string) {
+  if (label === "Task Board") return FolderKanban;
+  if (label === "Projects") return FolderKanban;
+  if (label === "Approvals") return UserRound;
+  if (label === "Focus Mode") return Sparkles;
+  if (label === "Team Directory") return Users;
+  if (label === "Org Tree") return Users;
+  if (label === "Recruitment") return UserRound;
+  if (label === "Inbox") return Sparkles;
+  if (label === "Analytics") return BarChart3;
+  if (label === "Goals & OKRs") return Goal;
+  if (label === "Forecasting") return Target;
+  if (label === "Settings") return Settings;
+  return ArrowRight;
+}
+
+export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true, actions, className }: CardNavProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navRef = useRef<HTMLElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const timelineRef = useRef<gsap.core.Timeline | null>(null);
+
+  const ctaHref = isAuthenticated ? "/dashboard/capture" : "/login";
+
+  const cardTints = useMemo(
+    () => [
+      "bg-accent-subtle border-border/40",
+      "bg-success-subtle border-border/40",
+      "bg-info-subtle border-border/40"
+    ],
+    []
+  );
+
+  const getExpandedHeight = () => {
+    if (typeof window === "undefined") return DESKTOP_EXPANDED_HEIGHT;
+    if (window.innerWidth < 768) {
+      const contentHeight = contentRef.current?.scrollHeight ?? 0;
+      return TOPBAR_HEIGHT + contentHeight;
+    }
+    return DESKTOP_EXPANDED_HEIGHT;
+  };
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const cards = cardRefs.current.filter((card): card is HTMLDivElement => card !== null);
+
+    gsap.set(nav, { height: TOPBAR_HEIGHT });
+    gsap.set(cards, { autoAlpha: 0, y: 50 });
+
+    const timeline = gsap.timeline({ paused: true, defaults: { ease: "power3.inOut" } });
+
+    timeline
+      .to(nav, {
+        height: () => getExpandedHeight(),
+        duration: 0.52
+      })
+      .to(
+        cards,
+        {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.4,
+          stagger: 0.08,
+          ease: "power3.out"
+        },
+        0.12
+      );
+
+    timeline.reverse();
+    timelineRef.current = timeline;
+
+    const handleResize = () => {
+      const current = timelineRef.current;
+      if (!current) return;
+
+      if (current.progress() > 0 && !current.reversed()) {
+        gsap.set(nav, { height: getExpandedHeight() });
+      } else {
+        gsap.set(nav, { height: TOPBAR_HEIGHT });
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      timeline.kill();
+    };
+  }, []);
+
+  const toggleMenu = () => {
+    const timeline = timelineRef.current;
+    if (!timeline) return;
+
+    if (timeline.reversed()) {
+      timeline.play();
+      setMenuOpen(true);
+      return;
+    }
+
+    timeline.reverse();
+    setMenuOpen(false);
+  };
+
+  return (
+    <nav
+      ref={navRef}
+      className={cn(
+        "w-full overflow-hidden rounded-xl border border-border/40 bg-bg-base shadow-lg",
+        className
+      )}
+      aria-label="Primary navigation"
+    >
+      <div className="relative flex h-14 items-center gap-2 px-3 md:px-5">
+        <button
+          type="button"
+          onClick={toggleMenu}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-bg-subtle text-text-primary transition hover:bg-bg-elevated"
+          aria-expanded={menuOpen}
+          aria-controls="card-nav-content"
+          aria-label={menuOpen ? "Collapse navigation menu" : "Expand navigation menu"}
+        >
+          {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        </button>
+
+        <Link
+          href="/dashboard"
+          className="absolute left-1/2 hidden -translate-x-1/2 flex-col items-center md:flex"
+          aria-label="ORGOS dashboard home"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-secondary">ORGOS</span>
+          <span className="-mt-0.5 text-sm font-semibold text-text-primary">{pageTitle}</span>
+        </Link>
+
+        <div className="ml-auto flex items-center gap-2">
+          {actions}
+          <Link
+            href={ctaHref}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-text-primary px-3 py-2 text-xs font-semibold text-bg-base transition hover:opacity-90"
+          >
+            Get Started
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+
+      <div id="card-nav-content" ref={contentRef} className="px-3 pb-3 md:px-5 md:pb-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {items.map((item, index) => (
+            <div
+              key={item.label}
+              ref={(element) => {
+                cardRefs.current[index] = element;
+              }}
+              className={cn("rounded-xl border p-3", cardTints[index] ?? "bg-bg-subtle border-border/40")}
+            >
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">{item.label}</p>
+              <ul className="space-y-1.5">
+                {item.links.map((link) => {
+                  const Icon = iconForLink(link.label);
+                  return (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="group flex items-center justify-between rounded-lg px-2.5 py-2 text-sm font-medium text-text-primary transition hover:bg-bg-elevated"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 text-text-secondary transition group-hover:text-text-primary" />
+                          {link.label}
+                        </span>
+                        <ArrowRight className="h-3.5 w-3.5 text-text-muted transition group-hover:translate-x-0.5 group-hover:text-text-secondary" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </nav>
+  );
+}

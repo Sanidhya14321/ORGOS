@@ -57,41 +57,41 @@ export default function ReferralPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-text-primary">Refer candidates</h2>
+    <div className="space-y-8 p-8">
+      <h2 className="text-xl font-bold tracking-tight text-text-primary">Refer candidates</h2>
 
       <Tabs defaultValue="open-jobs">
-        <TabsList>
-          <TabsTrigger value="open-jobs">Open jobs</TabsTrigger>
-          <TabsTrigger value="my-referrals">My referrals</TabsTrigger>
+        <TabsList className="gap-4 p-1 rounded-xl">
+          <TabsTrigger value="open-jobs" className="px-4 py-2 h-10 rounded-xl text-sm">Open jobs</TabsTrigger>
+          <TabsTrigger value="my-referrals" className="px-4 py-2 h-10 rounded-xl text-sm">My referrals</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="open-jobs" className="mt-3 grid gap-3 md:grid-cols-2">
+        <TabsContent value="open-jobs" className="mt-6 grid gap-6 md:grid-cols-2">
           {jobsQuery.isLoading ? (
             <>
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-36 w-full" />
+              <Skeleton className="h-36 w-full" />
             </>
           ) : (
             (jobsQuery.data ?? []).map((job) => (
-              <div key={job.id} className="rounded-md border border-border bg-bg-surface p-4">
-                <p className="text-sm font-semibold text-text-primary">{job.title}</p>
-                <p className="text-xs text-text-secondary">{job.department}</p>
+              <div key={job.id} className="rounded-xl border border-border bg-bg-surface p-6 shadow-sm">
+                <p className="text-lg font-bold tracking-tight text-text-primary">{job.title}</p>
+                <p className="mt-2 text-xs font-medium uppercase tracking-widest text-text-secondary">{job.department}</p>
                 <Dialog open={open && jobId === job.id} onOpenChange={(next) => { setOpen(next); setJobId(job.id); }}>
                   <DialogTrigger asChild>
-                    <Button className="mt-3 bg-accent hover:bg-accent-hover">Refer</Button>
+                    <Button className="mt-4 h-10 px-4 rounded-xl bg-accent hover:bg-accent-hover hover:scale-[1.02] transition-all duration-200">Refer</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="backdrop-blur-md bg-white/90 shadow-2xl rounded-2xl p-6">
                     <DialogHeader>
-                      <DialogTitle>Refer for {job.title}</DialogTitle>
-                      <DialogDescription>Send a referral for this role.</DialogDescription>
+                      <DialogTitle className="text-lg font-bold tracking-tight">Refer for {job.title}</DialogTitle>
+                      <DialogDescription className="text-sm text-text-secondary">Send a referral for this role.</DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-3">
-                      <Input placeholder="Applicant name" value={applicantName} onChange={(e) => setApplicantName(e.target.value)} className="border-border bg-bg-subtle" />
-                      <Input placeholder="Applicant email" value={applicantEmail} onChange={(e) => setApplicantEmail(e.target.value)} className="border-border bg-bg-subtle" />
-                      <Input placeholder="Relationship" value={relationship} onChange={(e) => setRelationship(e.target.value)} className="border-border bg-bg-subtle" />
-                      <Textarea placeholder="Personal note" value={note} onChange={(e) => setNote(e.target.value)} className="border-border bg-bg-subtle" />
-                      <Button className="w-full bg-accent hover:bg-accent-hover" disabled={referMutation.isPending || !applicantName || !applicantEmail} onClick={() => referMutation.mutate()}>
+                    <div className="space-y-4">
+                      <Input placeholder="Applicant name" value={applicantName} onChange={(e) => setApplicantName(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
+                      <Input placeholder="Applicant email" value={applicantEmail} onChange={(e) => setApplicantEmail(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
+                      <Input placeholder="Relationship" value={relationship} onChange={(e) => setRelationship(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
+                      <Textarea placeholder="Personal note" value={note} onChange={(e) => setNote(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
+                      <Button className="w-full h-10 px-4 rounded-xl bg-accent hover:bg-accent-hover hover:scale-[1.02] transition-all duration-200" disabled={referMutation.isPending || !applicantName || !applicantEmail} onClick={() => referMutation.mutate()}>
                         Submit referral
                       </Button>
                     </div>
@@ -102,11 +102,11 @@ export default function ReferralPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="my-referrals" className="mt-3 space-y-2">
+        <TabsContent value="my-referrals" className="mt-6 space-y-4">
           {(referralsQuery.data ?? []).map((item) => (
-            <div key={item.id} className="rounded-md border border-border bg-bg-surface p-3">
-              <p className="text-sm text-text-primary">{item.applicant_name} · {item.applicant_email}</p>
-              <p className="text-xs text-text-secondary">Status {item.status}</p>
+            <div key={item.id} className="rounded-xl border border-border bg-bg-surface p-4 shadow-sm">
+              <p className="text-sm text-text-primary font-medium">{item.applicant_name} · {item.applicant_email}</p>
+              <p className="mt-1 text-xs font-medium text-text-secondary">Status {item.status}</p>
             </div>
           ))}
           {(referralsQuery.data ?? []).length === 0 ? <p className="text-sm text-text-secondary">No referrals yet.</p> : null}
