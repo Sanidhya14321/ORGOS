@@ -250,14 +250,14 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-[var(--muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--ink)]">
+                          <Button variant="outline" size="icon" className="h-8 w-8 text-[var(--muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--ink)]">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem className="text-xs font-medium cursor-pointer">Edit Goal</DropdownMenuItem>
-                          <DropdownMenuItem className="text-xs font-medium cursor-pointer">View Analytics</DropdownMenuItem>
-                          <DropdownMenuItem className="text-xs font-medium cursor-pointer text-red-500">Delete Goal</DropdownMenuItem>
+                        <DropdownMenuContent align="end" className="w-40 bg-[var(--surface)] shadow-md ">
+                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:text-white">Edit Goal</DropdownMenuItem>
+                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:text-white">View Analytics</DropdownMenuItem>
+                          <DropdownMenuItem className="text-xs font-medium cursor-pointer text-red-500 ">Delete Goal</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

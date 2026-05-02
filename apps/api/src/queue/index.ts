@@ -19,6 +19,7 @@ let individualQueueInstance: Queue;
 let slaQueueInstance: Queue;
 let executeQueueInstance: Queue;
 let synthesizeQueueInstance: Queue;
+let ingestQueueInstance: Queue;
 let redisConnectionInstance: RedisConnection;
 let defaultJobOptionsInstance: JobsOptions;
 
@@ -29,8 +30,10 @@ function initializeQueues() {
 
   const env = readEnv();
   const redisUrl = new URL(env.UPSTASH_REDIS_URL);
-  const useTls = redisUrl.protocol === "rediss:" || redisUrl.protocol === "https:";
-  const defaultPort = useTls ? 6380 : 6379;
+  const isRediss = redisUrl.protocol === "rediss:";
+  const isHttpsRest = redisUrl.protocol === "https:";
+  const useTls = isRediss || isHttpsRest;
+  const defaultPort = 6379;
 
   redisConnectionInstance = {
     host: redisUrl.hostname,
@@ -84,6 +87,11 @@ function initializeQueues() {
     defaultJobOptions: defaultJobOptionsInstance
   });
 
+  ingestQueueInstance = new Queue("ingest", {
+    connection: redisConnectionInstance,
+    defaultJobOptions: defaultJobOptionsInstance
+  });
+
   initialized = true;
 }
 
@@ -122,6 +130,11 @@ export function getSynthesizeQueue(): Queue {
   return synthesizeQueueInstance;
 }
 
+export function getIngestQueue(): Queue {
+  initializeQueues();
+  return ingestQueueInstance;
+}
+
 export function getRedisConnection(): RedisConnection {
   initializeQueues();
   return redisConnectionInstance;
@@ -151,6 +164,8 @@ async function setupDeadLetterForwarding(queueName: string): Promise<void> {
               ? executeQueueInstance
               : queueName === "synthesize"
                 ? synthesizeQueueInstance
+                : queueName === "ingest"
+                  ? ingestQueueInstance
                 : null;
 
     if (!sourceQueue) {
@@ -194,5 +209,6 @@ export function initializeQueueForwarding() {
   void setupDeadLetterForwarding("queue-sla");
   void setupDeadLetterForwarding("execute");
   void setupDeadLetterForwarding("synthesize");
+  void setupDeadLetterForwarding("ingest");
 }
 

@@ -14,7 +14,6 @@ const BASE_CARD_NAV_ITEMS: CardNavItem[] = [
       { label: "Task Board", href: "/dashboard/task-board" },
       { label: "Projects", href: "/dashboard/projects" },
       { label: "Approvals", href: "/dashboard/approvals" },
-      { label: "Focus Mode", href: "/dashboard/focus" }
     ]
   },
   {

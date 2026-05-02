@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ReportSchema, type Report } from "@orgos/shared-types";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
-import { getSynthesizeQueue } from "../queue/index.js";
+import { getIngestQueue, getSynthesizeQueue } from "../queue/index.js";
 import { emitTaskReportSubmittedCascade } from "../services/notifier.js";
 
 const ReportCreateSchema = ReportSchema.omit({ id: true }).extend({
@@ -190,6 +190,25 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
         return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
       }
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to insert report");
+    }
+
+    const { data: taskForOrg } = await fastify.supabaseService
+      .from("tasks")
+      .select("org_id")
+      .eq("id", payload.task_id)
+      .maybeSingle();
+
+    const reportIngestText = [reportToInsert.insight, reportToInsert.data ? JSON.stringify(reportToInsert.data) : ""]
+      .filter((value) => value.length > 0)
+      .join("\n\n");
+
+    if (taskForOrg?.org_id && reportIngestText.length > 0) {
+      await getIngestQueue().add("report_ingest", {
+        orgId: taskForOrg.org_id as string,
+        sourceType: "report",
+        sourceId: reportId,
+        text: reportIngestText
+      });
     }
 
     const { error: updateTaskError } = await fastify.supabaseService

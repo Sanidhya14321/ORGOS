@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { callLLM } from "../llm/router.js";
+import type { LLMMessage } from "../llm/provider.js";
+import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
 
 export interface SynthesisTaskRef {
   id: string;
@@ -18,6 +20,12 @@ export interface SynthesisReportInput {
     escalate: boolean;
   }>;
   goalContext: string;
+  rag?: {
+    orgId: string;
+    searchClient: RagSearchClient;
+    topK?: number;
+    maxSnippetChars?: number;
+  };
 }
 
 export const SynthesisReportSchema = z.object({
@@ -69,18 +77,32 @@ export async function synthesisAgent(input: SynthesisReportInput): Promise<Synth
     "Summary must be concise."
   ].join(" ");
 
+  const userPayload = {
+    parentTask: input.parentTask,
+    goalContext: input.goalContext,
+    childReports: input.childReports
+  };
+
+  let messages: LLMMessage[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: JSON.stringify(userPayload) }
+  ];
+
+  if (input.rag) {
+    const query = [input.parentTask.title, input.goalContext, ...input.childReports.map((report) => report.insight)]
+      .filter(Boolean)
+      .join(" ");
+    const augmented = await buildRagAugmentedMessages(messages, input.rag.searchClient, {
+      orgId: input.rag.orgId,
+      query,
+      topK: input.rag.topK ?? 4,
+      maxSnippetChars: input.rag.maxSnippetChars ?? 400
+    });
+    messages = augmented.messages;
+  }
+
   const response = await callLLM(
-    [
-      { role: "system", content: systemPrompt },
-      {
-        role: "user",
-        content: JSON.stringify({
-          parentTask: input.parentTask,
-          goalContext: input.goalContext,
-          childReports: input.childReports
-        })
-      }
-    ],
+    messages,
     { temperature: 0.1, maxTokens: 500 },
     { agentType: "synthesis_agent", action: "synthesize", taskId: input.parentTask.id }
   );

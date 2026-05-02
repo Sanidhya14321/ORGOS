@@ -26,7 +26,7 @@ const records = [
 
 export function CustomersTableCard() {
   return (
-    <Card className="rounded-2xl border-[var(--border)] bg-[#0f1115] text-[var(--ink)] shadow-none">
+    <Card className="rounded-2xl border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] shadow-none">
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Realtime Org Pulse</CardTitle>
         <CardDescription className="text-[var(--muted)]">
@@ -36,7 +36,7 @@ export function CustomersTableCard() {
       <CardContent>
         <div className="overflow-hidden rounded-xl border border-[var(--border)]">
           <table className="w-full text-left text-sm">
-            <thead className="bg-[var(--surface-2)] text-[var(--muted)]">
+            <thead className="bg-[var(--bg-subtle)] text-[var(--text-secondary)]">
               <tr>
                 <th className="px-3 py-2 font-medium">Employee</th>
                 <th className="px-3 py-2 font-medium">Role</th>
@@ -45,11 +45,11 @@ export function CustomersTableCard() {
             </thead>
             <tbody>
               {records.map((entry) => (
-                <tr key={entry.employee} className="border-t border-[var(--border)] bg-[var(--surface)]">
+                <tr key={entry.employee} className="border-t border-[var(--border)] bg-[var(--bg-base)]">
                   <td className="px-3 py-2">{entry.employee}</td>
-                  <td className="px-3 py-2 text-[var(--muted)]">{entry.role}</td>
+                  <td className="px-3 py-2 text-[var(--text-muted)]">{entry.role}</td>
                   <td className="px-3 py-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#1f2a1f] px-2 py-0.5 text-xs text-[#9de7b8]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--success-subtle)] px-2 py-0.5 text-xs text-[var(--success)]">
                       <CheckCircle2 className="h-3 w-3" />
                       {entry.status}
                     </span>
@@ -69,7 +69,7 @@ export default function OrgosFeatures() {
     <section className="grid gap-4 md:grid-cols-3">
       <Card className="rounded-2xl border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] shadow-none">
         <CardHeader>
-          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#1b222d] text-[#ff6b35]">
+          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-subtle)] text-[var(--accent)]">
             <BriefcaseBusiness className="h-4 w-4" />
           </div>
           <CardTitle className="text-lg">Role-Driven Workflows</CardTitle>
@@ -79,7 +79,7 @@ export default function OrgosFeatures() {
 
       <Card className="rounded-2xl border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] shadow-none">
         <CardHeader>
-          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#1b222d] text-[#ff6b35]">
+          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--warning-subtle)] text-[var(--warning)]">
             <ShieldCheck className="h-4 w-4" />
           </div>
           <CardTitle className="text-lg">Executive Guardrails</CardTitle>
@@ -89,7 +89,7 @@ export default function OrgosFeatures() {
 
       <Card className="rounded-2xl border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] shadow-none">
         <CardHeader>
-          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#1b222d] text-[#ff6b35]">
+          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--info-subtle)] text-[var(--info)]">
             <BarChart3 className="h-4 w-4" />
           </div>
           <CardTitle className="text-lg">Measurable Outcomes</CardTitle>

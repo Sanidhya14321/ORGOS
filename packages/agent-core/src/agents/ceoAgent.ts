@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { sanitizeGoalInput } from "../llm/sanitize.js";
 import { callLLM } from "../llm/router.js";
+import type { LLMMessage } from "../llm/provider.js";
 import { ceoPrompt } from "../prompts/ceoPrompt.js";
+import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
 
 const SubDirectiveSchema = z.object({
   assigned_role: z.enum(["ceo", "cfo", "manager", "worker"]),
@@ -29,6 +31,12 @@ export interface CEOAgentInput {
   deadline?: string;
   priority: string;
   orgContext: OrgContext;
+  rag?: {
+    orgId: string;
+    searchClient: RagSearchClient;
+    topK?: number;
+    maxSnippetChars?: number;
+  };
 }
 
 export type GoalStructure = z.infer<typeof GoalStructureSchema>;
@@ -42,10 +50,20 @@ export async function ceoAgent(input: CEOAgentInput): Promise<GoalStructure> {
     orgContext: input.orgContext
   };
 
-  const messages = [
-    { role: "system" as const, content: `${ceoPrompt.system}\nSchema: ${JSON.stringify(ceoPrompt.schema)}` },
-    { role: "user" as const, content: JSON.stringify(userPayload) }
+  let messages: LLMMessage[] = [
+    { role: "system", content: `${ceoPrompt.system}\nSchema: ${JSON.stringify(ceoPrompt.schema)}` },
+    { role: "user", content: JSON.stringify(userPayload) }
   ];
+
+  if (input.rag) {
+    const augmented = await buildRagAugmentedMessages(messages, input.rag.searchClient, {
+      orgId: input.rag.orgId,
+      query: input.rawGoal,
+      topK: input.rag.topK ?? 4,
+      maxSnippetChars: input.rag.maxSnippetChars ?? 400
+    });
+    messages = augmented.messages;
+  }
 
   const response = await callLLM(messages, { temperature: 0.2, maxTokens: 1200 }, {
     agentType: "ceo_agent",

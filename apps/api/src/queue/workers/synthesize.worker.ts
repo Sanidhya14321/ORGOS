@@ -3,6 +3,7 @@ import { Worker, type Job } from "bullmq";
 import { synthesisAgent } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
+import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { getRedisConnection, getSynthesizeQueue } from "../index.js";
 import { emitTaskReportSubmittedCascade } from "../../services/notifier.js";
 
@@ -41,7 +42,7 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
 
   const { data: parentTask, error: parentError } = await supabase
     .from("tasks")
-    .select("id, goal_id, title, success_criteria")
+    .select("id, org_id, goal_id, title, success_criteria")
     .eq("id", job.data.parentTaskId)
     .single();
 
@@ -74,9 +75,11 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
 
   const { data: goal } = await supabase
     .from("goals")
-    .select("title, description")
+    .select("org_id, title, description")
     .eq("id", parentTask.goal_id)
     .maybeSingle();
+
+  const ragSearchClient = createSupabaseRagSearchClient(supabase);
 
   const synthesis = await synthesisAgent({
     parentTask: {
@@ -92,7 +95,17 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
       confidence: Number(report.confidence ?? 0),
       escalate: Boolean(report.escalate)
     })),
-    goalContext: `${goal?.title ?? ""} ${goal?.description ?? ""}`.trim()
+    goalContext: `${goal?.title ?? ""} ${goal?.description ?? ""}`.trim(),
+    ...(parentTask.org_id
+      ? {
+          rag: {
+            orgId: String(parentTask.org_id),
+            searchClient: ragSearchClient,
+            topK: 4,
+            maxSnippetChars: 400
+          }
+        }
+      : {})
   });
 
   const synthesisReportId = crypto.randomUUID();

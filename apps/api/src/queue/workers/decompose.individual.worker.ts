@@ -2,6 +2,7 @@ import { Worker, type Job } from "bullmq";
 import { individualAgent } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
+import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitToUser } from "../../services/notifier.js";
 import { getIndividualQueue, getRedisConnection } from "../index.js";
 
@@ -15,7 +16,7 @@ export async function processIndividualAckJob(job: Job<IndividualAckJobData>): P
 
   const taskResult = await supabase
     .from("tasks")
-    .select("id, title, description, success_criteria, deadline, assigned_to, parent_id")
+    .select("id, org_id, goal_id, title, description, success_criteria, deadline, assigned_to, parent_id")
     .eq("id", job.data.taskId)
     .maybeSingle();
 
@@ -38,6 +39,7 @@ export async function processIndividualAckJob(job: Job<IndividualAckJobData>): P
     ? await supabase.from("tasks").select("title").eq("id", task.parent_id).maybeSingle()
     : { data: null, error: null };
   const parentContext = typeof parentTaskResult.data?.title === "string" ? parentTaskResult.data.title : null;
+  const ragSearchClient = createSupabaseRagSearchClient(supabase);
 
   const output = await individualAgent({
     taskId: String(task.id),
@@ -48,7 +50,17 @@ export async function processIndividualAckJob(job: Job<IndividualAckJobData>): P
       ? assigneeResult.data.skills.filter((value): value is string => typeof value === "string")
       : [],
     deadline: typeof task.deadline === "string" ? task.deadline : null,
-    ...(parentContext ? { parentContext } : {})
+    ...(parentContext ? { parentContext } : {}),
+    ...(task.org_id
+      ? {
+          rag: {
+            orgId: String(task.org_id),
+            searchClient: ragSearchClient,
+            topK: 4,
+            maxSnippetChars: 400
+          }
+        }
+      : {})
   });
 
   if (output.questions.length > 0) {

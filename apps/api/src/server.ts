@@ -26,6 +26,7 @@ import { startCsuiteDecomposeWorker } from "./queue/workers/decompose.csuite.wor
 import { startManagerDecomposeWorker } from "./queue/workers/decompose.manager.worker.js";
 import { startIndividualAckWorker } from "./queue/workers/decompose.individual.worker.js";
 import { startExecuteWorker } from "./queue/workers/execute.worker.js";
+import { startIngestWorker } from "./queue/workers/ingest.worker.js";
 import { ensureSlaSchedule, startSlaWorker } from "./queue/workers/sla.worker.js";
 import { startSynthesizeWorker } from "./queue/workers/synthesize.worker.js";
 import { initializeNotifier } from "./services/notifier.js";
@@ -154,8 +155,10 @@ export async function start() {
   async function canReachQueueRedis(redisUrlRaw: string): Promise<boolean> {
     try {
       const redisUrl = new URL(redisUrlRaw);
-      const tlsMode = redisUrl.protocol === "rediss:" || redisUrl.protocol === "https:";
-      const port = redisUrl.port ? Number(redisUrl.port) : (tlsMode ? 6380 : 6379);
+      const isRediss = redisUrl.protocol === "rediss:";
+      const isHttpsRest = redisUrl.protocol === "https:";
+      const tlsMode = isRediss || isHttpsRest;
+      const port = redisUrl.port ? Number(redisUrl.port) : 6379;
 
       await new Promise<void>((resolve, reject) => {
         const timeoutMs = 1200;
@@ -207,6 +210,7 @@ export async function start() {
       startIndividualAckWorker(),
       startSlaWorker(server),
       startExecuteWorker(),
+      startIngestWorker(),
       startSynthesizeWorker()
     );
   } catch (error) {

@@ -2,18 +2,8 @@
 
 import { useMemo, useState } from "react";
 
-type DemoRole = "ceo" | "cfo" | "manager" | "worker";
-
-const ROLE_FLOW: Record<DemoRole, string> = {
-  ceo: "Goal approval and strategic checkpoint",
-  cfo: "Budget and risk validation",
-  manager: "Task decomposition and delegation",
-  worker: "Execution and report submission"
-};
-
 export function HeroDemo() {
   const [employees, setEmployees] = useState(42);
-  const [role, setRole] = useState<DemoRole>("manager");
   const [simulateTick, setSimulateTick] = useState(0);
 
   const simulation = useMemo(() => {
@@ -28,10 +18,9 @@ export function HeroDemo() {
       workers,
       executives,
       tasks,
-      reports,
-      roleStep: ROLE_FLOW[role]
+      reports
     };
-  }, [employees, role, simulateTick]);
+  }, [employees, simulateTick]);
 
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[#0f1115] p-6 shadow-sm">
@@ -46,7 +35,7 @@ export function HeroDemo() {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-4">
         <label className="space-y-2">
           <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Organization size</span>
           <input
@@ -58,21 +47,6 @@ export function HeroDemo() {
             className="w-full accent-[var(--accent)]"
           />
           <p className="text-sm text-[var(--ink)]">{employees} members</p>
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Focus role</span>
-          <select
-            value={role}
-            onChange={(event) => setRole(event.target.value as DemoRole)}
-            className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)]"
-          >
-            <option value="ceo">CEO</option>
-            <option value="cfo">CFO</option>
-            <option value="manager">Manager</option>
-            <option value="worker">Worker</option>
-          </select>
-          <p className="text-sm text-[var(--muted)]">{simulation.roleStep}</p>
         </label>
       </div>
 

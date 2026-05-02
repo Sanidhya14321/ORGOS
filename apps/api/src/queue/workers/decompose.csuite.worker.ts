@@ -3,6 +3,7 @@ import { ceoAgent, type GoalStructure } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { emitGoalDecomposed } from "../../services/notifier.js";
+import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { getCsuiteQueue, getManagerQueue, getRedisConnection } from "../index.js";
 
 interface CsuiteDecomposeJobData {
@@ -24,7 +25,7 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
 
   const { data: goal, error: goalError } = await supabase
     .from("goals")
-    .select("id, title, description, raw_input, priority, deadline")
+    .select("id, org_id, title, description, raw_input, priority, deadline")
     .eq("id", goalId)
     .single();
 
@@ -32,18 +33,34 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
     throw new Error(goalError?.message ?? "Goal not found for c-suite decomposition");
   }
 
+  const ragSearchClient = createSupabaseRagSearchClient(supabase);
+
   const ceoInput: {
     rawGoal: string;
     priority: string;
     orgContext: { organizationName: string; departments: string[] };
     deadline?: string;
+    rag?: {
+      orgId: string;
+      searchClient: ReturnType<typeof createSupabaseRagSearchClient>;
+      topK?: number;
+      maxSnippetChars?: number;
+    };
   } = {
     rawGoal: String(goal.raw_input),
     priority: String(goal.priority),
     orgContext: {
       organizationName: "ORGOS",
       departments: ["engineering", "product", "marketing", "operations", "sales"]
-    }
+    },
+    rag: goal.org_id
+      ? {
+          orgId: String(goal.org_id),
+          searchClient: ragSearchClient,
+          topK: 4,
+          maxSnippetChars: 400
+        }
+      : undefined
   };
 
   if (goal.deadline) {

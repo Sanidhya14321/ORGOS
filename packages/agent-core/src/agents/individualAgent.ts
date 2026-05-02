@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { callLLM } from "../llm/router.js";
+import type { LLMMessage } from "../llm/provider.js";
 import { individualPrompt } from "../prompts/individualPrompt.js";
+import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
 
 const IndividualAgentOutputSchema = z.object({
   acknowledged: z.boolean(),
@@ -17,6 +19,12 @@ export interface IndividualAgentInput {
   assigneeSkills: string[];
   deadline?: string | null;
   parentContext?: string;
+  rag?: {
+    orgId: string;
+    searchClient: RagSearchClient;
+    topK?: number;
+    maxSnippetChars?: number;
+  };
 }
 
 export type IndividualAgentOutput = z.infer<typeof IndividualAgentOutputSchema>;
@@ -30,33 +38,43 @@ function safeJsonParse(raw: string): unknown {
 }
 
 export async function individualAgent(input: IndividualAgentInput): Promise<IndividualAgentOutput> {
-  const response = await callLLM(
-    [
-      { role: "system", content: `${individualPrompt.system}\nSchema: ${JSON.stringify(individualPrompt.schema)}` },
-      {
-        role: "user",
-        content: JSON.stringify({
-          task: {
-            id: input.taskId,
-            title: input.title,
-            description: input.description ?? null,
-            success_criteria: input.successCriteria,
-            deadline: input.deadline ?? null
-          },
-          assignee: {
-            skills: input.assigneeSkills
-          },
-          parentContext: input.parentContext ?? null
-        })
-      }
-    ],
-    { temperature: 0.1, maxTokens: 700 },
-    {
-      agentType: "worker_agent",
-      action: "execute",
-      taskId: input.taskId
-    }
-  );
+  const userPayload = {
+    task: {
+      id: input.taskId,
+      title: input.title,
+      description: input.description ?? null,
+      success_criteria: input.successCriteria,
+      deadline: input.deadline ?? null
+    },
+    assignee: {
+      skills: input.assigneeSkills
+    },
+    parentContext: input.parentContext ?? null
+  };
+
+  let messages: LLMMessage[] = [
+    { role: "system", content: `${individualPrompt.system}\nSchema: ${JSON.stringify(individualPrompt.schema)}` },
+    { role: "user", content: JSON.stringify(userPayload) }
+  ];
+
+  if (input.rag) {
+    const query = [input.title, input.description ?? "", input.successCriteria, input.parentContext ?? ""]
+      .filter(Boolean)
+      .join(" ");
+    const augmented = await buildRagAugmentedMessages(messages, input.rag.searchClient, {
+      orgId: input.rag.orgId,
+      query,
+      topK: input.rag.topK ?? 4,
+      maxSnippetChars: input.rag.maxSnippetChars ?? 400
+    });
+    messages = augmented.messages;
+  }
+
+  const response = await callLLM(messages, { temperature: 0.1, maxTokens: 700 }, {
+    agentType: "worker_agent",
+    action: "execute",
+    taskId: input.taskId
+  });
 
   const parsed = safeJsonParse(response.content);
   const validated = IndividualAgentOutputSchema.parse(parsed);

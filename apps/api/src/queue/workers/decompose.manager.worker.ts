@@ -5,6 +5,7 @@ import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { assignTask } from "../../services/assignmentEngine.js";
 import { suggestRoutingForTask } from "../../services/agentService.js";
+import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitToUser } from "../../services/notifier.js";
 import { getIndividualQueue, getManagerQueue, getRedisConnection } from "../index.js";
 
@@ -113,12 +114,28 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>): Prom
 
   const existingTasks = ((existingTasksResult.data ?? []) as Task[]).slice(0, 50);
 
+  const goalResult = await supabase
+    .from("goals")
+    .select("id, org_id")
+    .eq("id", job.data.goalId)
+    .maybeSingle();
+
+  const ragSearchClient = createSupabaseRagSearchClient(supabase);
+
   const managerTasks = await managerAgent({
     directive: job.data.directive,
     department: job.data.department,
     existingTasks,
     deadline: job.data.deadline,
-    goalId: job.data.goalId
+    goalId: job.data.goalId,
+    rag: goalResult.data?.org_id
+      ? {
+          orgId: String(goalResult.data.org_id),
+          searchClient: ragSearchClient,
+          topK: 4,
+          maxSnippetChars: 400
+        }
+      : undefined
   });
 
   const assignedTasks: Task[] = [];

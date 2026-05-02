@@ -3,14 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import reportsRoutes from "../src/routes/reports.js";
 import { createSupabaseMock } from "./helpers/createSupabaseMock.js";
 
-const { enqueueMock, emitMock } = vi.hoisted(() => ({
-  enqueueMock: vi.fn(),
+const { synthesizeEnqueueMock, ingestEnqueueMock, emitMock } = vi.hoisted(() => ({
+  synthesizeEnqueueMock: vi.fn(),
+  ingestEnqueueMock: vi.fn(),
   emitMock: vi.fn()
 }));
 
 vi.mock("../src/queue/index.js", () => ({
-  synthesizeQueue: { add: enqueueMock },
-  getSynthesizeQueue: () => ({ add: enqueueMock })
+  getSynthesizeQueue: () => ({ add: synthesizeEnqueueMock }),
+  getIngestQueue: () => ({ add: ingestEnqueueMock })
 }));
 
 vi.mock("../src/services/notifier.js", () => ({
@@ -29,13 +30,15 @@ describe("reports route integration", () => {
         id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         parent_id: null,
         assigned_to: "11111111-1111-4111-8111-111111111111",
-        status: "in_progress"
+        status: "in_progress",
+        org_id: "org-1"
       },
       {
         id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
         parent_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         assigned_to: "11111111-1111-4111-8111-111111111111",
-        status: "completed"
+        status: "completed",
+        org_id: "org-1"
       }
     ],
     reports: [],
@@ -43,7 +46,8 @@ describe("reports route integration", () => {
   });
 
   beforeEach(() => {
-    enqueueMock.mockReset();
+    synthesizeEnqueueMock.mockReset();
+    ingestEnqueueMock.mockReset();
     emitMock.mockReset();
   });
 
@@ -89,8 +93,14 @@ describe("reports route integration", () => {
     });
 
     expect(response.statusCode).toBe(201);
-    expect(enqueueMock).toHaveBeenCalledWith("report_synthesize", {
+    expect(synthesizeEnqueueMock).toHaveBeenCalledWith("report_synthesize", {
       parentTaskId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    });
+    expect(ingestEnqueueMock).toHaveBeenCalledWith("report_ingest", {
+      orgId: "org-1",
+      sourceType: "report",
+      sourceId: expect.any(String),
+      text: expect.stringContaining("done with validation-safe detail")
     });
     expect(emitMock).toHaveBeenCalledWith(
       "cccccccc-cccc-4ccc-8ccc-cccccccccccc",

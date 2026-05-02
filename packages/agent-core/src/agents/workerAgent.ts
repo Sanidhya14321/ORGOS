@@ -2,10 +2,18 @@ import crypto from "node:crypto";
 import { ReportSchema, type Report, type Task } from "@orgos/shared-types";
 import { readInternalData } from "../tools/readInternalData.js";
 import { webSearch, type WebSearchResponse } from "../tools/webSearch.js";
+import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
+import type { LLMMessage } from "../llm/provider.js";
 
 export interface WorkerAgentInput {
   task: Task;
   goalContext: string;
+  rag?: {
+    orgId: string;
+    searchClient: RagSearchClient;
+    topK?: number;
+    maxSnippetChars?: number;
+  };
 }
 
 interface ToolExecutionState {
@@ -71,6 +79,32 @@ export async function workerAgent(input: WorkerAgentInput): Promise<Report> {
 
   const plan = buildPlan(input.task);
 
+  const baseMessages: LLMMessage[] = [
+    {
+      role: "system",
+      content: "You are ORGOS worker agent. Return concise JSON outputs when asked."
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        task: input.task,
+        goalContext: input.goalContext
+      })
+    }
+  ];
+
+  const ragQuery = `${input.task.title} ${input.goalContext} ${input.task.description ?? ""}`.trim();
+  const ragDocuments = input.rag
+    ? (
+        await buildRagAugmentedMessages(baseMessages, input.rag.searchClient, {
+          orgId: input.rag.orgId,
+          query: ragQuery,
+          topK: input.rag.topK ?? 4,
+          maxSnippetChars: input.rag.maxSnippetChars ?? 400
+        })
+      ).documents
+    : [];
+
   if (input.task.goal_id) {
     const rows = await runTool(() => readInternalData("goals", { id: input.task.goal_id }));
     state.internalRows.push(...rows);
@@ -101,6 +135,10 @@ export async function workerAgent(input: WorkerAgentInput): Promise<Report> {
       : `No external references found, relied on ${state.internalRows.length} internal records.`
   ];
 
+  if (ragDocuments.length > 0) {
+    insightParts.push(`Retrieved ${ragDocuments.length} org context snippets for alignment.`);
+  }
+
   const insight = insightParts.join(" ");
 
   const relevance = sources.length > 0 || state.internalRows.length > 0 ? 1 : 0;
@@ -120,7 +158,8 @@ export async function workerAgent(input: WorkerAgentInput): Promise<Report> {
       plan,
       tool_calls: state.callCount,
       internal_rows: state.internalRows,
-      web_searches: state.webSearches
+      web_searches: state.webSearches,
+      rag_context: ragDocuments
     },
     confidence,
     sources,

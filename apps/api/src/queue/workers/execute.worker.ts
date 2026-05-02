@@ -3,6 +3,7 @@ import { workerAgent } from "@orgos/agent-core";
 import type { Task } from "@orgos/shared-types";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
+import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitAgentEscalated, emitAgentExecuting } from "../../services/notifier.js";
 import { getExecuteQueue, getRedisConnection, getSynthesizeQueue } from "../index.js";
 
@@ -81,7 +82,7 @@ export async function processExecuteJob(job: Job<ExecuteJobData>): Promise<void>
 
   const { data: task, error: taskError } = await supabase
     .from("tasks")
-    .select("id, goal_id, title, description, success_criteria, assigned_to, assigned_role, is_agent_task, status, deadline, parent_id, required_skills")
+    .select("id, org_id, goal_id, title, description, success_criteria, assigned_to, assigned_role, is_agent_task, status, deadline, parent_id, required_skills")
     .eq("id", job.data.taskId)
     .single();
 
@@ -95,7 +96,7 @@ export async function processExecuteJob(job: Job<ExecuteJobData>): Promise<void>
 
   const { data: goal, error: goalError } = await supabase
     .from("goals")
-    .select("id, title, description")
+    .select("id, org_id, title, description")
     .eq("id", task.goal_id)
     .single();
 
@@ -127,9 +128,21 @@ export async function processExecuteJob(job: Job<ExecuteJobData>): Promise<void>
     deadline: (task.deadline as string | null) ?? undefined
   };
 
+  const ragSearchClient = createSupabaseRagSearchClient(supabase);
+
   const report = await workerAgent({
     task: taskForAgent,
-    goalContext: `${goal.title} ${goal.description ?? ""}`.trim()
+    goalContext: `${goal.title} ${goal.description ?? ""}`.trim(),
+    ...(task.org_id
+      ? {
+          rag: {
+            orgId: String(task.org_id),
+            searchClient: ragSearchClient,
+            topK: 4,
+            maxSnippetChars: 400
+          }
+        }
+      : {})
   });
 
   const { data: insertedReport, error: reportError } = await supabase

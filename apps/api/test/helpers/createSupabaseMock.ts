@@ -9,7 +9,8 @@ type TableName =
   | "orgs"
   | "positions"
   | "routing_suggestions"
-  | "audit_log";
+  | "audit_log"
+  | "embeddings";
 
 export type FixtureStore = Partial<Record<TableName, Row[]>>;
 
@@ -38,7 +39,8 @@ export function createSupabaseMock(fixtures: FixtureStore) {
     orgs: clone(fixtures.orgs ?? []),
     positions: clone(fixtures.positions ?? []),
     routing_suggestions: clone(fixtures.routing_suggestions ?? []),
-    audit_log: clone(fixtures.audit_log ?? [])
+    audit_log: clone(fixtures.audit_log ?? []),
+    embeddings: clone((fixtures as Partial<Record<string, Row[]>>).embeddings ?? [])
   };
 
   function query(table: TableName) {

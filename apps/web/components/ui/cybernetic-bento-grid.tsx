@@ -62,17 +62,17 @@ export function CyberneticBentoGrid() {
           >
             {item.image ? (
               <div
-                className="absolute inset-0 opacity-20 transition-opacity duration-300 group-hover:opacity-30"
+                className="absolute inset-0 opacity-15 transition-opacity duration-300 group-hover:opacity-20"
                 style={{ backgroundImage: `url(${item.image})`, backgroundSize: "cover", backgroundPosition: "center" }}
                 aria-hidden
               />
             ) : null}
 
-            <div className="absolute inset-0 bg-gradient-to-b from-[#0f1115]/20 via-[#0f1115]/70 to-[#0f1115]/95" />
+            <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/20 to-transparent" />
 
             <div className="relative z-10 flex h-full flex-col justify-between">
               <div>
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[#11141a] px-2.5 py-1 text-xs text-[var(--muted)]">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-subtle)] px-2.5 py-1 text-xs text-[var(--text-secondary)]">
                   {item.icon}
                   {item.status}
                 </div>
@@ -83,7 +83,7 @@ export function CyberneticBentoGrid() {
               <div className="mt-4 flex items-center justify-between">
                 <div className="flex flex-wrap gap-2">
                   {item.tags.map((tag) => (
-                    <span key={tag} className="rounded-full border border-[var(--border)] bg-[#11141a] px-2 py-1 text-[11px] text-[var(--muted)]">
+                    <span key={tag} className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-[11px] text-[var(--text-secondary)]">
                       {tag}
                     </span>
                   ))}

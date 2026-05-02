@@ -4,6 +4,7 @@ import { requireRole } from "../plugins/rbac.js";
 import { sendApiError } from "../lib/errors.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import type { AuditEventInput } from "../lib/audit.js";
+import { getIngestQueue } from "../queue/index.js";
 
 const OrgParamSchema = z.object({ orgId: z.string().uuid() });
 const TaskParamSchema = z.object({ id: z.string().uuid() });
@@ -603,6 +604,19 @@ const expansionRoutes: FastifyPluginAsync = async (fastify) => {
     if (error || !data) {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to import meeting");
     }
+
+      const meetingIngestText = [parsed.data.subject, parsed.data.notes ?? "", parsed.data.rawTranscript ?? ""]
+        .filter((value) => value.length > 0)
+        .join("\n\n");
+
+      if (meetingIngestText.length > 0) {
+        await getIngestQueue().add("meeting_ingest", {
+          orgId: data.org_id as string,
+          sourceType: "meeting_ingestion",
+          sourceId: data.id as string,
+          text: meetingIngestText
+        });
+      }
 
     await createSecurityAudit(fastify, request as never, "meeting_imported", "meeting_ingestion", data.id as string, { source: parsed.data.source });
     return reply.status(201).send(data);
