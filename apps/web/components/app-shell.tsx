@@ -9,10 +9,9 @@ type AppShellProps = {
   children: ReactNode;
   layout?: "split" | "stack";
   role?: Role;
-  showNav?: boolean;
 };
 
-export function AppShell({ eyebrow, title, description, children, layout = "split", role, showNav = true }: AppShellProps) {
+export function AppShell({ eyebrow, title, description, children, layout = "split", role }: AppShellProps) {
   const navLinks = role ? [
     { href: `/dashboard/${role}`, label: "Overview" },
     { href: "/dashboard/task-board", label: "Task board" },
@@ -23,15 +22,6 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
   if (layout === "stack") {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-4 py-8 sm:px-6 lg:px-10">
-        {showNav && navLinks.length > 0 && (
-          <nav className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2">
-            {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink)]">
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        )}
         <section className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--muted)] sm:text-sm sm:tracking-[0.32em]">{eyebrow}</p>
           <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[var(--ink)] sm:text-4xl lg:text-6xl">{title}</h1>
@@ -46,15 +36,7 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col justify-center px-4 py-10 sm:px-6 lg:px-10 lg:py-12">
-      {showNav && navLinks.length > 0 ? (
-        <nav className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2">
-          {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="rounded-xl border border-[var(--border)] bg-[#0f1115] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--ink)]">
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-      ) : null}
+      {/* AppShell no longer renders a small nav; top-level Dashboard Topbar owns global navigation */}
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <section className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--muted)] sm:text-sm sm:tracking-[0.32em]">{eyebrow}</p>

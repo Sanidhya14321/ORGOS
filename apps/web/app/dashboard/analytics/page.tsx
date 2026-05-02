@@ -46,7 +46,7 @@ export default function AnalyticsPage() {
 
   if (overviewQuery.isLoading) {
     return (
-      <AppShell eyebrow="Analytics" title="Operational analytics" description="Gathering latest snapshot..." role={meQuery.data?.role} showNav={false}>
+      <AppShell eyebrow="Analytics" title="Operational analytics" description="Gathering latest snapshot..." role={meQuery.data?.role}>
         <div className="grid gap-4 md:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-32 w-full rounded-2xl bg-bg-subtle" />
@@ -62,7 +62,6 @@ export default function AnalyticsPage() {
       title="Operational Analytics" 
       description="Track throughput, completion, and effort variance across your digital estate." 
       role={meQuery.data?.role}
-      showNav={false}
     >
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* Action Header */}
