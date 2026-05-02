@@ -50,6 +50,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         applicants={applicants}
         pendingMembers={pendingQuery.data ?? []}
         agentRunning={socket.connected}
+        role={meQuery.data?.role}
       />
       <main className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-6 md:pr-6">
         {isLoading ? (

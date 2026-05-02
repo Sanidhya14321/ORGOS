@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { CardNav, type CardNavItem } from "@/components/ui/card-nav";
 import { NotificationsDrawer } from "@/components/shell/notifications-drawer";
 import { CommandPalette } from "@/components/shell/command-palette";
-import type { Goal, Task, User, PendingMember, Applicant } from "@/lib/models";
+import type { Goal, Task, User, PendingMember, Applicant, Role } from "@/lib/models";
 
-const CARD_NAV_ITEMS: CardNavItem[] = [
+const BASE_CARD_NAV_ITEMS: CardNavItem[] = [
   {
     label: "Operations",
     links: [
@@ -37,6 +37,32 @@ const CARD_NAV_ITEMS: CardNavItem[] = [
   }
 ];
 
+function getCardNavItemsForRole(role?: Role): CardNavItem[] {
+  const items = JSON.parse(JSON.stringify(BASE_CARD_NAV_ITEMS)) as CardNavItem[];
+  if (!role) return items;
+
+  // Add role-specific Overview link at the front of Operations
+  items[0].links.unshift({ label: "Overview", href: `/dashboard/${role}` });
+
+  // Add Org Tree for manager-like roles (ensure no duplicate)
+  if (role === "ceo" || role === "cfo" || role === "manager") {
+    const peopleLinks = items[1].links.map((l) => l.href);
+    if (!peopleLinks.includes("/dashboard/org-tree")) {
+      items[1].links.splice(1, 0, { label: "Org Tree", href: "/dashboard/org-tree" });
+    }
+  }
+
+  // CEO control link
+  if (role === "ceo") {
+    const opsLinks = items[0].links.map((l) => l.href);
+    if (!opsLinks.includes("/dashboard/ceo")) {
+      items[0].links.push({ label: "CEO control", href: "/dashboard/ceo" });
+    }
+  }
+
+  return items;
+}
+
 export function Topbar({
   pageTitle,
   tasks,
@@ -44,7 +70,8 @@ export function Topbar({
   people,
   applicants,
   pendingMembers,
-  agentRunning
+  agentRunning,
+  role
 }: {
   pageTitle: string;
   tasks: Task[];
@@ -53,12 +80,15 @@ export function Topbar({
   applicants: Applicant[];
   pendingMembers: PendingMember[];
   agentRunning: boolean;
+  role?: Role;
 }) {
+  const items = getCardNavItemsForRole(role);
+
   return (
     <header className="sticky top-4 z-30 flex justify-center px-3 md:px-6">
       <CardNav
         className="w-full max-w-[1120px]"
-        items={CARD_NAV_ITEMS}
+        items={items}
         pageTitle={pageTitle}
         isAuthenticated
         actions={
