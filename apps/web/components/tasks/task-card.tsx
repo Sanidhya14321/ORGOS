@@ -17,25 +17,25 @@ export function TaskCard({ task, onOpen }: { task: Task; onOpen: (task: Task) =>
       whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.1 }}
       onClick={() => onOpen(task)}
-      className={cn("w-full rounded-md border border-border bg-bg-surface p-4 text-left border-l-4", priorityTone)}
+      className={cn("dashboard-dense-row w-full border border-border bg-[var(--surface)] p-4 text-left border-l-4 shadow-sm transition-all", priorityTone)}
     >
-      <p className="text-xs text-text-secondary">Goal {task.goal_id.slice(0, 8)}</p>
-      <p className="mt-1 text-sm font-semibold text-text-primary">{task.title}</p>
+      <p className="dashboard-label">Goal {task.goal_id.slice(0, 8)}</p>
+      <p className="mt-2 text-sm font-semibold tracking-tight text-[var(--ink)]">{task.title}</p>
 
       <div className="mt-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Avatar className="h-6 w-6"><AvatarFallback>{(task.assigned_role ?? "u").slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
-          <Badge className="bg-bg-subtle text-text-secondary">{task.status}</Badge>
+          <Avatar className="h-6 w-6 border border-[var(--border)] bg-[var(--surface-2)]"><AvatarFallback className="bg-[var(--bg-subtle)] text-[10px] text-[var(--accent)]">{(task.assigned_role ?? "u").slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
+          <Badge className="border border-[var(--border)] bg-[var(--bg-subtle)] text-[10px] text-[var(--muted)]">{task.status}</Badge>
           {task.blocked_by_count && task.blocked_by_count > 0 ? (
-            <span className="inline-flex items-center gap-1 text-xs text-warning"><Lock className="h-3 w-3" />blocked</span>
+            <span className="inline-flex items-center gap-1 text-xs text-[var(--warning)]"><Lock className="h-3 w-3" />blocked</span>
           ) : null}
         </div>
-        <span className={cn("text-xs", overdue ? "text-danger" : "text-text-secondary")}>{task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "No deadline"}</span>
+        <span className={cn("text-xs font-medium", overdue ? "text-[var(--danger)]" : "text-[var(--muted)]")}>{task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "No deadline"}</span>
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-xs text-text-secondary">
+      <div className="mt-3 flex items-center justify-between text-xs text-[var(--muted)]">
         <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" /> comments</span>
-        <span className={task.sla_status === "breached" ? "text-danger" : task.sla_status === "at_risk" ? "text-warning" : "text-success"}>SLA {task.sla_status ?? "on_track"}</span>
+        <span className={task.sla_status === "breached" ? "text-[var(--danger)]" : task.sla_status === "at_risk" ? "text-[var(--warning)]" : "text-[var(--success)]"}>SLA {task.sla_status ?? "on_track"}</span>
       </div>
     </motion.button>
   );

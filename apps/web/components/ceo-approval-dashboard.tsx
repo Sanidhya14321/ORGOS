@@ -1203,9 +1203,9 @@ export function CeoApprovalDashboard() {
                 Open org tree
               </Link>
             </div>
-            <div className="mt-6 rounded-3xl bg-[#121826] p-5 text-white">
-              <p className="text-sm uppercase tracking-[0.25em] text-white/60">Tip</p>
-              <p className="mt-3 text-sm leading-6 text-white/80">
+            <div className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-5 text-[var(--ink)]">
+              <p className="text-sm uppercase tracking-[0.25em] text-[var(--muted)]">Tip</p>
+              <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
                 Employee level can be auto-assigned during profile completion from your level map (L1 manager, L2 worker).
               </p>
             </div>
@@ -1234,7 +1234,7 @@ export function CeoApprovalDashboard() {
                     <th className="px-3 py-2">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border)] bg-[#0f1115] text-[var(--ink)]">
+                <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)] text-[var(--ink)]">
                   {accounts.map((account) => (
                     <tr key={account.id}>
                       <td className="px-3 py-2">
@@ -1292,7 +1292,7 @@ export function CeoApprovalDashboard() {
             <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
               Existing passwords are not readable by design. Use temporary password resets for access recovery and share credentials through secure channels only.
             </p>
-            <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[#0f1115] p-4">
+            <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">Best practice</p>
               <p className="mt-2 text-sm text-[var(--ink)]">
                 Ask each member to rotate the temporary password after first login.
@@ -1396,9 +1396,9 @@ export function CeoApprovalDashboard() {
               ))}
             </div>
 
-            <div className="mt-6 rounded-3xl bg-[#121826] p-5 text-white">
-              <p className="text-sm uppercase tracking-[0.25em] text-white/60">Executive note</p>
-              <p className="mt-3 text-sm leading-6 text-white/80">
+            <div className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-5 text-[var(--ink)]">
+              <p className="text-sm uppercase tracking-[0.25em] text-[var(--muted)]">Executive note</p>
+              <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
                 Keep Approvals for people decisions and use Org setup for position and organization controls.
               </p>
             </div>

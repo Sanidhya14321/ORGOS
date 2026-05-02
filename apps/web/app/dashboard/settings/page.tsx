@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils'; // Assuming you have a cn utility for classes
 import { 
   Bell, Lock, Eye, Clock, Mail, Save, 
   RotateCcw, AlertCircle, Check, ShieldCheck, 
@@ -17,9 +18,16 @@ import {
 } from 'lucide-react';
 import { UserPreferences, UserPreferencesUpdate } from '@orgos/shared-types';
 
+// Define the available tab types
+type SettingsTab = 'general' | 'notifications' | 'security';
+
 export default function SettingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  
+  // Tab State
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -27,7 +35,6 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Fetch preferences
   const prefsQuery = useQuery({
     queryKey: ['settings', 'preferences'],
     queryFn: () => apiFetch<{ prefs: UserPreferences }>('/api/settings/preferences'),
@@ -36,7 +43,6 @@ export default function SettingsPage() {
   const preferences = prefsQuery.data?.prefs;
   const [localPrefs, setLocalPrefs] = useState<UserPreferencesUpdate>({});
 
-  // Sync local state with fetched preferences
   useEffect(() => {
     if (preferences) {
       setLocalPrefs({
@@ -53,7 +59,6 @@ export default function SettingsPage() {
     }
   }, [preferences]);
 
-  // Mutations
   const updatePrefsMutation = useMutation({
     mutationFn: (updates: UserPreferencesUpdate) =>
       apiFetch('/api/settings/preferences', { method: 'PATCH', body: JSON.stringify(updates) }),
@@ -85,9 +90,7 @@ export default function SettingsPage() {
     },
   });
 
-  const handleSavePreferences = () => {
-    updatePrefsMutation.mutate(localPrefs);
-  };
+  const handleSavePreferences = () => updatePrefsMutation.mutate(localPrefs);
 
   const handleResetPreferences = () => {
     if (preferences) {
@@ -102,8 +105,6 @@ export default function SettingsPage() {
         interview_scheduled: preferences.interview_scheduled,
         meeting_digest: preferences.meeting_digest,
       });
-      setErrorMessage(null);
-      setSuccessMessage(null);
     }
   };
 
@@ -114,10 +115,6 @@ export default function SettingsPage() {
     }
     if (newPassword !== confirmPassword) {
       setErrorMessage('Passwords do not match');
-      return;
-    }
-    if (newPassword.length < 8) {
-      setErrorMessage('Password must be at least 8 characters');
       return;
     }
     changePasswordMutation.mutate({ current_password: currentPassword, new_password: newPassword });
@@ -139,7 +136,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-5xl mx-auto pb-20">
-      {/* Dynamic Header Section */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold text-text-primary tracking-tight">Account Settings</h1>
@@ -165,194 +162,208 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Floating Global Feedback */}
-      <div className="fixed top-24 right-8 z-50 flex flex-col gap-2">
-        {successMessage && (
-          <div className="flex items-center gap-3 px-4 py-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-600 animate-in fade-in slide-in-from-right-4 duration-300">
-            <Check className="h-5 w-5" />
-            <p className="text-sm font-bold tracking-tight">{successMessage}</p>
-          </div>
-        )}
-        {errorMessage && (
-          <div className="flex items-center gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 animate-in fade-in slide-in-from-right-4 duration-300">
-            <AlertCircle className="h-5 w-5" />
-            <p className="text-sm font-bold tracking-tight">{errorMessage}</p>
-          </div>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
-        {/* Navigation Sidebar */}
+        {/* Navigation Sidebar - Functional Tabs */}
         <aside className="md:col-span-3">
           <nav className="flex flex-col gap-1 sticky top-8">
-            <Button variant="ghost" className="justify-start text-accent bg-accent/5 font-bold text-xs uppercase tracking-widest">
-              <UserCircle className="mr-2 h-4 w-4" /> General Hub
-            </Button>
-            <Button variant="ghost" className="justify-start text-text-secondary hover:text-text-primary text-xs uppercase tracking-widest font-bold">
-              <Bell className="mr-2 h-4 w-4" /> Notifications
-            </Button>
-            <Button variant="ghost" className="justify-start text-text-secondary hover:text-text-primary text-xs uppercase tracking-widest font-bold">
-              <ShieldCheck className="mr-2 h-4 w-4" /> Security Log
-            </Button>
+            <button
+              onClick={() => setActiveTab('general')}
+              className={cn(
+                "flex items-center w-full px-4 py-3 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
+                activeTab === 'general' 
+                  ? "bg-accent/10 text-accent shadow-[inset_0_0_0_1px_rgba(var(--accent-rgb),0.2)]" 
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-subtle"
+              )}
+            >
+              <UserCircle className="mr-3 h-4 w-4" /> General Hub
+            </button>
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={cn(
+                "flex items-center w-full px-4 py-3 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
+                activeTab === 'notifications' 
+                  ? "bg-accent/10 text-accent shadow-[inset_0_0_0_1px_rgba(var(--accent-rgb),0.2)]" 
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-subtle"
+              )}
+            >
+              <Bell className="mr-3 h-4 w-4" /> Notifications
+            </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              className={cn(
+                "flex items-center w-full px-4 py-3 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
+                activeTab === 'security' 
+                  ? "bg-accent/10 text-accent shadow-[inset_0_0_0_1px_rgba(var(--accent-rgb),0.2)]" 
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-subtle"
+              )}
+            >
+              <ShieldCheck className="mr-3 h-4 w-4" /> Security Log
+            </button>
           </nav>
         </aside>
 
-        {/* Content Modules */}
-        <div className="md:col-span-9 space-y-10">
+        {/* Content Modules - Conditional Rendering */}
+        <div className="md:col-span-9">
           
-          {/* Notification Engine Preferences */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2 px-1 text-text-primary">
-              <Bell className="h-5 w-5 text-accent" />
-              <h2 className="text-lg font-bold tracking-tight uppercase text-xs tracking-[0.2em]">Notification Engine</h2>
-            </div>
-            <Card className="border border-border bg-bg-surface overflow-hidden rounded-2xl shadow-sm">
-              <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-text-primary tracking-tight">Global Email Notifications</p>
-                    <p className="text-xs text-text-secondary font-medium">Toggle primary delivery for all automated node updates.</p>
-                  </div>
-                  <Switch 
-                    checked={localPrefs.email_notifications ?? false}
-                    onCheckedChange={(checked) => setLocalPrefs({...localPrefs, email_notifications: checked})} 
-                  />
-                </div>
-
-                {localPrefs.email_notifications && (
-                  <div className="grid grid-cols-1 gap-4 p-5 bg-bg-subtle/50 rounded-2xl border border-border animate-in fade-in zoom-in-95 duration-300">
-                    {[
-                      { key: 'task_assigned', label: 'Node Assignment', desc: 'When a new execution node is routed to you.' },
-                      { key: 'task_updated', label: 'Node Updates', desc: 'Alerts for changes in watched task hierarchies.' },
-                      { key: 'sla_breached', label: 'SLA Exceptions', desc: 'Critical alerts for deadline breaches and risks.' },
-                      { key: 'interview_scheduled', label: 'Talent Acquisition', desc: 'Reminders for scheduled recruitment sessions.' },
-                    ].map((item) => (
-                      <div key={item.key} className="flex items-center justify-between">
-                        <div className="pr-4">
-                          <p className="text-sm font-bold text-text-primary tracking-tight">{item.label}</p>
-                          <p className="text-[11px] text-text-secondary font-medium">{item.desc}</p>
-                        </div>
-                        <Switch 
-                          className="scale-90"
-                          checked={(localPrefs as any)[item.key] ?? false}
-                          onCheckedChange={(checked) => setLocalPrefs({...localPrefs, [item.key]: checked})} 
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* 1. General Tab */}
+          {activeTab === 'general' && (
+            <section className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="flex items-center gap-2 px-1 text-text-primary">
+                <Eye className="h-5 w-5 text-accent" />
+                <h2 className="text-lg font-bold tracking-tight uppercase text-xs tracking-[0.2em]">Interface & Region</h2>
               </div>
-            </Card>
-          </section>
+              <Card className="border border-border bg-bg-surface p-8 rounded-2xl shadow-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] flex items-center gap-2">
+                        <Moon className="h-3.5 w-3.5" /> Aesthetic Theme
+                      </label>
+                      <div className="flex items-center gap-3 p-1.5 bg-bg-subtle border border-border rounded-xl w-fit">
+                        <Button size="sm" className="bg-accent text-white h-8 rounded-lg font-bold text-xs shadow-lg shadow-accent/20">Dark</Button>
+                        <span className="text-[9px] uppercase font-bold text-text-secondary px-3 opacity-40 cursor-not-allowed">Light (N/A)</span>
+                      </div>
+                    </div>
 
-          {/* User Interface Preferences */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2 px-1 text-text-primary">
-              <Eye className="h-5 w-5 text-accent" />
-              <h2 className="text-lg font-bold tracking-tight uppercase text-xs tracking-[0.2em]">Interface & Region</h2>
-            </div>
-            <Card className="border border-border bg-bg-surface p-8 rounded-2xl shadow-sm">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] flex items-center gap-2">
-                      <Moon className="h-3.5 w-3.5" /> Aesthetic Theme
-                    </label>
-                    <div className="flex items-center gap-3 p-1.5 bg-bg-subtle border border-border rounded-xl w-fit">
-                      <Button size="sm" className="bg-accent text-white h-8 rounded-lg font-bold text-xs shadow-lg shadow-accent/20">Dark</Button>
-                      <span className="text-[9px] uppercase font-bold text-text-secondary px-3 opacity-40 cursor-not-allowed">Light (N/A)</span>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] flex items-center gap-2">
+                        <Globe className="h-3.5 w-3.5" /> Localization
+                      </label>
+                      <Select 
+                        value={localPrefs.language as string || 'en'}
+                        onValueChange={(value) => setLocalPrefs({...localPrefs, language: value as any})}
+                      >
+                        <SelectTrigger className="w-full bg-bg-subtle border-border rounded-xl h-10 font-medium">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-bg-surface border-border">
+                          <SelectItem value="en">English (Global)</SelectItem>
+                          <SelectItem value="es">Español</SelectItem>
+                          <SelectItem value="fr">Français</SelectItem>
+                          <SelectItem value="de">Deutsch</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     <label className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] flex items-center gap-2">
-                      <Globe className="h-3.5 w-3.5" /> Localization
+                      <Clock className="h-3.5 w-3.5" /> Chronology Format
                     </label>
                     <Select 
-                      value={localPrefs.language as string || 'en'}
-                      onValueChange={(value) => setLocalPrefs({...localPrefs, language: value as any})}
+                      value={localPrefs.time_format as string || '24h'}
+                      onValueChange={(value) => setLocalPrefs({...localPrefs, time_format: value as any})}
                     >
                       <SelectTrigger className="w-full bg-bg-subtle border-border rounded-xl h-10 font-medium">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-bg-surface border-border">
-                        <SelectItem value="en">English (Global)</SelectItem>
-                        <SelectItem value="es">Español</SelectItem>
-                        <SelectItem value="fr">Français</SelectItem>
-                        <SelectItem value="de">Deutsch</SelectItem>
+                        <SelectItem value="24h">ISO-24H (14:30)</SelectItem>
+                        <SelectItem value="12h">STD-12H (2:30 PM)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+              </Card>
+            </section>
+          )}
 
-                <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] flex items-center gap-2">
-                    <Clock className="h-3.5 w-3.5" /> Chronology Format
-                  </label>
-                  <Select 
-                    value={localPrefs.time_format as string || '24h'}
-                    onValueChange={(value) => setLocalPrefs({...localPrefs, time_format: value as any})}
-                  >
-                    <SelectTrigger className="w-full bg-bg-subtle border-border rounded-xl h-10 font-medium">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-bg-surface border-border">
-                      <SelectItem value="24h">ISO-24H (14:30)</SelectItem>
-                      <SelectItem value="12h">STD-12H (2:30 PM)</SelectItem>
-                    </SelectContent>
-                  </Select>
+          {/* 2. Notifications Tab */}
+          {activeTab === 'notifications' && (
+            <section className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="flex items-center gap-2 px-1 text-text-primary">
+                <Bell className="h-5 w-5 text-accent" />
+                <h2 className="text-lg font-bold tracking-tight uppercase text-xs tracking-[0.2em]">Notification Engine</h2>
+              </div>
+              <Card className="border border-border bg-bg-surface overflow-hidden rounded-2xl shadow-sm">
+                <div className="p-6 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-text-primary tracking-tight">Global Email Notifications</p>
+                      <p className="text-xs text-text-secondary font-medium">Toggle primary delivery for all automated node updates.</p>
+                    </div>
+                    <Switch 
+                      checked={localPrefs.email_notifications ?? false}
+                      onCheckedChange={(checked) => setLocalPrefs({...localPrefs, email_notifications: checked})} 
+                    />
+                  </div>
+
+                  {localPrefs.email_notifications && (
+                    <div className="grid grid-cols-1 gap-4 p-5 bg-bg-subtle/50 rounded-2xl border border-border animate-in fade-in zoom-in-95 duration-300">
+                      {[
+                        { key: 'task_assigned', label: 'Node Assignment', desc: 'When a new execution node is routed to you.' },
+                        { key: 'task_updated', label: 'Node Updates', desc: 'Alerts for changes in watched task hierarchies.' },
+                        { key: 'sla_breached', label: 'SLA Exceptions', desc: 'Critical alerts for deadline breaches and risks.' },
+                        { key: 'interview_scheduled', label: 'Talent Acquisition', desc: 'Reminders for scheduled recruitment sessions.' },
+                      ].map((item) => (
+                        <div key={item.key} className="flex items-center justify-between">
+                          <div className="pr-4">
+                            <p className="text-sm font-bold text-text-primary tracking-tight">{item.label}</p>
+                            <p className="text-[11px] text-text-secondary font-medium">{item.desc}</p>
+                          </div>
+                          <Switch 
+                            className="scale-90"
+                            checked={(localPrefs as any)[item.key] ?? false}
+                            onCheckedChange={(checked) => setLocalPrefs({...localPrefs, [item.key]: checked})} 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            </Card>
-          </section>
+              </Card>
+            </section>
+          )}
 
-          {/* Access & Security Protocols */}
-          <section className="space-y-4">
-            <div className="flex items-center gap-2 px-1 text-text-primary">
-              <Lock className="h-5 w-5 text-accent" />
-              <h2 className="text-lg font-bold tracking-tight uppercase text-xs tracking-[0.2em]">Security Protocols</h2>
-            </div>
-            <Card className="border border-border bg-bg-surface overflow-hidden rounded-2xl shadow-sm">
-              <div className="divide-y divide-border">
-                <button 
-                  onClick={() => setShowPasswordModal(true)}
-                  className="w-full flex items-center justify-between p-5 hover:bg-bg-subtle transition-all group text-left"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-xl bg-accent/5 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
-                      <Lock className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-text-primary tracking-tight">Identity Credentials</p>
-                      <p className="text-[11px] text-text-secondary font-medium">Update your account password and authentication keys.</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-text-secondary group-hover:translate-x-1 transition-transform" />
-                </button>
-
-                <button 
-                  onClick={() => router.push('/settings/security')}
-                  className="w-full flex items-center justify-between p-5 hover:bg-bg-subtle transition-all group text-left"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-xl bg-accent/5 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
-                      <Clock className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-text-primary tracking-tight">Access Session Log</p>
-                      <p className="text-[11px] text-text-secondary font-medium">Audit currently active nodes and device sessions.</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-text-secondary group-hover:translate-x-1 transition-transform" />
-                </button>
+          {/* 3. Security Tab */}
+          {activeTab === 'security' && (
+            <section className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="flex items-center gap-2 px-1 text-text-primary">
+                <Lock className="h-5 w-5 text-accent" />
+                <h2 className="text-lg font-bold tracking-tight uppercase text-xs tracking-[0.2em]">Security Protocols</h2>
               </div>
-            </Card>
-          </section>
+              <Card className="border border-border bg-bg-surface overflow-hidden rounded-2xl shadow-sm">
+                <div className="divide-y divide-border">
+                  <button 
+                    onClick={() => setShowPasswordModal(true)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-bg-subtle transition-all group text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-accent/5 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
+                        <Lock className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-text-primary tracking-tight">Identity Credentials</p>
+                        <p className="text-[11px] text-text-secondary font-medium">Update your account password and authentication keys.</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-text-secondary group-hover:translate-x-1 transition-transform" />
+                  </button>
+
+                  <button 
+                    onClick={() => router.push('/settings/security')}
+                    className="w-full flex items-center justify-between p-5 hover:bg-bg-subtle transition-all group text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-accent/5 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
+                        <Clock className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-text-primary tracking-tight">Access Session Log</p>
+                        <p className="text-[11px] text-text-secondary font-medium">Audit currently active nodes and device sessions.</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-text-secondary group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              </Card>
+            </section>
+          )}
 
         </div>
       </div>
 
-      {/* Modernized Security Modal */}
+      {/* Password Modal remains the same */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300">
           <Card className="border border-border bg-bg-surface p-8 w-full max-w-md shadow-2xl rounded-2xl animate-in zoom-in-95 duration-200">

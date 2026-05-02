@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Manrope, IBM_Plex_Mono } from "next/font/google";
 import { AppProviders } from "@/components/providers/app-providers";
 import { ServiceWorkerRegistration } from "../components/pwa/service-worker-registration";
 import "./globals.css";
@@ -9,13 +9,13 @@ export const metadata: Metadata = {
   description: "AI Organizational Operating System"
 };
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-sans" });
+const ibmPlexMono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-mono", weight: ["400", "500", "600"] });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetBrainsMono.variable}`}>
-      <body className="min-h-screen bg-bg-base text-text-primary antialiased">
+    <html lang="en" className={`${manrope.variable} ${ibmPlexMono.variable}`}>
+      <body className="min-h-screen bg-bg-base text-text-primary antialiased selection:bg-accent/20 selection:text-text-primary">
         <AppProviders>{children}</AppProviders>
         <ServiceWorkerRegistration />
       </body>

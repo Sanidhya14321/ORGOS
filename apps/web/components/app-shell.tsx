@@ -1,17 +1,20 @@
+"use client";
+
 import type { ReactNode } from "react";
-import Link from "next/link";
 import type { Role } from "@/lib/models";
+import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   eyebrow: string;
   title: string;
   description: string;
   children: ReactNode;
-  layout?: "split" | "stack";
+  layout?: "split" | "stack"; // Logic preserved, but both now follow vertical flow
   role?: Role;
 };
 
 export function AppShell({ eyebrow, title, description, children, layout = "split", role }: AppShellProps) {
+  // Logic for navLinks remains exactly the same for internal use/future-proofing
   const navLinks = role ? [
     { href: `/dashboard/${role}`, label: "Overview" },
     { href: "/dashboard/task-board", label: "Task board" },
@@ -19,34 +22,41 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
     ...(role === "ceo" ? [{ href: "/dashboard/ceo", label: "CEO control" }] : [])
   ] : [];
 
-  if (layout === "stack") {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-4 py-8 sm:px-6 lg:px-10">
-        <section className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--muted)] sm:text-sm sm:tracking-[0.32em]">{eyebrow}</p>
-          <h1 className="mt-3 break-words font-serif text-3xl leading-tight text-[var(--ink)] sm:text-4xl lg:text-6xl">{title}</h1>
-          <p className="mt-4 max-w-4xl break-words text-base leading-7 text-[var(--muted)]">{description}</p>
-        </section>
-        <section className="mt-6 min-w-0 rounded-[28px] border border-[var(--border)] bg-[var(--surface)]/85 p-6 shadow-[0_22px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-          {children}
-        </section>
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col justify-center px-4 py-10 sm:px-6 lg:px-10 lg:py-12">
-      {/* AppShell no longer renders a small nav; top-level Dashboard Topbar owns global navigation */}
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <section className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--muted)] sm:text-sm sm:tracking-[0.32em]">{eyebrow}</p>
-          <h1 className="mt-4 break-words font-serif text-3xl leading-tight text-[var(--ink)] sm:text-5xl lg:text-7xl">{title}</h1>
-          <p className="mt-5 max-w-2xl break-words text-base leading-7 text-[var(--muted)] sm:text-lg sm:leading-8">{description}</p>
-        </section>
-        <section className="min-w-0 overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--surface)]/90 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.3)] backdrop-blur-xl sm:p-6">
+    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-12 lg:py-16">
+      {/* 1. Header Section: High-Professional Typography Stacking */}
+      <header className="mb-10 space-y-4 max-w-4xl animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="space-y-1">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-text-secondary opacity-70">
+            {eyebrow}
+          </p>
+          <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
+            {title}
+          </h1>
+        </div>
+        
+        <p className="text-base leading-relaxed text-text-secondary md:text-lg opacity-80">
+          {description}
+        </p>
+
+        {/* Subtle decorative line to separate context from execution */}
+        <div className="h-px w-24 bg-accent/30 mt-8" />
+      </header>
+
+      {/* 2. Content Section: Full-Width Tactical Card */}
+      <section 
+        className={cn(
+          "relative min-w-0 overflow-hidden rounded-[32px] border border-border bg-bg-surface/50 shadow-2xl backdrop-blur-2xl animate-in fade-in slide-in-from-bottom-6 duration-1000",
+          layout === "stack" ? "p-6 lg:p-8" : "p-8 lg:p-10"
+        )}
+      >
+        {/* Subtle inner ambient glow */}
+        <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 bg-accent/5 blur-[120px]" />
+        
+        <div className="relative z-10">
           {children}
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }

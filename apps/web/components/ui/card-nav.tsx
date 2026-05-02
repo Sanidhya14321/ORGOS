@@ -43,7 +43,6 @@ function iconForLink(label: string) {
   if (label === "Task Board") return FolderKanban;
   if (label === "Projects") return FolderKanban;
   if (label === "Approvals") return UserRound;
-  if (label === "Focus Mode") return Sparkles;
   if (label === "Team Directory") return Users;
   if (label === "Org Tree") return Users;
   if (label === "Recruitment") return UserRound;
@@ -150,7 +149,7 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
     <nav
       ref={navRef}
       className={cn(
-        "w-full overflow-hidden rounded-xl border border-border/40 bg-bg-base shadow-lg",
+        "w-full overflow-hidden sticky rounded-xl border border-border/40 bg-bg-base shadow-lg",
         className
       )}
       aria-label="Primary navigation"

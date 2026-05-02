@@ -174,27 +174,27 @@ export function OrgTree() {
     setOffset({ x: 0, y: 0 });
   };
 
-  if (treeQuery.isLoading) return <Skeleton className="h-[600px] w-full rounded-xl" />;
+  if (treeQuery.isLoading) return <Skeleton className="h-[600px] w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)]" />;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] gap-4 select-none">
+    <div className="flex h-[calc(100vh-120px)] flex-col gap-4 select-none rounded-[32px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_24px_80px_rgba(23,21,19,0.08)]">
       {/* Top Toolbar */}
-      <div className="flex items-center justify-between bg-background/60 backdrop-blur-md p-2 rounded-xl border border-border shadow-sm">
+      <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[rgba(252,251,248,0.82)] p-2 shadow-sm backdrop-blur-md">
         <div className="flex items-center gap-3 flex-1">
           <div className="relative max-w-sm w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search members..."
-              className="pl-9 bg-secondary/50 border-none focus-visible:ring-1"
+              className="pl-9 border-[var(--border)] bg-[var(--bg-subtle)]/60 focus-visible:ring-[var(--accent)]"
             />
           </div>
-          <div className="h-6 w-[1px] bg-border mx-2" />
-          <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-200">On Track</Badge>
-            <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-200">At Risk</Badge>
-            <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-200">Breached</Badge>
+          <div className="mx-2 h-6 w-px bg-[var(--border)]" />
+          <div className="flex items-center gap-1 text-xs font-medium text-[var(--muted)]">
+            <Badge variant="outline" className="border-[var(--success)]/20 bg-[var(--success-subtle)] text-[var(--success)]">On Track</Badge>
+            <Badge variant="outline" className="border-[var(--warning)]/20 bg-[var(--warning-subtle)] text-[var(--warning)]">At Risk</Badge>
+            <Badge variant="outline" className="border-[var(--danger)]/20 bg-[var(--danger-subtle)] text-[var(--danger)]">Breached</Badge>
           </div>
         </div>
         
@@ -208,7 +208,7 @@ export function OrgTree() {
         </div>
       </div>
 
-      <div className="relative flex-1 overflow-hidden bg-background rounded-2xl border border-border shadow-inner">
+      <div className="relative flex-1 overflow-hidden rounded-[28px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.78),rgba(247,242,234,0.92))] shadow-inner">
         {/* SVG Canvas */}
         <svg
           ref={svgRef}
@@ -268,26 +268,26 @@ export function OrgTree() {
                   <foreignObject width="160" height="90">
                     <div className={`
                         h-full w-full p-3 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-between
-                        ${isSelected ? 'border-primary bg-white ring-4 ring-primary/10' : 'border-border bg-white dark:bg-slate-900'}
+                        ${isSelected ? 'border-[var(--accent)] bg-[var(--surface)] ring-4 ring-[var(--accent)]/10' : 'border-[var(--border)] bg-[var(--surface)]'}
                     `}>
                         <div className="flex items-start gap-2">
                             <div className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm
-                                ${node.sla_status === 'breached' ? 'bg-red-500' : node.sla_status === 'at_risk' ? 'bg-yellow-500' : 'bg-green-500'}`}>
+                            ${node.sla_status === 'breached' ? 'bg-[var(--danger)]' : node.sla_status === 'at_risk' ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`}>
                                 {node.full_name.split(' ').map(n => n[0]).join('')}
                             </div>
                             <div className="overflow-hidden">
-                                <p className="text-[11px] font-bold truncate text-slate-900 dark:text-slate-100">{node.full_name}</p>
-                                <p className="text-[9px] text-muted-foreground truncate uppercase tracking-tighter">{node.position_title}</p>
+                            <p className="truncate text-[11px] font-bold text-[var(--ink)]">{node.full_name}</p>
+                            <p className="truncate text-[9px] uppercase tracking-tighter text-[var(--muted)]">{node.position_title}</p>
                             </div>
                         </div>
 
                         <div className="space-y-1">
                             <div className="flex justify-between items-center text-[9px]">
-                                <span className="text-muted-foreground">Workload</span>
+                            <span className="text-[var(--muted)]">Workload</span>
                                 <span className="font-medium">{Math.round((node.current_load/node.max_load)*100)}%</span>
                             </div>
-                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-500 ${node.sla_status === 'breached' ? 'bg-red-500' : 'bg-primary'}`} 
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bg-subtle)]">
+                            <div className={`h-full rounded-full transition-all duration-500 ${node.sla_status === 'breached' ? 'bg-[var(--danger)]' : 'bg-[var(--accent)]'}`} 
                                      style={{ width: `${(node.current_load/node.max_load)*100}%` }} />
                             </div>
                         </div>
@@ -301,15 +301,15 @@ export function OrgTree() {
 
         {/* Floating Detail Panel */}
         {selectedNode && (
-          <div className="absolute top-4 right-4 bottom-4 w-80 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-border shadow-2xl rounded-2xl flex flex-col animate-in slide-in-from-right duration-300">
-            <div className="p-5 border-b border-border flex items-center justify-between">
+            <div className="absolute top-4 right-4 bottom-4 w-80 rounded-3xl border border-[var(--border)] bg-[rgba(252,251,248,0.9)] backdrop-blur-xl shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between border-b border-[var(--border)] p-5">
                 <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-subtle)] text-[var(--accent)]">
                         <Users className="h-5 w-5" />
                     </div>
                     <div>
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 line-clamp-1">{selectedNode.full_name}</h3>
-                        <p className="text-xs text-muted-foreground">ID: {selectedNode.id.slice(0,8)}</p>
+                  <h3 className="line-clamp-1 font-bold text-[var(--ink)]">{selectedNode.full_name}</h3>
+                  <p className="text-xs text-[var(--muted)]">ID: {selectedNode.id.slice(0,8)}</p>
                     </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setSelectedNodeId(null)} className="rounded-full">
@@ -320,26 +320,26 @@ export function OrgTree() {
             <div className="flex-1 overflow-y-auto p-5 space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-primary/80">Department</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Department</p>
                         <p className="text-sm font-medium">{selectedNode.department || "N/A"}</p>
                     </div>
                     <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-primary/80">Status</p>
-                        <Badge variant="outline" className="capitalize">{selectedNode.sla_status.replace('_', ' ')}</Badge>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Status</p>
+                  <Badge variant="outline" className="capitalize border-[var(--border)] bg-[var(--bg-subtle)]">{selectedNode.sla_status.replace('_', ' ')}</Badge>
                     </div>
                 </div>
 
                 <div className="space-y-3">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Active Contacts</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Active Contacts</p>
                     <div className="space-y-2">
                         {selectedNode.email && (
-                            <div className="flex items-center gap-3 p-2 rounded-lg bg-secondary/30 text-sm hover:bg-secondary/50 cursor-pointer transition-colors">
-                                <Mail className="h-4 w-4 text-primary" />
+                    <div className="flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)]/50 p-2 text-sm transition-colors hover:bg-[var(--bg-subtle)]">
+                      <Mail className="h-4 w-4 text-[var(--accent)]" />
                                 <span className="truncate">{selectedNode.email}</span>
                             </div>
                         )}
-                        <div className="flex items-center gap-3 p-2 rounded-lg bg-secondary/30 text-sm hover:bg-secondary/50 cursor-pointer">
-                            <Phone className="h-4 w-4 text-primary" />
+                  <div className="flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-subtle)]/50 p-2 text-sm transition-colors hover:bg-[var(--bg-subtle)]">
+                    <Phone className="h-4 w-4 text-[var(--accent)]" />
                             <span>+1 (555) 000-0000</span>
                         </div>
                     </div>
@@ -347,20 +347,20 @@ export function OrgTree() {
 
                 {selectedNode.children.length > 0 && (
                     <div className="space-y-3">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Team Members ({selectedNode.children.length})</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Team Members ({selectedNode.children.length})</p>
                         <div className="space-y-2">
                             {selectedNode.children.map(id => {
                                 const child = layout.nodes.get(id);
                                 return child ? (
                                     <div key={id} onClick={() => setSelectedNodeId(id)} 
-                                         className="flex items-center justify-between p-2 rounded-xl border border-transparent hover:border-border hover:bg-white dark:hover:bg-slate-800 transition-all cursor-pointer group">
+                           className="group flex cursor-pointer items-center justify-between rounded-xl border border-transparent p-2 transition-all hover:border-[var(--border)] hover:bg-[var(--bg-subtle)]/55">
                                         <div className="flex items-center gap-3">
-                                            <div className="h-7 w-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px]">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-subtle)] text-[10px] text-[var(--accent)]">
                                                 {child.full_name[0]}
                                             </div>
                                             <span className="text-xs font-medium">{child.full_name}</span>
                                         </div>
-                                        <ChevronRight className="h-3 w-3 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                          <ChevronRight className="h-3 w-3 text-[var(--muted)] transition-transform group-hover:translate-x-1" />
                                     </div>
                                 ) : null;
                             })}
@@ -369,9 +369,9 @@ export function OrgTree() {
                 )}
             </div>
 
-            <div className="p-5 border-t border-border grid grid-cols-2 gap-2">
-                <Button variant="outline" className="w-full">Message</Button>
-                <Button className="w-full shadow-md">View Profile</Button>
+            <div className="grid grid-cols-2 gap-2 border-t border-[var(--border)] p-5">
+                <Button variant="outline" className="w-full border-[var(--border)] bg-[var(--surface)]">Message</Button>
+                <Button className="w-full bg-[var(--accent)] text-white shadow-md hover:bg-[var(--accent-hover)]">View Profile</Button>
             </div>
           </div>
         )}

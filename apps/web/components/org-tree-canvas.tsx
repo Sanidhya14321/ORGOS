@@ -14,7 +14,7 @@ type TreeUserNode = {
   id: string;
   full_name: string;
   email?: string;
-  role: "ceo" | "cfo" | "manager" | "worker";
+  const [error, setError] = useState<string | null>(null);
   status?: "pending" | "active" | "rejected";
   department?: string | null;
   position_id?: string | null;

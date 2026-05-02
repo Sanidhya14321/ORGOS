@@ -409,19 +409,19 @@ export function DashboardClient({ role }: DashboardClientProps) {
             ))}
           </div>
 
-          <div className="mt-6 rounded-3xl bg-[#121826] p-5 text-white">
-            <p className="text-sm uppercase tracking-[0.25em] text-white/60">Reports</p>
+          <div className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-5 text-[var(--ink)]">
+            <p className="text-sm uppercase tracking-[0.25em] text-[var(--muted)]">Reports</p>
             <div className="mt-3 space-y-3">
               {reports.slice(0, 3).map((report) => (
-                <div key={report.id} className="min-w-0 rounded-2xl bg-[var(--surface)]/70 p-4">
+                <div key={report.id} className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold">{report.status}</span>
-                    <span className="text-sm text-white/70">{mapReportTone(report)}</span>
+                    <span className="text-sm text-[var(--muted)]">{mapReportTone(report)}</span>
                   </div>
-                  <p className="mt-2 break-words text-sm leading-6 text-white/80">{report.insight}</p>
+                  <p className="mt-2 break-words text-sm leading-6 text-[var(--muted)]">{report.insight}</p>
                 </div>
               ))}
-              {reports.length === 0 ? <p className="text-sm text-white/70">No reports yet.</p> : null}
+              {reports.length === 0 ? <p className="text-sm text-[var(--muted)]">No reports yet.</p> : null}
             </div>
           </div>
         </aside>
