@@ -319,7 +319,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                                           {canEdit ? (
                                             <DropdownMenuItem onClick={() => openEdit(goal)} className="text-xs font-medium cursor-pointer hover:text-white">Edit Goal</DropdownMenuItem>
                                           ) : (
-                                            <DropdownMenuItem className="text-xs font-medium text-[var(--muted)] cursor-not-allowed" disabled>
+                                            <DropdownMenuItem className="text-xs font-medium text-[var(--muted)] cursor-not-allowed" disabled title="Requires CEO or CFO role to edit goals">
                                               Edit (insufficient role)
                                             </DropdownMenuItem>
                                           )}

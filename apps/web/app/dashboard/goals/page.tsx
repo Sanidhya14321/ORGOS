@@ -264,6 +264,13 @@ export default function GoalsPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Informational banner when user cannot create goals */}
+        {!canCreate && (
+          <div className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+            Only users with <strong>CEO</strong> or <strong>CFO</strong> roles can create strategic goals. If you need access, request an executive role or sign in with an executive account.
+          </div>
+        )}
       </div>
 
       {/* Quick Stats Grid */}

@@ -1,0 +1,43 @@
+name: E2E - Goals (Authenticated)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  e2e-goals:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies (root)
+        run: npm ci
+
+      - name: Start API dev server
+        run: |
+          cd apps/api
+          npm ci
+          nohup npm run dev > api_dev.log 2>&1 &
+
+      - name: Wait for API to be ready
+        run: |
+          echo "Waiting for API on http://localhost:4000"
+          for i in $(seq 1 60); do
+            if curl -sS http://localhost:4000/ >/dev/null 2>&1; then
+              echo "API is reachable"; break
+            fi
+            sleep 1
+          done
+
+      - name: Run authenticated E2E script
+        run: |
+          bash scripts/e2e-auth-goals.sh

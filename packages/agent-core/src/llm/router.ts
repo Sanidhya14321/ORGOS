@@ -3,6 +3,7 @@ import { GeminiProvider } from "./gemini.js";
 import { AllProvidersExhaustedError } from "./errors.js";
 import { GroqProvider } from "./groq.js";
 import type { LLMMessage, LLMOptions, LLMResponse } from "./provider.js";
+import { resilientComplete } from "./resiliency.js";
 
 export interface LLMLogContext {
   agentType?: "ceo_agent" | "manager_agent" | "worker_agent" | "synthesis_agent";
@@ -311,7 +312,7 @@ export async function callLLM(
   const groqStartedAt = Date.now();
 
   try {
-    const result = await groqProvider.complete(messages, opts);
+    const result = await resilientComplete(groqProvider, messages, opts);
     await logLLMCall(groqProvider.name, messages, result, context);
     return result;
   } catch (error) {
@@ -324,12 +325,12 @@ export async function callLLM(
       compTokens: 0,
       latencyMs: elapsed
     }, context, err.message);
-    console.warn("[llm-router] groq failed, trying gemini", err.message);
+    console.warn("[llm-router] groq failed or timed out, trying gemini", err.message);
   }
 
   const geminiStartedAt = Date.now();
   try {
-    const result = await geminiProvider.complete(messages, opts);
+    const result = await resilientComplete(geminiProvider, messages, opts);
     await logLLMCall(geminiProvider.name, messages, result, context);
     return result;
   } catch (error) {
@@ -342,7 +343,7 @@ export async function callLLM(
       compTokens: 0,
       latencyMs: elapsed
     }, context, err.message);
-    console.warn("[llm-router] gemini failed, trying rule-based fallback", err.message);
+    console.warn("[llm-router] gemini failed or timed out, trying rule-based fallback", err.message);
   }
 
   const fallbackStartedAt = Date.now();

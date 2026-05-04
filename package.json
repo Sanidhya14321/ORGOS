@@ -13,12 +13,16 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "db:apply-remote": "bash scripts/apply-remote-schema.sh"
+    "smoke:local": "node scripts/smoke-local.js",
+    "db:apply-remote": "bash scripts/apply-remote-schema.sh",
+    "e2e:auth-goals": "bash scripts/e2e-auth-goals.sh"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
     "turbo": "^2.0.12",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "pg": "^8.11.0",
+    "ioredis": "^5.3.2"
   },
   "dependencies": {
     "dotenv": "^17.4.1"

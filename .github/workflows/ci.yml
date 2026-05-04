@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-test:
+    name: Build, Typecheck & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        # Consider replacing with a pinned commit SHA for each action (e.g. actions/checkout@<sha>)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate environment variables (optional)
+        run: bash scripts/validate-env.sh || true
+
+      - name: Build agent-core
+        run: npm --prefix packages/agent-core run build
+
+      - name: Pack agent-core artifact
+        run: |
+          cd packages/agent-core
+          npm pack --silent
+
+      - name: Upload agent-core artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-core-tarball
+          path: packages/agent-core/*.tgz
+
+      - name: Typecheck (turbo)
+        run: npm run typecheck --silent
+
+      - name: Run tests
+        run: npm test --silent
+
+      - name: Run Playwright E2E (if enabled)
+        if: env.RUN_E2E == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          cd apps/web
+          npm ci
+          npx playwright test --reporter=list
+
+      - name: Package build artifacts
+        run: npm run build --if-present
+
+  deploy:
+    name: Deploy (OIDC-enabled)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure OIDC for cloud provider
+        # Example: request OIDC token for Google or Azure - provider-specific actions follow
+        run: echo "Configuring OIDC for deploy target: $DEPLOY_TARGET"
+
+      - name: Deploy to GCP (example)
+        if: env.DEPLOY_TARGET == 'gcp'
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Deploy to Azure (example)
+        if: env.DEPLOY_TARGET == 'azure'
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Placeholder deploy step
+        run: |
+          echo "Deploy job executed for target: $DEPLOY_TARGET"
+          # Replace with provider-specific deploy commands (gcloud, az, vercel, render, railway)
