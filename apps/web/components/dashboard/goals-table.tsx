@@ -18,6 +18,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Goal, Task } from "@/lib/models";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import { toast } from "sonner";
+import { getRoleFromBrowser } from "@/lib/auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from "@/components/ui/dialog";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -32,6 +43,15 @@ function statusClass(status: Goal["status"]) {
 export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Task[]; loading: boolean }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const queryClient = useQueryClient();
+
+  // Edit dialog state
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPriority, setEditPriority] = useState<Goal["priority"]>("medium");
+  const [editDeadline, setEditDeadline] = useState<string | undefined>(undefined);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Pagination Logic
   const totalPages = Math.ceil(goals.length / ITEMS_PER_PAGE);
@@ -94,6 +114,47 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
       </div>
     </div>
   );
+
+  function openEdit(goal: Goal) {
+    setEditingGoal(goal);
+    setEditTitle(goal.title ?? "");
+    setEditDescription(goal.description ?? "");
+    setEditPriority(goal.priority ?? "medium");
+    setEditDeadline(goal.deadline ?? undefined);
+  }
+
+  async function saveEdit() {
+    if (!editingGoal) return;
+    setIsSavingEdit(true);
+    try {
+      const payload: any = {};
+      if (editTitle && editTitle !== editingGoal.title) payload.title = editTitle;
+      if (editDescription !== editingGoal.description) payload.description = editDescription ?? null;
+      if (editPriority !== editingGoal.priority) payload.priority = editPriority;
+      if (editDeadline !== editingGoal.deadline) payload.deadline = editDeadline ?? null;
+
+      await apiFetch(`/api/goals/${editingGoal.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload)
+      });
+
+      void queryClient.invalidateQueries({ queryKey: ["goals", "page"] });
+      void queryClient.invalidateQueries({ queryKey: ["goals"] });
+      setEditingGoal(null);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to save goal edit", err);
+      // Show an error toast to the user
+      const message = (err as any)?.message || String(err) || "Failed to save changes";
+      toast.error(message);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  // Role gating for edit visibility
+  const currentRole = typeof window !== "undefined" ? getRoleFromBrowser() : null;
+  const canEdit = currentRole ? ["ceo", "cfo"].includes(currentRole.toLowerCase()) : false;
 
   return (
     <div className="flex flex-col gap-4">
@@ -254,11 +315,17 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40 bg-[var(--surface)] shadow-md ">
-                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:text-white">Edit Goal</DropdownMenuItem>
-                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:text-white">View Analytics</DropdownMenuItem>
-                          <DropdownMenuItem className="text-xs font-medium cursor-pointer text-red-500 ">Delete Goal</DropdownMenuItem>
-                        </DropdownMenuContent>
+                                        <DropdownMenuContent align="end" className="w-40 bg-[var(--surface)] shadow-md ">
+                                          {canEdit ? (
+                                            <DropdownMenuItem onClick={() => openEdit(goal)} className="text-xs font-medium cursor-pointer hover:text-white">Edit Goal</DropdownMenuItem>
+                                          ) : (
+                                            <DropdownMenuItem className="text-xs font-medium text-[var(--muted)] cursor-not-allowed" disabled>
+                                              Edit (insufficient role)
+                                            </DropdownMenuItem>
+                                          )}
+                                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:text-white">View Analytics</DropdownMenuItem>
+                                          <DropdownMenuItem className="text-xs font-medium cursor-pointer text-red-500 ">Delete Goal</DropdownMenuItem>
+                                        </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
@@ -307,6 +374,40 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
       <div className="md:hidden">
         <PaginationControls />
       </div>
+      {editingGoal && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setEditingGoal(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Goal</DialogTitle>
+              <DialogDescription>Update goal details and save to the server.</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 p-4">
+              <label className="text-xs font-medium text-[var(--muted)]">Title</label>
+              <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]" />
+
+              <label className="text-xs font-medium text-[var(--muted)]">Description</label>
+              <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="w-full min-h-[100px] border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]" />
+
+              <label className="text-xs font-medium text-[var(--muted)]">Priority</label>
+              <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as any)} className="w-full border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+
+              <label className="text-xs font-medium text-[var(--muted)]">Deadline</label>
+              <input type="date" value={editDeadline ?? ""} onChange={(e) => setEditDeadline(e.target.value || undefined)} className="w-full border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]" />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4">
+              <Button variant="ghost" onClick={() => setEditingGoal(null)}>Cancel</Button>
+              <Button onClick={saveEdit} disabled={isSavingEdit}>{isSavingEdit ? "Saving..." : "Save"}</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

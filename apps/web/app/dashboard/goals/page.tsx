@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { toast } from "sonner";
+import { getRoleFromBrowser } from "@/lib/auth";
 import { GoalsTable } from "@/components/dashboard/goals-table";
 import { Button } from "@/components/ui/button";
 import { 
@@ -79,15 +81,25 @@ export default function GoalsPage() {
       if (context?.previous) {
         queryClient.setQueryData(["goals", "page"], context.previous);
       }
+      try {
+        const msg = (_error as any)?.message || "Failed to create goal";
+        toast.error(msg);
+      } catch (e) {
+        // ignore
+      }
     },
     onSettled: () => {
       setOpen(false);
       setTitle("");
       setDescription("");
       setDeadline("");
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      void queryClient.invalidateQueries({ queryKey: ["goals", "page"] });
+      void queryClient.invalidateQueries({ queryKey: ["goals"] });
     }
   });
+
+  const browserRole = typeof window !== "undefined" ? getRoleFromBrowser() : null;
+  const canCreate = browserRole ? ["ceo", "cfo"].includes(browserRole.toLowerCase()) : false;
 
   // Executive Stats
   const stats = {
@@ -113,10 +125,17 @@ export default function GoalsPage() {
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="lg" className="bg-accent hover:bg-accent/90 text-white shadow-lg shadow-accent/20 px-6">
-              <Plus className="mr-2 h-5 w-5" />
-              New Strategic Goal
-            </Button>
+            {canCreate ? (
+              <Button size="lg" className="bg-accent hover:bg-accent/90 text-white shadow-lg shadow-accent/20 px-6">
+                <Plus className="mr-2 h-5 w-5" />
+                New Strategic Goal
+              </Button>
+            ) : (
+              <Button size="lg" disabled className="bg-accent/10 text-text-secondary shadow-sm px-6" title="Insufficient role to create goals">
+                <Plus className="mr-2 h-5 w-5" />
+                New Strategic Goal
+              </Button>
+            )}
           </DialogTrigger>
           <DialogContent className="max-w-xl bg-bg-surface border-border p-0 overflow-hidden">
             <DialogHeader className="p-6 pb-2">

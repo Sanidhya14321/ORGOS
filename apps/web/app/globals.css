@@ -213,6 +213,21 @@ select {
   }
 }
 
+@keyframes loadingFill {
+  0% {
+    transform: scaleX(0.02);
+    opacity: 0.55;
+  }
+  45% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(0.02);
+    opacity: 0.55;
+  }
+}
+
 .animate-rise-in {
   animation: riseIn 420ms ease-out;
 }
