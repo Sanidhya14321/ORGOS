@@ -4,6 +4,7 @@ import { AllProvidersExhaustedError } from "./errors.js";
 import { GroqProvider } from "./groq.js";
 import type { LLMMessage, LLMOptions, LLMResponse } from "./provider.js";
 import { resilientComplete } from "./resiliency.js";
+import { llmMetrics } from "./metrics.js";
 
 export interface LLMLogContext {
   agentType?: "ceo_agent" | "manager_agent" | "worker_agent" | "synthesis_agent";
@@ -313,10 +314,12 @@ export async function callLLM(
 
   try {
     const result = await resilientComplete(groqProvider, messages, opts);
+    llmMetrics.recordRouterLatency(groqProvider.name, result.latencyMs);
     await logLLMCall(groqProvider.name, messages, result, context);
     return result;
   } catch (error) {
     const elapsed = Date.now() - groqStartedAt;
+    llmMetrics.recordRouterLatency(groqProvider.name, elapsed);
     const err = error instanceof Error ? error : new Error("Unknown Groq error");
     failures.push(`${groqProvider.name}: ${err.message}`);
     await logLLMCall(groqProvider.name, messages, {
@@ -331,10 +334,13 @@ export async function callLLM(
   const geminiStartedAt = Date.now();
   try {
     const result = await resilientComplete(geminiProvider, messages, opts);
+    llmMetrics.recordRouterLatency(geminiProvider.name, result.latencyMs);
+    llmMetrics.recordRouterFallback(groqProvider.name, geminiProvider.name);
     await logLLMCall(geminiProvider.name, messages, result, context);
     return result;
   } catch (error) {
     const elapsed = Date.now() - geminiStartedAt;
+    llmMetrics.recordRouterLatency(geminiProvider.name, elapsed);
     const err = error instanceof Error ? error : new Error("Unknown Gemini error");
     failures.push(`${geminiProvider.name}: ${err.message}`);
     await logLLMCall(geminiProvider.name, messages, {
@@ -349,10 +355,13 @@ export async function callLLM(
   const fallbackStartedAt = Date.now();
   try {
     const fallback = await buildRuleBasedFallback(messages, context);
+    llmMetrics.recordRouterLatency("rule-based", fallback.latencyMs);
+    llmMetrics.recordRouterFallback(geminiProvider.name, "rule-based");
     await logLLMCall("rule-based", messages, fallback, context);
     return fallback;
   } catch (error) {
     const elapsed = Date.now() - fallbackStartedAt;
+    llmMetrics.recordRouterLatency("rule-based", elapsed);
     const err = error instanceof Error ? error : new Error("Unknown rule-based fallback error");
     failures.push(`rule-based: ${err.message}`);
     await logLLMCall("rule-based", messages, {
@@ -363,5 +372,6 @@ export async function callLLM(
     }, context, err.message);
   }
 
+  llmMetrics.recordAllProvidersExhausted();
   throw new AllProvidersExhaustedError(failures.join(" | "));
 }

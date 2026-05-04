@@ -11,15 +11,16 @@ export interface RagSearchResult {
   metadata?: Record<string, unknown>;
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
+function cosineSimilarity(a: number[] | undefined, b: number[] | undefined): number {
+  if (!a || !b || a.length === 0 || b.length === 0) return 0;
   let dot = 0;
   let normA = 0;
   let normB = 0;
 
   for (let i = 0; i < a.length; i += 1) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    dot += a[i]! * b[i]!;
+    normA += a[i]! * a[i]!;
+    normB += b[i]! * b[i]!;
   }
 
   if (normA === 0 || normB === 0) {
@@ -33,6 +34,7 @@ export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
   return {
     async search({ orgId, query, topK = 5 }: { orgId: string; query: string; topK?: number }): Promise<RagSearchResult[]> {
       const [queryEmbedding] = await embeddingService.embedTexts([query]);
+      if (!queryEmbedding || !Array.isArray(queryEmbedding)) return [];
 
       const { data, error } = await supabase
         .from("embeddings")
@@ -56,13 +58,13 @@ export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
             sourceType: String(row.source_type ?? "unknown"),
             sourceId: (row.source_id as string | null) ?? null,
             chunkIndex: Number(row.chunk_index ?? 0),
-            score: cosineSimilarity(queryEmbedding, embedding as number[]),
+            score: cosineSimilarity(queryEmbedding as number[], embedding as number[]),
             textSnippet: String(row.text_snippet ?? ""),
-            metadata: (row.metadata as Record<string, unknown> | undefined) ?? {}
+            metadata: (row.metadata as Record<string, unknown>) || {}
           };
         })
         .filter((item): item is RagSearchResult => item !== null)
-        .sort((left, right) => right.score - left.score)
+        .sort((left, right) => (right?.score ?? 0) - (left?.score ?? 0))
         .slice(0, topK);
 
       return scored;

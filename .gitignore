@@ -8,5 +8,4 @@ coverage/
 *.log
 .DS_Store
 .env.local
-.env.example
 .env

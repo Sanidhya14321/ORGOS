@@ -11,7 +11,12 @@ const EnvSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   UPSTASH_REDIS_URL: z.string().url(),
-  UPSTASH_REDIS_TOKEN: z.string().min(1)
+  UPSTASH_REDIS_TOKEN: z.string().min(1),
+  GROQ_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  SENTRY_DSN: z.string().optional(),
+  DATADOG_API_KEY: z.string().optional(),
+  DATADOG_ENABLED: z.coerce.boolean().default(false)
 });
 
 export type Env = z.infer<typeof EnvSchema>;

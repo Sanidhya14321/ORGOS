@@ -1,4 +1,5 @@
-import type { LLMProvider, LLMMessage, LLMOptions, LLMResponse } from "./provider";
+import type { LLMProvider, LLMMessage, LLMOptions, LLMResponse } from "./provider.js";
+import { llmMetrics } from "./metrics.js";
 
 type CircuitState = {
   failures: number;
@@ -6,6 +7,13 @@ type CircuitState = {
 };
 
 const circuitStates: Map<string, CircuitState> = new Map();
+
+// Optional metrics emitter for resiliency events. Tests or hosting apps can register.
+let metricsEmitter: ((event: string, labels?: Record<string, string | number>) => void) | null = null;
+
+export function setMetricsEmitter(fn: (event: string, labels?: Record<string, string | number>) => void) {
+  metricsEmitter = fn;
+}
 
 export interface ResiliencyConfig {
   timeoutMs?: number;
@@ -44,12 +52,25 @@ function recordFailure(name: string, cfg: Required<ResiliencyConfig>) {
   if (state.failures >= cfg.failureThreshold) {
     state.openedUntil = now() + cfg.cooldownMs;
     state.failures = 0;
+    // emit circuit open metric
+    try {
+      metricsEmitter?.('resiliency.circuit_open', { provider: name });
+      llmMetrics.recordCircuitOpen(name);
+    } catch {}
   }
   circuitStates.set(name, state);
+  try {
+    metricsEmitter?.('resiliency.failure', { provider: name, failures: state.failures });
+    llmMetrics.recordFailure(name);
+  } catch {}
 }
 
 function recordSuccess(name: string) {
   circuitStates.set(name, { failures: 0, openedUntil: null });
+  try {
+    metricsEmitter?.('resiliency.success', { provider: name });
+    llmMetrics.recordSuccess(name);
+  } catch {}
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

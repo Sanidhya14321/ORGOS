@@ -76,7 +76,8 @@ export async function upsertEmbeddings(dbClient: any, orgId: string, sourceType:
       let idx = 1;
       for (let i = 0; i < chunks.length; i++) {
         const snippet = chunks[i];
-        const vector = embeddings[i];
+        const vector = embeddings?.[i];
+        if (!vector || !Array.isArray(vector)) continue;
         // Represent vector as string like '[0.1,0.2,...]'
         const vecLiteral = '[' + vector.join(',') + ']';
         placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`);

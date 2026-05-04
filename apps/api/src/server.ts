@@ -10,11 +10,14 @@ import type { Redis } from "@upstash/redis";
 import { readEnv } from "./config/env.js";
 import { createRedisClient, createSupabaseAnonClient, createSupabaseServiceClient } from "./lib/clients.js";
 import { sendApiError } from "./lib/errors.js";
+import { initializeSentry, captureException } from "./lib/sentry.js";
+import { initializePrometheus, initializeHttpMetrics, exportMetricsText, recordHttpRequest } from "./lib/prometheus.js";
 import authPlugin from "./plugins/auth.js";
 import authRoutes from "./routes/auth.js";
 import goalsRoutes from "./routes/goals.js";
 import healthRoutes from "./routes/health.js";
 import meRoutes from "./routes/me.js";
+import metricsRoutes from "./routes/metrics.js";
 import orgRoutes from "./routes/org.js";
 import reportsRoutes from "./routes/reports.js";
 import recruitmentRoutes from "./routes/recruitment.js";
@@ -68,10 +71,21 @@ export async function buildServer() {
 
   fastify.addHook("onSend", async (request, reply) => {
     reply.header("X-Request-ID", request.requestId);
+    // Record HTTP metrics
+    const startTime = (request as any)._startTime ?? Date.now();
+    const durationMs = Date.now() - startTime;
+    recordHttpRequest(request.method, request.url.split("?")[0], reply.statusCode, durationMs);
   });
 
   fastify.setErrorHandler(async (error, request, reply) => {
     request.log.error({ err: error }, "Unhandled API error");
+    // Capture exception in Sentry
+    captureException(error, {
+      requestId: request.requestId,
+      path: request.url,
+      method: request.method,
+      userId: request.user?.id,
+    });
     return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Internal server error");
   });
 
@@ -131,6 +145,7 @@ export async function buildServer() {
   await fastify.register(authPlugin);
 
   await fastify.register(healthRoutes);
+  await fastify.register(metricsRoutes);
 
   await fastify.register(async (api) => {
     await api.register(authRoutes);
@@ -149,6 +164,12 @@ export async function buildServer() {
 
 export async function start() {
   const server = await buildServer();
+
+  // Initialize observability
+  initializeSentry(server.env);
+  await initializePrometheus();
+  await initializeHttpMetrics();
+
   initializeNotifier(server);
   const workers: Array<{ close: () => Promise<void> }> = [];
 

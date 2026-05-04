@@ -9,12 +9,14 @@
     "@fastify/sensible": "^5.6.0",
     "@orgos/agent-core": "file:../../packages/agent-core",
     "@orgos/shared-types": "file:../../packages/shared-types",
+    "@sentry/node": "^7.99.0",
     "@supabase/supabase-js": "^2.49.8",
     "@upstash/redis": "^1.35.0",
     "bullmq": "^5.58.0",
     "fastify": "^4.29.1",
     "fastify-plugin": "^5.0.1",
     "ioredis": "^5.4.2",
+    "prom-client": "^15.1.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",
     "zod": "^3.23.8"
@@ -25,7 +27,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "echo \"No lint config yet\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke:local": "bash ../../scripts/smoke-e2e-local.sh",
+    "smoke:integration": "vitest run test/smoke-e2e.test.ts",
+    "smoke:e2e": "node ../../scripts/e2e-smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
