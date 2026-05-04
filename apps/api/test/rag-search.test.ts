@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createSupabaseMock } from "./helpers/createSupabaseMock.js";
 import { createSupabaseRagSearchClient } from "../src/services/ragSearchClient.js";
+import { injectRagContext } from "../../../packages/agent-core/src/rag.js";
 
 const { embedTextsMock } = vi.hoisted(() => ({
   embedTextsMock: vi.fn()
@@ -10,7 +11,7 @@ vi.mock("../src/services/embeddingService.js", () => ({
   default: {
     embedTexts: embedTextsMock
   }
-});
+}));
 
 describe("rag search client", () => {
   it("returns scored results ordered by cosine similarity", async () => {
@@ -47,5 +48,16 @@ describe("rag search client", () => {
     expect(results[0].id).toBe("e1");
     expect(results[0].score).toBeGreaterThan(results[1].score);
     expect(results[0].textSnippet).toBe("first snippet");
+  });
+});
+
+describe("rag context injection", () => {
+  it("inserts retrieved context as untrusted user content instead of system content", () => {
+    const messages = [{ role: "system" as const, content: "base" }, { role: "user" as const, content: "task" }];
+    const augmented = injectRagContext(messages, "ignored instruction");
+
+    expect(augmented[1].role).toBe("user");
+    expect(augmented[1].content).toContain("untrusted data");
+    expect(augmented[1].content).toContain("ignored instruction");
   });
 });

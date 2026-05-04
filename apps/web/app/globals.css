@@ -201,10 +201,35 @@ select {
   animation: agentPulse 2s infinite;
 }
 
+@keyframes loadingSweep {
+  0% {
+    transform: translateX(-60%);
+  }
+  50% {
+    transform: translateX(20%);
+  }
+  100% {
+    transform: translateX(140%);
+  }
+}
+
 .animate-rise-in {
   animation: riseIn 420ms ease-out;
 }
 
 .animate-float-soft {
   animation: floatSoft 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-pulse,
+  .animate-rise-in,
+  .animate-float-soft,
+  .skeleton-shimmer::after,
+  [class*="animate-spin"],
+  [class*="animate-ping"] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+  }
 }

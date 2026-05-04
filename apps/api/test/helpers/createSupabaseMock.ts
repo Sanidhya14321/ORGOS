@@ -88,6 +88,9 @@ export function createSupabaseMock(fixtures: FixtureStore) {
       order() {
         return builder;
       },
+      limit() {
+        return builder;
+      },
       gt() {
         return builder;
       },

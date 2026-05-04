@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { LoginForm } from "@/components/login-form";
 import Link from "next/link";
+import { LoadingScreen } from "@/components/loading-screen";
 
 export default function LoginPage() {
   return (
@@ -12,7 +13,7 @@ export default function LoginPage() {
           <p className="text-sm leading-6 text-[var(--muted)]">Sign in to continue to your workspace and track live execution.</p>
         </div>
 
-        <Suspense fallback={<p className="text-sm text-[var(--muted)]">Loading login form...</p>}>
+        <Suspense fallback={<LoadingScreen compact />}>
           <div className="dashboard-panel space-y-5">
             <LoginForm />
             <div className="border-t border-[var(--border)] pt-4 text-center text-sm text-[var(--muted)]">

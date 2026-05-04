@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { setRoleCookie } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,10 @@ export function LoginForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) {
+      return;
+    }
+
     setPending(true);
     setError(null);
 
@@ -55,7 +59,6 @@ export function LoginForm() {
       router.refresh();
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Unable to sign in");
-    } finally {
       setPending(false);
     }
   }
@@ -105,9 +108,17 @@ export function LoginForm() {
       <Button
         type="submit"
         disabled={pending}
-        className="w-full bg-accent text-white hover:bg-accent-hover"
+        aria-busy={pending}
+        className="w-full bg-accent text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-[var(--accent)]/70 disabled:text-white/80"
       >
-        {pending ? "Signing in..." : "Sign in"}
+        {pending ? (
+          <span className="inline-flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Signing in...
+          </span>
+        ) : (
+          "Sign in"
+        )}
       </Button>
     </form>
   );
