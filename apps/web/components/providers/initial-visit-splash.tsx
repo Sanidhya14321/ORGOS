@@ -10,7 +10,7 @@ export function InitialVisitSplash() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: number | undefined;
 
     try {
       if (window.localStorage.getItem(SPLASH_STORAGE_KEY) !== "1") {
