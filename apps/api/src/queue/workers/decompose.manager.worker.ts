@@ -122,21 +122,24 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>): Prom
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
 
-  const managerTasks = await managerAgent({
+  const managerInput = {
     directive: job.data.directive,
     department: job.data.department,
     existingTasks,
     deadline: job.data.deadline,
-    goalId: job.data.goalId,
-    rag: goalResult.data?.org_id
-      ? {
-          orgId: String(goalResult.data.org_id),
-          searchClient: ragSearchClient,
-          topK: 4,
-          maxSnippetChars: 400
-        }
-      : undefined
-  });
+    goalId: job.data.goalId
+  } as any;
+
+  if (goalResult.data?.org_id) {
+    managerInput.rag = {
+      orgId: String(goalResult.data.org_id),
+      searchClient: ragSearchClient,
+      topK: 4,
+      maxSnippetChars: 400
+    };
+  }
+
+  const managerTasks = await managerAgent(managerInput);
 
   const assignedTasks: Task[] = [];
   for (const task of managerTasks) {

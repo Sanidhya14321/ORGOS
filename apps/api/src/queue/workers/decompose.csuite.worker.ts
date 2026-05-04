@@ -35,39 +35,29 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
 
-  const ceoInput: {
-    rawGoal: string;
-    priority: string;
-    orgContext: { organizationName: string; departments: string[] };
-    deadline?: string;
-    rag?: {
-      orgId: string;
-      searchClient: ReturnType<typeof createSupabaseRagSearchClient>;
-      topK?: number;
-      maxSnippetChars?: number;
-    };
-  } = {
+  const ceoInput = {
     rawGoal: String(goal.raw_input),
     priority: String(goal.priority),
     orgContext: {
       organizationName: "ORGOS",
       departments: ["engineering", "product", "marketing", "operations", "sales"]
-    },
-    rag: goal.org_id
-      ? {
-          orgId: String(goal.org_id),
-          searchClient: ragSearchClient,
-          topK: 4,
-          maxSnippetChars: 400
-        }
-      : undefined
-  };
+    }
+  } as const;
 
-  if (goal.deadline) {
-    ceoInput.deadline = new Date(String(goal.deadline)).toISOString();
+  if (goal.org_id) {
+    (ceoInput as any).rag = {
+      orgId: String(goal.org_id),
+      searchClient: ragSearchClient,
+      topK: 4,
+      maxSnippetChars: 400
+    };
   }
 
-  const ceoResult = await ceoAgent(ceoInput);
+  if (goal.deadline) {
+    (ceoInput as any).deadline = new Date(String(goal.deadline)).toISOString();
+  }
+
+  const ceoResult = await ceoAgent(ceoInput as any);
 
   const { error: goalUpdateError } = await supabase
     .from("goals")

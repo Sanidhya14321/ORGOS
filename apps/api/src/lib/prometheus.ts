@@ -4,7 +4,7 @@ import type { Env } from "../config/env.js";
 let register: Registry | null = null;
 
 // Metrics registry (lazily initialized)
-function getRegistry(): Registry | null {
+async function getRegistry(): Promise<Registry | null> {
   if (register) return register;
 
   try {
@@ -59,7 +59,7 @@ export async function createCounter(
 
   try {
     const { Counter } = await import("prom-client");
-    return new Counter({ name, help, labelNames, registers: [reg] });
+    return new Counter({ name, help, labelNames: labelNames || [], registers: [reg] });
   } catch {
     return null;
   }
@@ -82,8 +82,8 @@ export async function createHistogram(
     return new Histogram({
       name,
       help,
-      buckets,
-      labelNames,
+      buckets: buckets || [],
+      labelNames: labelNames || [],
       registers: [reg],
     });
   } catch {

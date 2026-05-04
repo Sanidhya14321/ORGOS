@@ -11,7 +11,7 @@ const metricsRoutes: FastifyPluginAsync = async (fastify) => {
       reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
       return reply.send(metricsText || "# No metrics available\n");
     } catch (error) {
-      fastify.log.error("Failed to export metrics:", error);
+      fastify.log.error({ err: error }, "Failed to export metrics");
       return reply.send("# Error exporting metrics\n");
     }
   });

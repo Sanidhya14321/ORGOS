@@ -9,8 +9,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 const API_URL = process.env.API_URL || 'http://localhost:4000';
 const TEST_EMAIL = process.env.TEST_EMAIL || 'smoke-test@velocity-labs.orgos.ai';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || TEST_EMAIL;
+const runE2E = process.env.RUN_E2E === 'true';
 
-describe('E2E Smoke Tests', () => {
+const describeE2E = runE2E ? describe : describe.skip;
+
+describeE2E('E2E Smoke Tests', () => {
   let sessionToken: string | null = null;
   let userId: string | null = null;
   let goalId: string | null = null;

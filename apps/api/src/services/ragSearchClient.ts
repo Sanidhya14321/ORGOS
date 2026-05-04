@@ -8,7 +8,7 @@ export interface RagSearchResult {
   chunkIndex: number;
   score: number;
   textSnippet: string;
-  metadata?: Record<string, unknown>;
+  metadata: Record<string, unknown>;
 }
 
 function cosineSimilarity(a: number[] | undefined, b: number[] | undefined): number {
@@ -63,9 +63,11 @@ export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
             metadata: (row.metadata as Record<string, unknown>) || {}
           };
         })
-        .filter((item): item is RagSearchResult => item !== null)
+        .filter((item): item is RagSearchResult => {
+          return item !== null && item.metadata !== undefined;
+        })
         .sort((left, right) => (right?.score ?? 0) - (left?.score ?? 0))
-        .slice(0, topK);
+        .slice(0, topK) as RagSearchResult[];
 
       return scored;
     }

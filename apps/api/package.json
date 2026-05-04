@@ -30,7 +30,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke:local": "bash ../../scripts/smoke-e2e-local.sh",
     "smoke:integration": "vitest run test/smoke-e2e.test.ts",
-    "smoke:e2e": "node ../../scripts/e2e-smoke.mjs"
+    "smoke:e2e": "node ../../scripts/e2e-smoke-test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

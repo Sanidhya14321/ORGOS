@@ -65,99 +65,68 @@ export async function upsertEmbeddings(dbClient: any, orgId: string, sourceType:
   // This function should upsert rows into the `embeddings` table created by the migration.
   if (!dbClient) throw new Error('dbClient required for upsertEmbeddings');
 
-  // If embeddings not provided, compute (but current embedTexts is unimplemented)
-    if (!embeddings) embeddings = await embedTexts(chunks);
+  if (!embeddings) {
+    embeddings = await embedTexts(chunks);
+  }
 
-    // Prefer bulk insert for pg-style clients
-    if (typeof dbClient.query === 'function') {
-      // Construct multi-row INSERT
-      const values: any[] = [];
-      const placeholders: string[] = [];
-      let idx = 1;
-      for (let i = 0; i < chunks.length; i++) {
-        const snippet = chunks[i];
-        const vector = embeddings?.[i];
-        if (!vector || !Array.isArray(vector)) continue;
-        // Represent vector as string like '[0.1,0.2,...]'
-        const vecLiteral = '[' + vector.join(',') + ']';
-        placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`);
-        values.push(orgId, sourceType, sourceId, i, snippet, vecLiteral, JSON.stringify({}));
-      }
+  if (typeof dbClient.query === 'function') {
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    let idx = 1;
 
+    for (let i = 0; i < chunks.length; i++) {
+      const snippet = chunks[i];
+      const vector = embeddings?.[i];
+      if (!vector || !Array.isArray(vector)) continue;
+
+      const vecLiteral = '[' + vector.join(',') + ']';
+      placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`);
+      values.push(orgId, sourceType, sourceId, i, snippet, vecLiteral, JSON.stringify({}));
+    }
+
+    if (placeholders.length > 0) {
       const sql = `INSERT INTO embeddings (org_id, source_type, source_id, chunk_index, text_snippet, embedding, metadata) VALUES ${placeholders.join(',')}`;
+
       try {
         await dbClient.query(sql, values);
       } catch (err) {
         console.warn('bulk upsertEmbeddings error', err);
-        // Fallback to single inserts
         for (let i = 0; i < chunks.length; i++) {
           try {
-            await dbClient.query(`INSERT INTO embeddings (org_id, source_type, source_id, chunk_index, text_snippet, embedding, metadata) VALUES ($1,$2,$3,$4,$5,$6::vector,$7)`, [orgId, sourceType, sourceId, i, chunks[i], '[' + embeddings![i].join(',') + ']', JSON.stringify({})]);
-          } catch (err2) { console.warn('fallback insert failed', err2); }
+            await dbClient.query(
+              `INSERT INTO embeddings (org_id, source_type, source_id, chunk_index, text_snippet, embedding, metadata) VALUES ($1,$2,$3,$4,$5,$6::vector,$7)`,
+              [orgId, sourceType, sourceId, i, chunks[i], '[' + (embeddings?.[i] || []).join(',') + ']', JSON.stringify({})]
+            );
+          } catch (err2) {
+            console.warn('fallback insert failed', err2);
+          }
         }
       }
-
-      return;
     }
 
-    // Supabase-style client
-    if (typeof dbClient.from === 'function') {
-      try {
-        const rows = chunks.map((snippet, i) => ({
-          org_id: orgId,
-          source_type: sourceType,
-          source_id: sourceId,
-          chunk_index: i,
-          text_snippet: snippet,
-          embedding: embeddings![i],
-          metadata: {},
-        }));
-        await dbClient.from('embeddings').insert(rows);
-      } catch (err) {
-        console.warn('upsertEmbeddings(supabase) error', err);
-      }
-      return;
-    }
-
-    throw new Error('Unsupported dbClient for upsertEmbeddings');
-
-  // Basic looped upsert - adapt to bulk upsert for performance.
-  for (let i = 0; i < chunks.length; i++) {
-    const snippet = chunks[i];
-    const vector = embeddings[i];
-    const metadata = {};
-
-    // Expect dbClient.query(sql, params) or supabase.from('embeddings').upsert(...)
-    if (typeof dbClient.query === 'function') {
-      const sql = `
-        INSERT INTO embeddings (org_id, source_type, source_id, chunk_index, text_snippet, embedding, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `;
-      try {
-        await dbClient.query(sql, [orgId, sourceType, sourceId, i, snippet, vector, JSON.stringify(metadata)]);
-      } catch (err) {
-        // In ingestion paths prefer logging and continuing on duplicates/errors.
-        console.warn('upsertEmbeddings error', err);
-      }
-    } else if (typeof dbClient.from === 'function') {
-      // Supabase-style client
-      try {
-        await dbClient.from('embeddings').insert({
-          org_id: orgId,
-          source_type: sourceType,
-          source_id: sourceId,
-          chunk_index: i,
-          text_snippet: snippet,
-          embedding: vector,
-          metadata,
-        });
-      } catch (err) {
-        console.warn('upsertEmbeddings(supabase) error', err);
-      }
-    } else {
-      throw new Error('Unsupported dbClient for upsertEmbeddings');
-    }
+    return;
   }
+
+  if (typeof dbClient.from === 'function') {
+    try {
+      const rows = chunks.map((snippet, i) => ({
+        org_id: orgId,
+        source_type: sourceType,
+        source_id: sourceId,
+        chunk_index: i,
+        text_snippet: snippet,
+        embedding: embeddings?.[i],
+        metadata: {},
+      }));
+      await dbClient.from('embeddings').insert(rows);
+    } catch (err) {
+      console.warn('upsertEmbeddings(supabase) error', err);
+    }
+
+    return;
+  }
+
+  throw new Error('Unsupported dbClient for upsertEmbeddings');
 }
 
 export default {

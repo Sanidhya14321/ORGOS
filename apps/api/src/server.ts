@@ -74,7 +74,8 @@ export async function buildServer() {
     // Record HTTP metrics
     const startTime = (request as any)._startTime ?? Date.now();
     const durationMs = Date.now() - startTime;
-    recordHttpRequest(request.method, request.url.split("?")[0], reply.statusCode, durationMs);
+    const requestPath = (request.url ?? "/unknown").split("?")[0] ?? "/unknown";
+    recordHttpRequest(request.method, requestPath, reply.statusCode || 500, durationMs);
   });
 
   fastify.setErrorHandler(async (error, request, reply) => {
