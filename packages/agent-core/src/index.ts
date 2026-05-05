@@ -9,6 +9,8 @@ export * from "./agents/managerAgent.js";
 export * from "./agents/individualAgent.js";
 export * from "./agents/workerAgent.js";
 export * from "./agents/synthesisAgent.js";
+export * from "./agents/hierarchical-agent.js";
 export * from "./tools/webSearch.js";
 export * from "./tools/readInternalData.js";
 export * from "./rag.js";
+export * from "./types/hierarchical-agent.types.js";

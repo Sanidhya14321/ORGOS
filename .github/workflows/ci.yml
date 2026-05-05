@@ -5,10 +5,10 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   validate-workflow:
@@ -19,8 +19,7 @@ jobs:
         uses: actions/checkout@1d7c6c3c4aee9cc2d9dcd3511fbf18f3f4f78471  # v4.1.7
 
       - name: Validate workflow with actionlint
-        run: |
-          docker run --rm -v $(pwd):/repo ghcr.io/rhysd/actionlint:latest -color -format "{{json}}"
+        uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106  # v1.7.7
 
   secrets-check:
     name: Secrets Check (pushes to main)
@@ -103,6 +102,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
     env:
       DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
     steps:
