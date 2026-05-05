@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Task } from "@orgos/shared-types";
-import { type Position, type UserCapacity } from "@orgos/shared-types/src/organization.schema.js";
+import { type Position, type UserCapacity, type OrgStructureKind } from "@orgos/shared-types";
 import { callLLM } from "../llm/router.js";
 import type { LLMMessage } from "../llm/provider.js";
 
@@ -93,6 +93,8 @@ export interface HierarchicalAgentInput {
   // Org context
   current_position: Position;           // Position making the decision
   org_chart: Position[];                // Full org structure for finding candidates
+  // Organization structure kind — influences routing rules and recommendations
+  org_structure?: OrgStructureKind;
   
   // Capacity info
   team_capacity: Record<string, UserCapacity>; // user_id → capacity
@@ -119,6 +121,19 @@ Given a task and your current position in the org, you must decide:
    - Maximum 10 subtasks per decomposition
 
 2. **DELEGATE**: Route this entire task to a subordinate position
+    ADAPT TO ORGANIZATIONAL MODEL:
+    - The organization may follow different structural models (hierarchical, functional, flat, divisional, matrix, team, network, process, circular, line).
+    - If the 'org_structure' provided in input is not "hierarchical", adapt recommendations accordingly:
+      - 'functional': prefer routing to technical specialists within the function; avoid cross-functional delegation unless necessary.
+      - 'flat': prefer direct delegation to skilled individuals; avoid multi-level decomposition.
+      - 'divisional': scope decomposition within division boundaries; prefer divisional positions for execution.
+      - 'matrix': consider dual reporting; when delegating, note both functional and project owners.
+      - 'team': prefer assigning to cross-functional teams or squads rather than single positions.
+      - 'network': prefer external partners or vendors for tasks marked as outsourced; flag if internal capacity is insufficient.
+      - 'process': follow the process flow — handoffs should respect the process sequence.
+      - 'circular': leaders are facilitators; prefer collaborative decomposition and shared ownership.
+      - 'line': strictly vertical routing — escalate for anything outside the direct chain.
+
    - Use when you're too senior to execute this task yourself
    - Or when a specific subordinate has better skills/capacity
    - Provide reasoning for the delegation
@@ -158,8 +173,8 @@ export async function hierarchicalAgent(
 ): Promise<HierarchicalAgentOutput> {
   const { task, current_position, org_chart, team_capacity } = input;
 
-  // Build org chart context for the LLM
-  const orgChartContext = buildOrgChartContext(current_position, org_chart);
+  // Build org chart context for the LLM (includes structure kind if provided)
+  const orgChartContext = buildOrgChartContext(current_position, org_chart, input.org_structure);
 
   // Build team capacity context
   const capacityContext = buildCapacityContext(team_capacity);
@@ -171,7 +186,7 @@ export async function hierarchicalAgent(
   const messages: LLMMessage[] = [
     {
       role: "system",
-      content: `${HIERARCHICAL_AGENT_SYSTEM_PROMPT}\n\nOrg Chart:\n${orgChartContext}\n\nTeam Capacity:\n${capacityContext}`,
+      content: `${HIERARCHICAL_AGENT_SYSTEM_PROMPT}\n\nOrg Structure: ${input.org_structure ?? 'hierarchical'}\n\nOrg Chart:\n${orgChartContext}\n\nTeam Capacity:\n${capacityContext}`,
     },
     {
       role: "user",
@@ -180,12 +195,14 @@ export async function hierarchicalAgent(
   ];
 
   // Call LLM with JSON mode
-  const llmResult = await callLLM(messages);
+  const llmResponse = await callLLM(messages);
+  const llmResult = typeof llmResponse === "string" ? llmResponse : llmResponse.content;
 
-  // Parse JSON response
-  const jsonMatch = llmResult.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error(`Invalid LLM response - no JSON found: ${llmResult.slice(0, 100)}`);
+  // Parse JSON response from the LLM content
+  const jsonMatch = typeof llmResult === "string" ? llmResult.match(/\{[\s\S]*\}/) : null;
+  if (!jsonMatch || !jsonMatch[0]) {
+    const preview = typeof llmResult === "string" ? llmResult.slice(0, 100) : "[non-string LLM response]";
+    throw new Error(`Invalid LLM response - no JSON found: ${preview}`);
   }
 
   const parsed = HierarchicalAgentOutputSchema.parse(JSON.parse(jsonMatch[0]));
@@ -199,9 +216,12 @@ export async function hierarchicalAgent(
 /**
  * Helper: Build org chart context string
  */
-function buildOrgChartContext(position: Position, orgChart: Position[]): string {
+function buildOrgChartContext(position: Position, orgChart: Position[], orgStructure?: string): string {
   const lines: string[] = [];
-  lines.push(`Your Position: ${position.title} (Level ${position.level})`);
+  lines.push(`Your Position: ${position.name} (Level ${position.level})`);
+  if (orgStructure) {
+    lines.push(`Org Model: ${orgStructure}`);
+  }
   lines.push(`Your Powers:`);
   lines.push(`  - Can delegate: ${position.can_delegate}`);
   lines.push(`  - Max task depth: ${position.max_task_depth}`);
@@ -213,7 +233,10 @@ function buildOrgChartContext(position: Position, orgChart: Position[]): string 
   if (directReports.length > 0) {
     lines.push("Your Direct Reports:");
     directReports.forEach((p) => {
-      lines.push(`  - ${p.title} (Level ${p.level}, Power: ${p.power_level})`);
+      // In matrix or functional models, list function or project if available
+      const pa = p as any;
+      const extra = (pa.function || pa.project || pa.slug) ? ` [${pa.function ?? pa.project ?? pa.slug}]` : "";
+      lines.push(`  - ${p.name} (Level ${p.level}, Power: ${p.power_level})${extra}`);
     });
   }
 
@@ -222,8 +245,11 @@ function buildOrgChartContext(position: Position, orgChart: Position[]): string 
     const superior = orgChart.find((p) => p.id === position.parent_position_id);
     if (superior) {
       lines.push("");
-      lines.push(`Your Superior: ${superior.title} (Level ${superior.level})`);
+      lines.push(`Your Superior: ${superior.name} (Level ${superior.level})`);
     }
+  } else if (orgStructure === 'flat') {
+    lines.push("");
+    lines.push(`Note: Organization appears to be flat — favor direct assignments to individuals.`);
   }
 
   return lines.join("\n");

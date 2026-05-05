@@ -1,5 +1,5 @@
 import { Worker, type Job } from "bullmq";
-import { ceoAgent, type GoalStructure } from "@orgos/agent-core";
+import { hierarchicalAgent } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { emitGoalDecomposed } from "../../services/notifier.js";
@@ -10,15 +10,15 @@ interface CsuiteDecomposeJobData {
   goalId: string;
 }
 
-function flattenRoleDirectives(goalStructure: GoalStructure): Array<{ role: string; directive: string; deadline: string }> {
-  return goalStructure.sub_directives.map((item) => ({
+function flattenRoleDirectives(goalStructure: any): Array<{ role: string; directive: string; deadline: string }> {
+  return (goalStructure?.sub_directives ?? []).map((item: any) => ({
     role: item.assigned_role,
     directive: item.directive,
     deadline: item.deadline
   }));
 }
 
-export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>): Promise<void> {
+export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>, agentFn = hierarchicalAgent): Promise<void> {
   const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
   const goalId = job.data.goalId;
@@ -35,17 +35,34 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
 
-  const ceoInput = {
-    rawGoal: String(goal.raw_input),
-    priority: String(goal.priority),
-    orgContext: {
-      organizationName: "ORGOS",
-      departments: ["engineering", "product", "marketing", "operations", "sales"]
-    }
-  } as const;
+  // Build a lightweight pseudo-task representing the goal for the hierarchical agent
+  const pseudoTask = {
+    id: goal.id,
+    goal_id: goal.id,
+    title: goal.title,
+    description: goal.description ?? goal.raw_input ?? null,
+    depth: 0,
+    success_criteria: "",
+    is_agent_task: true,
+    status: "pending"
+  } as any;
+
+  const agentInput = {
+    task: pseudoTask,
+    deadline: goal.deadline ? new Date(String(goal.deadline)).toISOString() : undefined,
+    current_position: {
+      id: "position:ceo",
+      name: "CEO",
+      level: 100,
+      max_task_depth: 100,
+      can_create_goals: true
+    },
+    org_chart: [],
+    team_capacity: {}
+  } as any;
 
   if (goal.org_id) {
-    (ceoInput as any).rag = {
+    agentInput.rag = {
       orgId: String(goal.org_id),
       searchClient: ragSearchClient,
       topK: 4,
@@ -53,37 +70,37 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
     };
   }
 
-  if (goal.deadline) {
-    (ceoInput as any).deadline = new Date(String(goal.deadline)).toISOString();
+  const ceoResult = await agentFn(agentInput as any);
+
+  // If the hierarchical agent returned decomposition, create manager jobs
+  if (ceoResult.action === "decompose" && Array.isArray((ceoResult as any).subtasks)) {
+    const directives = (ceoResult as any).subtasks as any[];
+    for (const directive of directives) {
+      await getManagerQueue().add("manager_decompose", {
+        mode: "decompose",
+        goalId,
+        directive: directive.title ?? directive.directive ?? directive.name ?? "",
+        department: directive.target_position_slug ?? directive.target_position ?? directive.department ?? "general",
+        deadline: directive.deadline ?? goal.deadline ?? null
+      });
+    }
+
+    emitGoalDecomposed({ goalId, taskCount: directives.length, tier: "csuite" });
+    await supabase
+      .from("goals")
+      .update({
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", goalId);
+  } else {
+    // If not decomposed, treat as summarized
+    await supabase
+      .from("goals")
+      .update({
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", goalId);
   }
-
-  const ceoResult = await ceoAgent(ceoInput as any);
-
-  const { error: goalUpdateError } = await supabase
-    .from("goals")
-    .update({
-      kpi: ceoResult.kpi,
-      description: ceoResult.summary,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", goalId);
-
-  if (goalUpdateError) {
-    throw new Error(`Failed to update structured goal: ${goalUpdateError.message}`);
-  }
-
-  const directives = flattenRoleDirectives(ceoResult);
-  for (const directive of directives) {
-    await getManagerQueue().add("manager_decompose", {
-      mode: "decompose",
-      goalId,
-      directive: directive.directive,
-      department: directive.role,
-      deadline: directive.deadline
-    });
-  }
-
-  emitGoalDecomposed({ goalId, taskCount: directives.length, tier: "csuite" });
 }
 
 export function startCsuiteDecomposeWorker(): Worker<CsuiteDecomposeJobData> {

@@ -240,3 +240,97 @@ For production:
 - ✅ Rotate credentials immediately if exposed
 - ✅ Use environment variable placeholders in `.env.example`
 - ✅ Store production secrets in cloud provider vault
+
+## Run & Verify: E2E, Observability, CI
+
+These steps cover the remaining local-first items: opt-in smoke E2E, Sentry verification, Prometheus scraping (or Datadog), and CI OIDC deploy wiring.
+
+### 1) Opt-in smoke E2E (local-first, no Docker required)
+
+The repository includes an opt-in smoke E2E test that runs basic end-to-end checks against a running API. By default the smoke tests are skipped to avoid failures when you don't have ephemeral cloud creds.
+
+Prereqs: API running (port 4000) and either Supabase + Upstash ephemeral creds or local Postgres + Redis configured in `.env.local`.
+
+Run locally:
+```bash
+# enable the opt-in smoke suite and point to local API (defaults to http://localhost:4000)
+cd apps/api
+RUN_E2E=true API_URL=http://localhost:4000 npm run test -- --testNamePattern="smoke" 
+```
+
+Alternative target (full smoke integration runner):
+```bash
+# executes the dedicated smoke integration script (uses RUN_E2E guard)
+cd apps/api
+RUN_E2E=true npm run smoke:integration
+```
+
+Notes:
+- If you rely on cloud Supabase/Upstash, set `SUPABASE_*` and `UPSTASH_*` in `.env.local` with ephemeral credentials before running.
+- The smoke tests are intentionally minimal (create account, healthcheck, simple RAG query) — they are not a full load test.
+
+### 2) Verify Sentry ingestion (quick local verification)
+
+1. Create a Sentry project and copy the `SENTRY_DSN`.
+2. Add `SENTRY_DSN` to `.env.local` (or set in your shell), then restart the API.
+
+Example:
+```bash
+cd /path/to/repo
+export SENTRY_DSN="https://<public>@o<org>.ingest.sentry.io/<proj>"
+cd apps/api && npm run dev
+# Trigger an error or visit an endpoint that throws; Sentry captures on unhandled exceptions
+curl http://localhost:4000/health
+```
+
+3. In Sentry UI, search for events from the last 10 minutes to confirm ingestion.
+
+### 3) Prometheus /metrics or Datadog (local verification)
+
+The API exposes `/metrics` (Prometheus format) when `prom-client` is available. For local verification:
+
+```bash
+# Start API
+cd apps/api && npm run dev
+
+# Fetch metrics text
+curl http://localhost:4000/metrics | head -n 40
+```
+
+To scrape with Prometheus (example `prometheus.yml`):
+
+```yaml
+scrape_configs:
+  - job_name: 'orgos-api'
+    static_configs:
+      - targets: ['host.docker.internal:4000'] # adapt for your environment
+    metrics_path: /metrics
+```
+
+Datadog: enable `DATADOG_ENABLED=true` and set `DATADOG_API_KEY` in your environment; the repo includes notes in `ci/OBSERVABILITY_SETUP.md`.
+
+### 4) CI: OIDC deploy wiring (what's required)
+
+We pinned actions and added an OIDC-enabled deploy job stub in `.github/workflows/ci.yml`. To make it functional you must:
+
+- Choose provider: AWS / GCP / Azure.
+- Configure the provider trust (workload identity / OIDC) for GitHub Actions and grant a short-lived role to the action OIDC subject.
+- Add any provider-specific secrets or set the OIDC role mapping in your cloud console — the workflow uses `id-token: write` and expects env variables like `AWS_ROLE_ARN` or `GCP_WORKLOAD_IDENTITY_PROVIDER`.
+
+Quick checklist (provider-agnostic):
+
+1. Create workload identity / OIDC trust from GitHub Actions in cloud provider.
+2. Create a minimal service account / role with least privilege for deploys.
+3. Update repository Secrets or environment with any small required values (the workflow is designed to prefer id-token/OIDC and avoid long-lived secrets).
+4. Run a test deployment in a non-prod environment.
+
+See `ci/GITHUB_ACTIONS_HARDENING.md` for provider-specific steps and example snippets.
+
+### 5) Next steps & recommended order
+
+1. Run opt-in smoke E2E locally (`RUN_E2E=true`) to validate runtime behavior.
+2. Wire Sentry (`SENTRY_DSN`) and confirm events arrive.
+3. Enable Prometheus scraping locally or toggle Datadog flags and confirm metrics.
+4. Configure cloud OIDC for CI deploys and run a dry-run deploy to staging.
+
+If you'd like, I can try to run the opt-in smoke E2E now — but I need ephemeral Supabase/Upstash credentials or confirmation to use local Postgres+Redis. Tell me which you prefer and I'll proceed.

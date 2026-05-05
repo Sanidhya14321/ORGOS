@@ -1,23 +1,25 @@
 import { Queue } from "bullmq";
 
-const redisUrl = process.env.UPSTASH_REDIS_URL;
-const redisToken = process.env.UPSTASH_REDIS_TOKEN;
+const upstashUrl = process.env.UPSTASH_REDIS_URL;
+const upstashToken = process.env.UPSTASH_REDIS_TOKEN;
+const redisUrl = process.env.REDIS_URL || upstashUrl || "redis://localhost:6379";
+const redisPassword = process.env.REDIS_PASSWORD || upstashToken || null;
 
 function fail(message) {
   console.error(message);
   process.exit(1);
 }
 
-if (!redisUrl || !redisToken) {
-  fail("UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN are required for queue smoke checks.");
+if (!redisUrl) {
+  fail("No Redis URL available. Set UPSTASH_REDIS_URL or REDIS_URL.");
 }
 
 const parsed = new URL(redisUrl);
 const connection = {
   host: parsed.hostname,
   port: parsed.port ? Number(parsed.port) : 6379,
-  username: parsed.username || "default",
-  password: redisToken,
+  username: parsed.username || undefined,
+  password: redisPassword || undefined,
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
   tls: parsed.protocol === "rediss:" ? {} : undefined

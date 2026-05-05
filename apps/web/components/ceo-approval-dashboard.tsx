@@ -26,6 +26,7 @@ type FeedItem = {
 type OrgItem = { id: string; name: string; domain?: string | null };
 type Industry = "tech" | "legal" | "healthcare" | "construction" | "finance" | "retail" | "manufacturing" | "education" | "nonprofit" | "hospitality";
 type CompanySize = "startup" | "mid" | "enterprise";
+type OrgStructureKind = "hierarchical" | "functional" | "flat" | "divisional" | "matrix" | "team" | "network" | "process" | "circular" | "line";
 type PositionItem = { id: string; title: string; level: number; confirmed?: boolean };
 type PositionCreateResponse = PositionItem & {
   credentials?: {
@@ -187,6 +188,8 @@ export function CeoApprovalDashboard() {
   const [orgDomain, setOrgDomain] = useState("");
   const [orgIndustry, setOrgIndustry] = useState<Industry>("tech");
   const [orgCompanySize, setOrgCompanySize] = useState<CompanySize>("startup");
+  const [orgStructure, setOrgStructure] = useState<OrgStructureKind | null>(null);
+  const [orgStructureSuggestion, setOrgStructureSuggestion] = useState<{ kind: OrgStructureKind; reason: string } | null>(null);
   const [creatingOrg, setCreatingOrg] = useState(false);
 
   const [newPositionTitle, setNewPositionTitle] = useState("");
@@ -510,6 +513,14 @@ export function CeoApprovalDashboard() {
 
       setOrgId(payload.org.id);
       setOrgName(payload.org.name);
+
+      if (orgStructure) {
+        await apiFetch(`/api/orgs/${payload.org.id}/settings`, {
+          method: "PATCH",
+          body: JSON.stringify({ orgStructure })
+        });
+      }
+
       setMe((prev) => prev ? { ...prev, org_id: payload.org.id } : prev);
       setActivity((items) => [
         {
@@ -558,6 +569,48 @@ export function CeoApprovalDashboard() {
       ]);
     } finally {
       setCreatingOrg(false);
+    }
+  }
+
+  async function saveOrgStructureSelection() {
+    if (!orgId || !orgStructure) {
+      setActivity((items) => [
+        {
+          id: `org-structure-missing-${Date.now()}`,
+          title: "Select a structure first",
+          description: "Choose an organization model and try again.",
+          tone: "warning"
+        },
+        ...items
+      ]);
+      return;
+    }
+
+    try {
+      await apiFetch(`/api/orgs/${orgId}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ orgStructure })
+      });
+
+      setActivity((items) => [
+        {
+          id: `org-structure-saved-${Date.now()}`,
+          title: "Organization model saved",
+          description: `Saved as ${orgStructure}. Agent routing will now use this model.`,
+          tone: "positive"
+        },
+        ...items
+      ]);
+    } catch (error) {
+      setActivity((items) => [
+        {
+          id: `org-structure-save-error-${Date.now()}`,
+          title: "Failed to save organization model",
+          description: error instanceof Error ? error.message : "Unable to persist organization model",
+          tone: "warning"
+        },
+        ...items
+      ]);
     }
   }
 
@@ -1009,6 +1062,86 @@ export function CeoApprovalDashboard() {
                   ) : (
                     <p className="mt-3 text-sm text-[var(--muted)]">No positions yet. Add your level map above.</p>
                   )}
+                </div>
+
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4 mt-4">
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Organization model</p>
+                  <p className="mt-2 text-sm text-[var(--muted)]">Select an organizational model that most closely matches how you want work routed and decisions made.</p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <select
+                      value={orgStructure ?? ""}
+                      onChange={(e) => setOrgStructure((e.target.value || null) as OrgStructureKind | null)}
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+                    >
+                      <option value="">Auto-detect / none</option>
+                      <option value="hierarchical">Hierarchical</option>
+                      <option value="functional">Functional</option>
+                      <option value="flat">Flat</option>
+                      <option value="divisional">Divisional</option>
+                      <option value="matrix">Matrix</option>
+                      <option value="team">Team / Squad</option>
+                      <option value="network">Network / Partners</option>
+                      <option value="process">Process-driven</option>
+                      <option value="circular">Circular</option>
+                      <option value="line">Line</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (orgId) {
+                            const res = await apiFetch(`/api/orgs/${orgId}/suggest-structure`, { method: "POST" });
+                            setOrgStructureSuggestion({ kind: (res as any).suggested_structure as OrgStructureKind, reason: (res as any).reason });
+                            setOrgStructure((res as any).suggested_structure as OrgStructureKind);
+                          } else {
+                            // Fallback local heuristic if orgId is not available
+                            const posCount = positions.length;
+                            const maxLevel = positions.reduce((m, p) => Math.max(m, p.level || 0), 0);
+                            let suggestion = "hierarchical";
+                            let reason = "Default to hierarchical.";
+
+                            if (orgCompanySize === "startup") {
+                              if (posCount < 15) { suggestion = "flat"; reason = "Small startup with few position levels prefers a flat model."; }
+                              else if (posCount < 50) { suggestion = "team"; reason = "Growing startup — team-based squads fit well."; }
+                              else { suggestion = "functional"; reason = "Growing headcount suggests functionally organized teams."; }
+                            } else if (orgCompanySize === "mid") {
+                              if (maxLevel <= 2) { suggestion = "functional"; reason = "Mid-sized org with shallow levels benefits from functional organization."; }
+                              else { suggestion = "hierarchical"; reason = "Deeper levels suggest hierarchical structure."; }
+                            } else { // enterprise
+                              if (posCount > 300) { suggestion = "divisional"; reason = "Large organization with many positions fits divisional or matrix models."; }
+                              else { suggestion = "matrix"; reason = "Enterprise with cross-cutting programs benefits from matrix model."; }
+                            }
+
+                            setOrgStructureSuggestion({ kind: suggestion as OrgStructureKind, reason });
+                            setOrgStructure(suggestion as OrgStructureKind);
+                          }
+                        } catch (err) {
+                          if (err instanceof ApiError) {
+                            alert(`Suggestion failed: ${err.message}`);
+                          } else {
+                            alert(`Suggestion failed`);
+                          }
+                        }
+                      }}
+                      className="rounded-2xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#0f1115]"
+                    >
+                      Suggest structure
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveOrgStructureSelection}
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--ink)]"
+                    >
+                      Apply structure
+                    </button>
+                  </div>
+
+                  {orgStructureSuggestion ? (
+                    <div className="mt-3 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
+                      <p className="font-semibold">Suggested: {orgStructureSuggestion.kind}</p>
+                      <p className="mt-1 text-[var(--muted)]">{orgStructureSuggestion.reason}</p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">

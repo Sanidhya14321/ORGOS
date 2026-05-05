@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OrgStructureKindSchema } from "./org-structure.schema.js";
 
 /**
  * Legacy Org Schema - DEPRECATED
@@ -31,6 +32,7 @@ export const OrganizationSchema = z.object({
   
   // Hierarchy settings
   max_hierarchy_depth: z.number().int().min(1).max(20).default(6),
+  org_structure: OrgStructureKindSchema.optional(),
   allow_multi_position: z.boolean().default(true),
   allow_skip_level_delegation: z.boolean().default(false),
   

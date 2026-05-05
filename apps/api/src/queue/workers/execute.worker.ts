@@ -1,5 +1,5 @@
 import { Worker, type Job } from "bullmq";
-import { workerAgent } from "@orgos/agent-core";
+import { hierarchicalAgent } from "@orgos/agent-core";
 import type { Task } from "@orgos/shared-types";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
@@ -76,7 +76,7 @@ async function resolveManagerAssignee(taskId: string): Promise<string | null> {
   return null;
 }
 
-export async function processExecuteJob(job: Job<ExecuteJobData>): Promise<void> {
+export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hierarchicalAgent): Promise<void> {
   const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
@@ -130,20 +130,43 @@ export async function processExecuteJob(job: Job<ExecuteJobData>): Promise<void>
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
 
-  const report = await workerAgent({
+  const agentInput = {
     task: taskForAgent,
     goalContext: `${goal.title} ${goal.description ?? ""}`.trim(),
-    ...(task.org_id
-      ? {
-          rag: {
-            orgId: String(task.org_id),
-            searchClient: ragSearchClient,
-            topK: 4,
-            maxSnippetChars: 400
-          }
-        }
-      : {})
-  });
+    current_position: {
+      id: task.assigned_to ? `user:${task.assigned_to}` : "position:worker",
+      name: "worker",
+      level: 1,
+      max_task_depth: 10,
+      can_create_goals: false
+    },
+    org_chart: [],
+    team_capacity: {}
+  } as any;
+
+  if (task.org_id) {
+    agentInput.rag = {
+      orgId: String(task.org_id),
+      searchClient: ragSearchClient,
+      topK: 4,
+      maxSnippetChars: 400
+    };
+  }
+
+  const agentOutput = await agentFn(agentInput as any);
+
+  // Normalize to previous report shape
+  const report = {
+    id: `report:${task.id}:${Date.now()}`,
+    task_id: task.id,
+    is_agent: true,
+    status: (agentOutput as any).status ?? "completed",
+    insight: (agentOutput as any).reasoning ?? null,
+    data: (agentOutput as any).execution_plan ?? (agentOutput as any).plan ?? null,
+    confidence: (agentOutput as any).confidence ?? null,
+    sources: (agentOutput as any).sources ?? [],
+    escalate: (agentOutput as any).action === "escalate" || (agentOutput as any).escalate === true
+  } as any;
 
   const { data: insertedReport, error: reportError } = await supabase
     .from("reports")

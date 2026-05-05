@@ -35,6 +35,28 @@ const OrgIdParamSchema = z.object({
   id: z.string().uuid()
 });
 
+const OrgStructureSchema = z.enum([
+  "hierarchical",
+  "functional",
+  "flat",
+  "divisional",
+  "matrix",
+  "team",
+  "network",
+  "process",
+  "circular",
+  "line"
+]);
+
+const OrgSettingsPatchBodySchema = z
+  .object({
+    orgStructure: OrgStructureSchema.optional(),
+    org_structure: OrgStructureSchema.optional()
+  })
+  .transform((value) => ({
+    orgStructure: value.orgStructure ?? value.org_structure
+  }));
+
 const LevelSchema = z.coerce.number().int().min(0).max(999);
 
 const PositionBodySchema = z.object({
@@ -290,6 +312,178 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send({ items: data ?? [] });
+  });
+
+  // Suggest an organization structure based on current positions and org size
+  fastify.post("/orgs/:id/suggest-structure", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const parsed = OrgIdParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization id");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId || requesterOrgId !== parsed.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
+    }
+
+    // Load positions and org settings
+    const positionsResult = await fastify.supabaseService
+      .from("positions")
+      .select("id, title, level")
+      .eq("org_id", parsed.data.id);
+
+    if (positionsResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load positions");
+    }
+
+    const orgResult = await fastify.supabaseService
+      .from("orgs")
+      .select("company_size")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+
+    const companySize = (orgResult.data?.company_size as string | undefined) ?? "startup";
+
+    const positions = positionsResult.data ?? [];
+    const posCount = positions.length;
+    const maxLevel = positions.reduce((m: number, p: any) => Math.max(m, Number(p.level ?? 0)), 0);
+
+    // Simple deterministic heuristic
+    let suggestion = "hierarchical";
+    let reason = "Default to hierarchical.";
+
+    if (companySize === "startup") {
+      if (posCount < 15) { suggestion = "flat"; reason = "Small startup with few positions prefers a flat model."; }
+      else if (posCount < 50) { suggestion = "team"; reason = "Growing startup — team-based squads fit well."; }
+      else { suggestion = "functional"; reason = "Growing headcount suggests functionally organized teams."; }
+    } else if (companySize === "mid") {
+      if (maxLevel <= 2) { suggestion = "functional"; reason = "Mid-sized org with shallow levels benefits from functional organization."; }
+      else { suggestion = "hierarchical"; reason = "Deeper levels suggest hierarchical structure."; }
+    } else { // enterprise
+      if (posCount > 300) { suggestion = "divisional"; reason = "Large organization with many positions fits divisional or matrix models."; }
+      else { suggestion = "matrix"; reason = "Enterprise with cross-cutting programs benefits from matrix model."; }
+    }
+
+    return reply.send({ suggested_structure: suggestion, reason, posCount, maxLevel, companySize });
+  });
+
+  fastify.get("/orgs/:id/settings", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+    const parsed = OrgIdParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization id");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId || requesterOrgId !== parsed.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
+    }
+
+    const settingsResult = await fastify.supabaseService
+      .from("org_settings")
+      .select("org_id, industry, company_size, org_structure")
+      .eq("org_id", parsed.data.id)
+      .maybeSingle();
+
+    if (settingsResult.error) {
+      if (isMissingTableSchemaCache(settingsResult.error)) {
+        return reply.send({
+          org_id: parsed.data.id,
+          industry: "tech",
+          company_size: "startup",
+          org_structure: "hierarchical"
+        });
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization settings");
+    }
+
+    return reply.send(
+      settingsResult.data ?? {
+        org_id: parsed.data.id,
+        industry: "tech",
+        company_size: "startup",
+        org_structure: "hierarchical"
+      }
+    );
+  });
+
+  fastify.patch("/orgs/:id/settings", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const params = OrgIdParamSchema.safeParse(request.params);
+    const body = OrgSettingsPatchBodySchema.safeParse(request.body);
+
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization settings payload", {
+        details: {
+          params: params.success ? null : params.error.flatten(),
+          body: body.success ? null : body.error.flatten()
+        }
+      });
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId || requesterOrgId !== params.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
+    }
+
+    if (!body.data.orgStructure) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "No settings changes requested");
+    }
+
+    const existingSettings = await fastify.supabaseService
+      .from("org_settings")
+      .select("org_id, industry, company_size")
+      .eq("org_id", params.data.id)
+      .maybeSingle();
+
+    if (existingSettings.error && !isMissingTableSchemaCache(existingSettings.error)) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to resolve organization settings");
+    }
+
+    const baseIndustry = (existingSettings.data?.industry as (typeof IndustryValues)[number] | undefined) ?? "tech";
+    const baseCompanySize = (existingSettings.data?.company_size as (typeof CompanySizeValues)[number] | undefined) ?? "startup";
+
+    const upsertResult = await fastify.supabaseService
+      .from("org_settings")
+      .upsert(
+        {
+          org_id: params.data.id,
+          industry: baseIndustry,
+          company_size: baseCompanySize,
+          org_structure: body.data.orgStructure
+        },
+        { onConflict: "org_id" }
+      )
+      .select("org_id, industry, company_size, org_structure")
+      .maybeSingle();
+
+    if (upsertResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update organization settings", {
+        details: upsertResult.error.message
+      });
+    }
+
+    await invalidateOrgPromptCache(fastify, params.data.id);
+
+    return reply.send(upsertResult.data ?? {
+      org_id: params.data.id,
+      industry: baseIndustry,
+      company_size: baseCompanySize,
+      org_structure: body.data.orgStructure
+    });
   });
 
   fastify.get("/orgs/:id/tree", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
