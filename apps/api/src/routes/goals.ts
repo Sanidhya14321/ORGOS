@@ -279,6 +279,63 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send(data);
   });
+
+  fastify.delete("/goals/:id", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const ParamsSchema = z.object({ id: z.string().uuid() });
+    const params = ParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid goal id", { field: "id" });
+    }
+
+    const goalId = params.data.id;
+
+    // First verify the goal exists
+    const { data: goal, error: fetchError } = await fastify.supabaseService
+      .from("goals")
+      .select("id")
+      .eq("id", goalId)
+      .maybeSingle();
+
+    if (fetchError) {
+      if (isSchemaCacheUnavailable(fetchError)) {
+        return sendApiError(
+          reply,
+          request,
+          503,
+          "SERVICE_UNAVAILABLE",
+          "Goal tables are not available yet; apply DB migrations first"
+        );
+      }
+      request.log.error({ err: fetchError }, "Failed to fetch goal");
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch goal");
+    }
+
+    if (!goal) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Goal not found");
+    }
+
+    // Delete the goal
+    const { error: deleteError } = await fastify.supabaseService
+      .from("goals")
+      .delete()
+      .eq("id", goalId);
+
+    if (deleteError) {
+      if (isSchemaCacheUnavailable(deleteError)) {
+        return sendApiError(
+          reply,
+          request,
+          503,
+          "SERVICE_UNAVAILABLE",
+          "Goal tables are not available yet; apply DB migrations first"
+        );
+      }
+      request.log.error({ err: deleteError }, "Failed to delete goal");
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to delete goal");
+    }
+
+    return reply.status(204).send();
+  });
 };
 
 export default goalsRoutes;

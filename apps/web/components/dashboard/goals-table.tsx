@@ -152,6 +152,19 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
     }
   }
 
+  async function deleteGoal(goalId: string, goalTitle: string) {
+    if (!window.confirm(`Delete goal "${goalTitle}"?`)) return;
+    try {
+      await apiFetch(`/api/goals/${goalId}`, { method: "DELETE" });
+      void queryClient.invalidateQueries({ queryKey: ["goals", "page"] });
+      void queryClient.invalidateQueries({ queryKey: ["goals"] });
+      toast.success(`Goal deleted`);
+    } catch (err) {
+      const msg = (err as any)?.message || "Failed to delete goal";
+      toast.error(msg);
+    }
+  }
+
   // Role gating for edit visibility
   const currentRole = typeof window !== "undefined" ? getRoleFromBrowser() : null;
   const canEdit = currentRole ? ["ceo", "cfo"].includes(currentRole.toLowerCase()) : false;
@@ -255,8 +268,8 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                 : "No SLA";
 
               return (
-                <use key={goal.id}>
-                  <TableRow className={`group border-[var(--border)] transition-colors hover:bg-[var(--bg-subtle)]/25 ${isExpanded ? 'bg-[var(--bg-subtle)]/15' : ''}`}>
+                <>
+                  <TableRow key={goal.id} className={`group border-[var(--border)] transition-colors hover:bg-[var(--bg-subtle)]/25 ${isExpanded ? 'bg-[var(--bg-subtle)]/15' : ''}`}>
                     <TableCell className="py-4">
                       <button 
                         className="group/btn flex items-center gap-3 text-left focus:outline-none" 
@@ -315,17 +328,26 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-40 bg-[var(--surface)] shadow-md ">
-                                          {canEdit ? (
-                                            <DropdownMenuItem onClick={() => openEdit(goal)} className="text-xs font-medium cursor-pointer hover:text-white">Edit Goal</DropdownMenuItem>
-                                          ) : (
-                                            <DropdownMenuItem className="text-xs font-medium text-[var(--muted)] cursor-not-allowed" disabled title="Requires CEO or CFO role to edit goals">
-                                              Edit (insufficient role)
-                                            </DropdownMenuItem>
-                                          )}
-                                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:text-white">View Analytics</DropdownMenuItem>
-                                          <DropdownMenuItem className="text-xs font-medium cursor-pointer text-red-500 ">Delete Goal</DropdownMenuItem>
-                                        </DropdownMenuContent>
+                        <DropdownMenuContent align="end" className="w-40 bg-[var(--surface)] shadow-md">
+                          {canEdit ? (
+                            <DropdownMenuItem onClick={() => openEdit(goal)} className="text-xs font-medium cursor-pointer hover:bg-[var(--bg-subtle)]">Edit Goal</DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem className="text-xs font-medium text-[var(--muted)] cursor-not-allowed" disabled title="Requires CEO or CFO role to edit goals">
+                              Edit (insufficient role)
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:bg-[var(--bg-subtle)]" onClick={() => window.open(`/dashboard/goals/${goal.id}/analytics`, '_blank')}>
+                            View Analytics
+                          </DropdownMenuItem>
+                          {canEdit && (
+                            <DropdownMenuItem 
+                              className="text-xs font-medium cursor-pointer text-red-500 hover:bg-red-500/10"
+                              onClick={() => deleteGoal(goal.id, goal.title)}
+                            >
+                              Delete Goal
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
@@ -362,7 +384,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                       </TableCell>
                     </TableRow>
                   )}
-                </use>
+                </>
               );
             })}
           </TableBody>

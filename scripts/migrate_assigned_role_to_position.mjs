@@ -1,16 +1,13 @@
 #!/usr/bin/env node
+import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import * as dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Import the repo's Supabase client helper
-const clientsPath = path.join(__dirname, '..', 'apps', 'api', 'src', 'lib', 'clients.js');
-const envPath = path.join(__dirname, '..', 'apps', 'api', 'src', 'config', 'env.js');
-
-const { createSupabaseServiceClient } = await import(`file://${clientsPath}`);
-const { readEnv } = await import(`file://${envPath}`);
+// Load .env.local for local development
+dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') });
 
 const roleLevelMap = {
   ceo: 0,
@@ -25,10 +22,31 @@ function parseFlags(argv) {
   };
 }
 
+function validateEnv() {
+  const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+  const missing = required.filter(k => !process.env[k]);
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+
+  return {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+}
+
 async function main() {
   const flags = parseFlags(process.argv.slice(2));
-  const env = readEnv();
-  const supabase = createSupabaseServiceClient(env);
+  const env = validateEnv();
+  
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
 
   console.log('Starting migration: assigned_role -> assigned_position_id');
   if (flags.dryRun) {
