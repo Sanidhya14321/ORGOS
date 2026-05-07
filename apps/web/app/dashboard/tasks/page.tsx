@@ -6,7 +6,7 @@ import type { Role } from "@/lib/models";
 
 const allowedRoles: Role[] = ["ceo", "cfo", "manager", "worker"];
 
-type TaskBoardPageProps = {
+type TasksPageProps = {
   searchParams?: {
     goalId?: string | string[];
     taskId?: string | string[];
@@ -17,7 +17,7 @@ function readParam(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
-export default function TaskBoardPage({ searchParams }: TaskBoardPageProps) {
+export default function TasksPage({ searchParams }: TasksPageProps) {
   const cookieRole = cookies().get(ROLE_COOKIE)?.value as Role | undefined;
   const initialGoalId = readParam(searchParams?.goalId);
   const initialTaskId = readParam(searchParams?.taskId);

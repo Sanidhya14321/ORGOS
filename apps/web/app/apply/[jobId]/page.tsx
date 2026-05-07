@@ -11,6 +11,7 @@ import type { Job } from "@/lib/models";
 
 export default function PublicJobApplyPage() {
   const params = useParams<{ jobId: string }>();
+  const jobId = typeof params?.jobId === "string" ? params.jobId : "";
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -20,13 +21,14 @@ export default function PublicJobApplyPage() {
   const [resumePath, setResumePath] = useState("");
 
   const jobQuery = useQuery({
-    queryKey: ["public-job", params.jobId],
-    queryFn: () => apiFetch<Job>(`/api/recruitment/jobs/${params.jobId}`)
+    queryKey: ["public-job", jobId],
+    queryFn: () => apiFetch<Job>(`/api/recruitment/jobs/${jobId}`),
+    enabled: Boolean(jobId)
   });
 
   const applyMutation = useMutation({
     mutationFn: () =>
-      apiFetch(`/api/recruitment/jobs/${params.jobId}/apply`, {
+      apiFetch(`/api/recruitment/jobs/${jobId}/apply`, {
         method: "POST",
         body: JSON.stringify({
           fullName,
@@ -46,6 +48,17 @@ export default function PublicJobApplyPage() {
         <div className="rounded-xl border border-border bg-bg-surface p-6 text-center shadow-sm">
           <p className="text-lg font-semibold text-text-primary">Your application has been received.</p>
           <p className="mt-1 text-sm text-text-secondary">We will be in touch.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!jobId) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-[600px] items-center justify-center bg-bg-base p-6">
+        <div className="rounded-xl border border-border bg-bg-surface p-6 text-center shadow-sm">
+          <p className="text-lg font-semibold text-text-primary">Job not found.</p>
+          <p className="mt-1 text-sm text-text-secondary">The application link is missing a job id.</p>
         </div>
       </main>
     );

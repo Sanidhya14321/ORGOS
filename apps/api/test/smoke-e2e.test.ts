@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
  */
 
 const API_URL = process.env.API_URL || 'http://localhost:4000';
-const TEST_EMAIL = process.env.TEST_EMAIL || 'smoke-test@velocity-labs.orgos.ai';
+const TEST_EMAIL = process.env.TEST_EMAIL || 'smoke-test@test.orgos.ai';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || TEST_EMAIL;
 const runE2E = process.env.RUN_E2E === 'true';
 

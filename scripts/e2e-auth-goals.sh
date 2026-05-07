@@ -4,7 +4,7 @@ API=${API:-http://localhost:4000}
 COOKIEJAR=$(mktemp)
 trap 'rm -f "$COOKIEJAR"' EXIT
 
-EMAIL=${EMAIL:-ceo@velocity-labs.orgos.ai}
+EMAIL=${EMAIL:-ceo@test.orgos.ai}
 PASSWORD=${PASSWORD:-$EMAIL}
 
 echo "API_BASE=$API"

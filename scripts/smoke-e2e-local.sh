@@ -30,7 +30,7 @@ log_step() {
 }
 
 # Test data
-CEO_EMAIL="${EMAIL:-ceo@velocity-labs.orgos.ai}"
+CEO_EMAIL="${EMAIL:-ceo@test.orgos.ai}"
 CEO_PASSWORD="${PASSWORD:-$CEO_EMAIL}"
 TEST_GOAL_TITLE="Smoke Test Goal - $(date +%s)"
 TEST_GOAL_PRIORITY="high"

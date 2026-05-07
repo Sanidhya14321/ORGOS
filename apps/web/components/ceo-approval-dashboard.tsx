@@ -962,14 +962,14 @@ export function CeoApprovalDashboard() {
                     type="text"
                     value={orgName}
                     onChange={(event) => setOrgName(event.target.value)}
-                    placeholder="ORGOS Velocity Labs"
+                    placeholder="ORGOS Test Org"
                   />
                   <input
                     className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
                     type="text"
                     value={orgDomain}
                     onChange={(event) => setOrgDomain(event.target.value)}
-                    placeholder="velocity-labs.orgos.ai"
+                    placeholder="test.orgos.ai"
                   />
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">

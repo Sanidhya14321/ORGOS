@@ -6,7 +6,7 @@ test('goal appears in UI after authenticated creation', async ({ page, request }
 
   // Login via API to obtain cookie
   const loginResp = await request.post(`${API}/api/auth/login`, {
-    data: { email: 'ceo@velocity-labs.orgos.ai', password: 'ceo@velocity-labs.orgos.ai' }
+    data: { email: 'ceo@test.orgos.ai', password: 'ceo@test.orgos.ai' }
   });
   expect(loginResp.ok()).toBeTruthy();
 

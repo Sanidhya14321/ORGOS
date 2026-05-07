@@ -25,7 +25,7 @@ function titleFromPath(pathname: string): string {
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/dashboard";
   const socket = useSocket();
   useRealtimeQueryInvalidation(true);
   const pageTitle = titleFromPath(pathname);

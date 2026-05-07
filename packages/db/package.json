@@ -9,7 +9,7 @@
     "lint": "echo \"No lint config yet\"",
     "typecheck": "echo \"No TypeScript files yet\"",
     "seed:demo": "tsx seeds/demo_org.ts",
-    "seed:velocity": "tsx seeds/velocity_labs_org.ts"
+    "seed:test": "tsx seeds/test_org_comprehensive.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

@@ -1,14 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { apiFetch } from "@/lib/api";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import type { Task } from "@/lib/models";
+
+type TaskBoardViewProps = {
+  initialGoalId?: string;
+  initialTaskId?: string;
+};
 
 function VirtualTaskColumn({ tasks, onOpen }: { tasks: Task[]; onOpen: (task: Task) => void }) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -45,15 +51,39 @@ function VirtualTaskColumn({ tasks, onOpen }: { tasks: Task[]; onOpen: (task: Ta
   );
 }
 
-export function TaskBoardView() {
+export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [query, setQuery] = useState("");
+  const [focusedGoalId, setFocusedGoalId] = useState<string | null>(null);
+  const [initialSelectionApplied, setInitialSelectionApplied] = useState(false);
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", "board"],
     queryFn: () => apiFetch<{ items: Task[] }>("/api/tasks?limit=200"),
     select: (data) => data.items
   });
+
+  useEffect(() => {
+    if (initialSelectionApplied || tasksQuery.data === undefined) {
+      return;
+    }
+
+    const tasks = tasksQuery.data ?? [];
+    const initialTask = initialTaskId ? tasks.find((task) => task.id === initialTaskId) : undefined;
+    const initialGoalExists = initialGoalId ? tasks.some((task) => task.goal_id === initialGoalId) : false;
+
+    if (initialTask) {
+      setSelectedTask(initialTask);
+    }
+
+    if (initialGoalExists) {
+      setFocusedGoalId(initialGoalId ?? null);
+    } else if (!focusedGoalId) {
+      setFocusedGoalId(tasks[0]?.goal_id ?? null);
+    }
+
+    setInitialSelectionApplied(true);
+  }, [focusedGoalId, initialGoalId, initialSelectionApplied, initialTaskId, tasksQuery.data]);
 
   const filtered = useMemo(
     () => (tasksQuery.data ?? []).filter((task) => task.title.toLowerCase().includes(query.toLowerCase())),
@@ -69,6 +99,19 @@ export function TaskBoardView() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-bg-surface px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">Execution focus</p>
+          <p className="mt-1 text-sm text-text-primary">
+            {focusedGoalId ? `Goal ${focusedGoalId.slice(0, 8)} is highlighted from the projects map.` : "Showing the full task board."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">Tasks and goals linked by goal_id</Badge>
+          {selectedTask ? <Badge variant="outline">Task drawer open</Badge> : null}
+        </div>
+      </div>
+
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}

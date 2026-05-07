@@ -12,7 +12,7 @@ const API_BASE =
 function VerifyPageContent() {
   const params = useSearchParams();
   const router = useRouter();
-  const initialEmail = useMemo(() => params.get("email") ?? "", [params]);
+  const initialEmail = useMemo(() => params?.get("email") ?? "", [params]);
 
   const [email, setEmail] = useState(initialEmail);
   const [pending, setPending] = useState(false);

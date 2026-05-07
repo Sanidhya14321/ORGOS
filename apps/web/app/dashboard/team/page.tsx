@@ -50,13 +50,13 @@ export default function TeamPage() {
     queryFn: () => apiFetch('/api/team'),
   });
 
-  const availableEmployeesQuery = useQuery<{ items: AvailableEmployee[] }>({
+  const availableEmployeesQuery = useQuery<AvailableEmployee[]>({
     queryKey: ['available-employees'],
     queryFn: async () => {
       const userRes = await apiFetch<{ org_id: string }>('/api/me');
-      return apiFetch<{ items: AvailableEmployee[] }>(`/api/orgs/${userRes.org_id}/accounts`);
+      const result = await apiFetch<{ items: AvailableEmployee[] }>(`/api/orgs/${userRes.org_id}/accounts`);
+      return result.items ?? [];
     },
-    select: (data) => data.items ?? [],
     enabled: !isCEO
   });
 
@@ -68,7 +68,7 @@ export default function TeamPage() {
 
   const filteredEmployees = useMemo(() => {
     if (!availableEmployeesQuery.data) return [];
-    return availableEmployeesQuery.data.filter(emp =>
+    return availableEmployeesQuery.data.filter((emp: AvailableEmployee) =>
       emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.email.toLowerCase().includes(searchQuery.toLowerCase())
     );

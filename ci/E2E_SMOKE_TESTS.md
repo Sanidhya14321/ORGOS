@@ -251,4 +251,3 @@ Expected run time: **10–30 seconds** (depends on network latency)
 - [Supabase Setup](https://supabase.com/docs/guides/getting-started/quickstarts/nextjs)
 - [Upstash Redis](https://upstash.com/docs/redis/features/rest-api)
 - [Prometheus Metrics Format](https://prometheus.io/docs/instrumenting/exposition_formats/)
-- [VELOCITY_LABS_LOGIN_README.md](../../VELOCITY_LABS_LOGIN_README.md) - Test credentials

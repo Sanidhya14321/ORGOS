@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialEmail = useMemo(() => searchParams.get("email") ?? "", [searchParams]);
+  const initialEmail = useMemo(() => searchParams?.get("email") ?? "", [searchParams]);
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

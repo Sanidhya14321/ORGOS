@@ -17,7 +17,7 @@ const items = [
 ] as const;
 
 export function MobileBottomNav() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/dashboard";
   const meQuery = useMeQuery();
   const role = meQuery.data?.role ?? "worker";
   const visibleItems = items.filter((item) => item.show(role));
