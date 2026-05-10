@@ -45,19 +45,35 @@ export default function TeamPage() {
   const browserRole = typeof window !== "undefined" ? getRoleFromBrowser() : null;
   const isCEO = browserRole?.toLowerCase() === "ceo";
 
-  const teamQuery = useQuery<TeamResponse>({
-    queryKey: ['team'],
-    queryFn: () => apiFetch('/api/team'),
+  // Get user info to fetch org_id
+  const meQuery = useQuery({
+    queryKey: ['team-me'],
+    queryFn: () => apiFetch<{ org_id: string }>('/api/me'),
   });
 
-  const availableEmployeesQuery = useQuery<AvailableEmployee[]>({
-    queryKey: ['available-employees'],
+  // Fetch positions from the correct org endpoint
+  const positionsQuery = useQuery({
+    queryKey: ['positions', meQuery.data?.org_id],
+    queryFn: () => apiFetch<{ items: any[] }>(`/api/orgs/${meQuery.data?.org_id}/positions`),
+    select: (data) => data.items ?? [],
+    enabled: !!meQuery.data?.org_id
+  });
+
+  // Fetch team members from the correct org endpoint
+  const teamQuery = useQuery({
+    queryKey: ['team-members', meQuery.data?.org_id],
+    queryFn: () => apiFetch<{ items: TeamMember[] }>(`/api/orgs/${meQuery.data?.org_id}/accounts?limit=100`),
+    select: (data) => data,
+    enabled: !!meQuery.data?.org_id
+  });
+
+  const availableEmployeesQuery = useQuery({
+    queryKey: ['available-employees', meQuery.data?.org_id],
     queryFn: async () => {
-      const userRes = await apiFetch<{ org_id: string }>('/api/me');
-      const result = await apiFetch<{ items: AvailableEmployee[] }>(`/api/orgs/${userRes.org_id}/accounts`);
-      return result.items ?? [];
+      return apiFetch<{ items: AvailableEmployee[] }>(`/api/orgs/${meQuery.data?.org_id}/accounts?limit=100`);
     },
-    enabled: !isCEO
+    select: (data) => data.items ?? [],
+    enabled: !!meQuery.data?.org_id && !isCEO
   });
 
   const [open, setOpen] = useState(false);
@@ -68,7 +84,7 @@ export default function TeamPage() {
 
   const filteredEmployees = useMemo(() => {
     if (!availableEmployeesQuery.data) return [];
-    return availableEmployeesQuery.data.filter((emp: AvailableEmployee) =>
+    return availableEmployeesQuery.data.filter(emp =>
       emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       emp.email.toLowerCase().includes(searchQuery.toLowerCase())
     );
@@ -76,16 +92,16 @@ export default function TeamPage() {
 
   const addMemberMutation = useMutation({
     mutationFn: (employeeId: string) =>
-      apiFetch('/api/team/members', {
-        method: 'POST',
-        body: JSON.stringify({ employee_id: employeeId })
+      apiFetch(`/api/orgs/members/${employeeId}/structure`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: 'worker', department: 'General' })
       }),
     onSuccess: () => {
       toast.success('Team member added');
       setOpen(false);
       setSearchQuery('');
       setSelectedEmployeeId('');
-      void queryClient.invalidateQueries({ queryKey: ['team'] });
+      void queryClient.invalidateQueries({ queryKey: ['team-members'] });
       void queryClient.invalidateQueries({ queryKey: ['available-employees'] });
     },
     onError: (err) => {
@@ -96,10 +112,13 @@ export default function TeamPage() {
 
   const removeMemberMutation = useMutation({
     mutationFn: (memberId: string) =>
-      apiFetch(`/api/team/members/${memberId}`, { method: 'DELETE' }),
+      apiFetch(`/api/orgs/members/${memberId}/structure`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'inactive' })
+      }),
     onSuccess: () => {
       toast.success('Team member removed');
-      void queryClient.invalidateQueries({ queryKey: ['team'] });
+      void queryClient.invalidateQueries({ queryKey: ['team-members'] });
       void queryClient.invalidateQueries({ queryKey: ['available-employees'] });
     },
     onError: (err) => {
@@ -108,18 +127,16 @@ export default function TeamPage() {
     }
   });
 
-  if (teamQuery.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-32" />
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full" />
-        ))}
-      </div>
-    );
-  }
+  const team = teamQuery.data?.items || [];
 
-  const team = teamQuery.data?.members || [];
+  // Create a map of position_id to position title for easier lookup
+  const positionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (positionsQuery.data || []).forEach((pos: any) => {
+      map.set(pos.id, pos.title);
+    });
+    return map;
+  }, [positionsQuery.data]);
 
   const getInitials = (name: string) =>
     name
@@ -285,6 +302,12 @@ export default function TeamPage() {
                           <Badge className={member.status === 'active' ? 'bg-success-subtle text-success' : 'bg-bg-subtle text-text-secondary'}>
                             {member.status || 'inactive'}
                           </Badge>
+                          {/* Show Position */}
+                          {member.position_id && positionMap.get(member.position_id) && (
+                            <Badge className="bg-blue-50 text-blue-700 border border-blue-200">
+                              📍 {positionMap.get(member.position_id)}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-text-secondary">{member.role}</p>
                         <div className="mt-1 flex flex-wrap gap-3 text-xs text-text-secondary">

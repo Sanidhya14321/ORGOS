@@ -617,7 +617,64 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch tasks", details ? { details } : undefined);
     }
 
-    return reply.send({ page, limit, total: count ?? 0, items: data ?? [] });
+    // Enrich tasks with position and assignee context
+    const tasks = data ?? [];
+    const positionIds = Array.from(new Set(tasks.map((t) => t.assigned_position_id).filter((id) => id)));
+    const assigneeIds = Array.from(new Set(tasks.map((t) => t.assigned_to).filter((id) => id)));
+
+    const positionsById = new Map<string, { title: string; level: number }>();
+    const assigneesById = new Map<string, { full_name: string; position_title: string; role: string }>();
+
+    if (positionIds.length > 0) {
+      const { data: positions } = await fastify.supabaseService
+        .from("positions")
+        .select("id, title, level")
+        .in("id", positionIds);
+
+      if (positions) {
+        for (const pos of positions) {
+          positionsById.set(pos.id as string, {
+            title: (pos.title as string) || "Unknown",
+            level: (pos.level as number) ?? 2
+          });
+        }
+      }
+    }
+
+    if (assigneeIds.length > 0) {
+      const { data: assignees } = await fastify.supabaseService
+        .from("users")
+        .select("id, full_name, position_id, role")
+        .in("id", assigneeIds);
+
+      if (assignees) {
+        for (const assignee of assignees) {
+          const posId = assignee.position_id as string;
+          const posTitle = positionsById.get(posId)?.title || "Unknown";
+          assigneesById.set(assignee.id as string, {
+            full_name: (assignee.full_name as string) || "Unknown",
+            position_title: posTitle,
+            role: (assignee.role as string) || "worker"
+          });
+        }
+      }
+    }
+
+    const enrichedItems = tasks.map((task) => {
+      const assignedPos = positionsById.get(task.assigned_position_id as string);
+      const assignee = assigneesById.get(task.assigned_to as string);
+
+      return {
+        ...task,
+        assigned_position_title: assignedPos?.title,
+        assigned_position_level: assignedPos?.level,
+        assigned_to_name: assignee?.full_name,
+        assigned_to_position: assignee?.position_title,
+        assigned_to_role: assignee?.role
+      };
+    });
+
+    return reply.send({ page, limit, total: count ?? 0, items: enrichedItems });
   });
 
   fastify.get("/tasks/workload/capacity", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {

@@ -12,6 +12,10 @@ export function TaskCard({ task, onOpen }: { task: Task; onOpen: (task: Task) =>
   const priorityTone = task.priority === "critical" ? "border-l-danger" : task.priority === "high" ? "border-l-warning" : task.priority === "medium" ? "border-l-info" : "border-l-border";
   const overdue = Boolean(task.is_overdue) || (task.deadline ? new Date(task.deadline).getTime() < Date.now() && task.status !== "completed" : false);
 
+  // Extract manager/position context from enriched API response
+  const assignedPosition = (task as any).assigned_position_title;
+  const assignedToName = (task as any).assigned_to_name;
+
   return (
     <motion.button
       whileHover={{ scale: 1.01 }}
@@ -21,6 +25,22 @@ export function TaskCard({ task, onOpen }: { task: Task; onOpen: (task: Task) =>
     >
       <p className="dashboard-label">Goal {task.goal_id.slice(0, 8)}</p>
       <p className="mt-2 text-sm font-semibold tracking-tight text-[var(--ink)]">{task.title}</p>
+
+      {/* Position & Assignee Context */}
+      {(assignedPosition || assignedToName) && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {assignedPosition && (
+            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+              📍 {assignedPosition}
+            </Badge>
+          )}
+          {assignedToName && (
+            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+              👤 {assignedToName}
+            </Badge>
+          )}
+        </div>
+      )}
 
       <div className="mt-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">

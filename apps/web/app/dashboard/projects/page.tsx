@@ -168,6 +168,12 @@ export default function ProjectsDashboardPage() {
                           <Badge variant="secondary">Goal</Badge>
                           <Badge variant={row.goal.status === "completed" ? "default" : row.goal.status === "paused" ? "secondary" : "outline"}>{row.goal.status}</Badge>
                           <Badge variant="outline">Priority {row.goal.priority}</Badge>
+                          {/* Goal Creator/Manager Context */}
+                          {(row.goal as any).created_by_position && (
+                            <Badge className="bg-blue-50 text-blue-700 border border-blue-200">
+                              📍 Created by {(row.goal as any).created_by_position}
+                            </Badge>
+                          )}
                         </div>
                         <div>
                           <h3 className="text-xl font-semibold text-text-primary">{row.goal.title}</h3>

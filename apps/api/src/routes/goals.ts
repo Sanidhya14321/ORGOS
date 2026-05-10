@@ -131,7 +131,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
 
     let query = fastify.supabaseService
       .from("goals")
-      .select("id, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at", {
+      .select("id, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at, created_by, created_by_position_id, assigned_position_id", {
         count: "exact"
       })
       .order("created_at", { ascending: false })
@@ -156,6 +156,53 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const goalIds = (data ?? []).map((goal) => goal.id as string);
     const taskCountByGoal = new Map<string, number>();
+    const creatorsByUserId = new Map<string, { name: string; position_title: string }>();
+    const positionsById = new Map<string, { title: string; level: number }>();
+
+    // Fetch unique user and position IDs
+    const creatorUserIds = Array.from(
+      new Set((data ?? []).map((goal) => goal.created_by).filter((id) => id))
+    );
+    const positionIds = Array.from(
+      new Set(
+        (data ?? [])
+          .flatMap((goal) => [goal.created_by_position_id, goal.assigned_position_id])
+          .filter((id) => id)
+      )
+    );
+
+    // Batch fetch creators and positions
+    if (creatorUserIds.length > 0) {
+      const { data: users, error: usersError } = await fastify.supabaseService
+        .from("users")
+        .select("id, full_name")
+        .in("id", creatorUserIds);
+
+      if (!usersError && users) {
+        for (const user of users) {
+          creatorsByUserId.set(user.id as string, {
+            name: (user.full_name as string) || "Unknown",
+            position_title: ""
+          });
+        }
+      }
+    }
+
+    if (positionIds.length > 0) {
+      const { data: positions, error: posError } = await fastify.supabaseService
+        .from("positions")
+        .select("id, title, level")
+        .in("id", positionIds);
+
+      if (!posError && positions) {
+        for (const pos of positions) {
+          positionsById.set(pos.id as string, {
+            title: (pos.title as string) || "Unknown",
+            level: (pos.level as number) ?? 2
+          });
+        }
+      }
+    }
 
     if (goalIds.length > 0) {
       const { data: taskRows, error: tasksError } = await fastify.supabaseService
@@ -190,10 +237,19 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       page,
       limit,
       total: count ?? 0,
-      items: (data ?? []).map((goal) => ({
-        ...goal,
-        task_count: taskCountByGoal.get(goal.id as string) ?? 0
-      }))
+      items: (data ?? []).map((goal) => {
+        const creator = creatorsByUserId.get(goal.created_by as string);
+        const assignedPos = positionsById.get(goal.assigned_position_id as string);
+        const createdByPos = positionsById.get(goal.created_by_position_id as string);
+
+        return {
+          ...goal,
+          task_count: taskCountByGoal.get(goal.id as string) ?? 0,
+          created_by_name: creator?.name,
+          created_by_position: createdByPos?.title || creator?.position_title,
+          assigned_position_title: assignedPos?.title
+        };
+      })
     });
   });
 
