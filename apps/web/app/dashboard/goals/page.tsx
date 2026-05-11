@@ -1,316 +1,480 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
-import { toast } from "sonner";
-import { getRoleFromBrowser } from "@/lib/auth";
-import { GoalsTable } from "@/components/dashboard/goals-table";
-import { Button } from "@/components/ui/button";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { apiFetch } from '@/lib/api';
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Stepper, { Step } from "@/components/ui/stepper";
+  Target, Plus, ChevronRight, ChevronDown, AlertCircle, CheckCircle2, Clock, 
+  Zap, MoreVertical, Trash2, Edit, TrendingUp
+} from 'lucide-react';
 import { 
-  Plus, 
-  Target, 
-  TrendingUp, 
-  AlertCircle, 
-  Flag, 
-  Calendar, 
-  Tags,
-  Sparkles,
-  Check
-} from "lucide-react";
-import type { Goal, Task } from "@/lib/models";
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 
-export default function GoalsPage() {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
-  const [deadline, setDeadline] = useState("");
+interface Task {
+  id: string;
+  title: string;
+  status: 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+  assigned_to?: string;
+  assigned_role: string;
+  depth: number;
+  parent_id?: string | null;
+  success_criteria: string;
+  deadline?: string | null;
+  is_agent_task: boolean;
+}
 
-  // Data Fetching
-  const goalsQuery = useQuery({
-    queryKey: ["goals", "page"],
-    queryFn: () => apiFetch<{ items: Goal[] }>("/api/goals?limit=100"),
-    select: (data) => data.items
-  });
+interface Goal {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  kpi?: string;
+  deadline?: string;
+  created_at: string;
+  updated_at: string;
+  tasks?: Task[];
+  task_count: number;
+  completed_count: number;
+}
 
-  const tasksQuery = useQuery({
-    queryKey: ["tasks", "goals-page"],
-    queryFn: () => apiFetch<{ items: Task[] }>("/api/tasks?limit=200"),
-    select: (data) => data.items
-  });
+const priorityColors: Record<string, string> = {
+  low: 'bg-blue-50 text-blue-700 border-blue-200',
+  medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  high: 'bg-orange-50 text-orange-700 border-orange-200',
+  critical: 'bg-red-50 text-red-700 border-red-200'
+};
 
-  // Mutation with Optimistic Updates
-  const createMutation = useMutation({
-    mutationFn: () =>
-      apiFetch("/api/goals", {
-        method: "POST",
-        body: JSON.stringify({ title, description, raw_input: title, priority, deadline: deadline || undefined })
-      }),
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ["goals", "page"] });
-      const previous = queryClient.getQueryData<Goal[]>(["goals", "page"]);
-      const optimistic: Goal = {
-        id: `optimistic-${Date.now()}`,
-        title,
-        description,
-        raw_input: title,
-        status: "active",
-        priority,
-        simulation: false,
-        deadline,
-        task_count: 0
-      };
-      queryClient.setQueryData<Goal[]>(["goals", "page"], (old = []) => [optimistic, ...old]);
-      return { previous };
-    },
-    onError: (_error, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(["goals", "page"], context.previous);
-      }
-      try {
-        const msg = (_error as any)?.message || "Failed to create goal";
-        toast.error(msg);
-      } catch (e) {
-        // ignore
-      }
-    },
-    onSettled: () => {
-      setOpen(false);
-      setTitle("");
-      setDescription("");
-      setDeadline("");
-      void queryClient.invalidateQueries({ queryKey: ["goals", "page"] });
-      void queryClient.invalidateQueries({ queryKey: ["goals"] });
+const statusIcons: Record<string, React.ReactNode> = {
+  pending: <Clock className="h-4 w-4" />,
+  in_progress: <Zap className="h-4 w-4" />,
+  blocked: <AlertCircle className="h-4 w-4" />,
+  completed: <CheckCircle2 className="h-4 w-4" />,
+  cancelled: <Trash2 className="h-4 w-4" />
+};
+
+const statusColors: Record<string, string> = {
+  pending: 'bg-slate-50 text-slate-700',
+  in_progress: 'bg-blue-50 text-blue-700',
+  blocked: 'bg-red-50 text-red-700',
+  completed: 'bg-green-50 text-green-700',
+  cancelled: 'bg-gray-50 text-gray-500'
+};
+
+function TaskTree({ tasks }: { tasks: Task[] }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (taskId: string) => {
+    const newExpanded = new Set(expanded);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
     }
-  });
-
-  const browserRole = typeof window !== "undefined" ? getRoleFromBrowser() : null;
-  const canCreate = browserRole ? ["ceo", "cfo"].includes(browserRole.toLowerCase()) : false;
-
-  // Executive Stats
-  const stats = {
-    total: goalsQuery.data?.length || 0,
-    active: goalsQuery.data?.filter(g => g.status === "active").length || 0,
-    atRisk: goalsQuery.data?.filter(g => g.sla_status === "at_risk" || g.sla_status === "breached").length || 0,
+    setExpanded(newExpanded);
   };
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-10">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-accent font-semibold text-sm uppercase tracking-wider">
-            <Target className="h-4 w-4" />
-            Strategy Management
+  const rootTasks = tasks.filter(t => t.depth === 0);
+
+  const renderTask = (task: Task) => {
+    const children = tasks.filter(t => t.parent_id === task.id);
+    const hasChildren = children.length > 0;
+
+    return (
+      <div key={task.id} className="border-l-2 border-border">
+        <div className="pl-4 py-3 hover:bg-bg-elevated transition-colors flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              {hasChildren && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => toggleExpand(task.id)}
+                >
+                  {expanded.has(task.id) ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+              {!hasChildren && <div className="w-6" />}
+
+              <span className={`text-xs font-medium ${statusColors[task.status]}`}>
+                {statusIcons[task.status]}
+              </span>
+              <span className="text-sm font-medium text-text-primary">{task.title}</span>
+              {task.is_agent_task && (
+                <Badge className="bg-purple-50 text-purple-700 border border-purple-200 text-xs">AI</Badge>
+              )}
+            </div>
+
+            {task.success_criteria && (
+              <p className="text-xs text-text-secondary mt-1 ml-8">✓ {task.success_criteria}</p>
+            )}
           </div>
-          <h1 className="text-4xl font-bold text-text-primary tracking-tight">Strategic Goals</h1>
-          <p className="text-text-secondary max-w-lg">
-            Monitor high-level objectives, manage autonomous decomposition, and track real-time SLA health across your organization.
-          </p>
+
+          <Badge className={`text-xs ${statusColors[task.status]}`}>
+            {task.status.replace('_', ' ')}
+          </Badge>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            {canCreate ? (
-              <Button size="lg" className="bg-accent hover:bg-accent/90 text-white shadow-lg shadow-accent/20 px-6">
-                <Plus className="mr-2 h-5 w-5" />
-                New Strategic Goal
-              </Button>
-            ) : (
-              <Button size="lg" disabled className="bg-accent/10 text-text-secondary shadow-sm px-6" title="Insufficient role to create goals">
-                <Plus className="mr-2 h-5 w-5" />
-                New Strategic Goal
-              </Button>
-            )}
-          </DialogTrigger>
-          <DialogContent className="max-w-xl bg-bg-surface border-border p-0 overflow-hidden">
-            <DialogHeader className="p-6 pb-2">
-              <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-accent" />
-                Define New Goal
-              </DialogTitle>
-              <DialogDescription>
-                Break down your strategy into executable units of work.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="pb-4">
-              <Stepper
-                initialStep={1}
-                onFinalStepCompleted={() => createMutation.mutate()}
-                /* Overrides to fix overlap in image_2d4ae5.png */
-                className="!min-h-0 !aspect-auto !p-0 !justify-start !items-stretch" 
-                stepCircleContainerClassName="!border-none !shadow-none !bg-transparent !max-w-none !rounded-none"
-                stepContainerClassName="px-8 pt-2 pb-8"
-                contentClassName="px-0" 
-                footerClassName="px-8 pb-4"
-                nextButtonText="Next Step"
-                backButtonText="Go Back"
-                nextButtonProps={{
-                  className: "bg-accent hover:bg-accent/90 text-white font-bold px-6 rounded-xl h-10 shadow-md transition-all active:scale-95 disabled:opacity-50",
-                  disabled: createMutation.isPending || (title.length < 3)
-                }}
-                backButtonProps={{
-                  className: "text-text-secondary hover:text-text-primary font-medium px-2"
-                }}
-                renderStepIndicator={({ step, currentStep }) => {
-                    const isCompleted = currentStep > step;
-                    const isActive = currentStep === step;
-                    return (
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-full font-bold text-xs transition-all duration-300 border-2 
-                            ${isActive ? 'bg-accent border-accent text-white scale-110 shadow-lg shadow-accent/20' : 
-                              isCompleted ? 'bg-accent/20 border-accent/40 text-accent' : 
-                              'bg-bg-subtle border-border text-text-secondary'}`}
-                        >
-                            {isCompleted ? <Check className="h-4 w-4" /> : step}
-                        </div>
-                    );
-                }}
-              >
-                <Step>
-                  <div className="space-y-5 px-8">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Goal Identity</label>
-                      <Input 
-                        value={title} 
-                        onChange={(e) => setTitle(e.target.value)} 
-                        placeholder="e.g., Scale Cloud Infrastructure for Q4" 
-                        className="h-12 border-border bg-bg-subtle text-base focus:ring-accent" 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Outcome Description</label>
-                      <Textarea 
-                        value={description} 
-                        onChange={(e) => setDescription(e.target.value)} 
-                        placeholder="Describe the successful state of this goal..." 
-                        className="min-h-[120px] border-border bg-bg-subtle resize-none focus:ring-accent" 
-                      />
-                    </div>
-                  </div>
-                </Step>
-
-                <Step>
-                  <div className="space-y-6 px-8">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
-                        <Flag className="h-3 w-3" /> Priority Level
-                      </label>
-                      <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
-                        <SelectTrigger className="h-12 border-border bg-bg-subtle">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Low Priority</SelectItem>
-                          <SelectItem value="medium">Medium Priority</SelectItem>
-                          <SelectItem value="high">High Priority</SelectItem>
-                          <SelectItem value="critical">Critical / Blocker</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
-                        <Calendar className="h-3 w-3" /> Target Deadline (SLA)
-                      </label>
-                      <Input 
-                        value={deadline} 
-                        onChange={(e) => setDeadline(e.target.value)} 
-                        type="date" 
-                        className="h-12 border-border bg-bg-subtle focus:ring-accent" 
-                      />
-                    </div>
-                  </div>
-                </Step>
-
-                <Step>
-                  <div className="space-y-6 px-8">
-                    <div className="p-5 rounded-2xl border border-dashed border-border bg-bg-subtle/50 space-y-4">
-                      <div className="flex items-center gap-2 text-text-secondary">
-                        <Tags className="h-4 w-4" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Metadata & Labels</span>
-                      </div>
-                      <Input placeholder="Engineering, Q3_Ops, Research..." className="bg-bg-surface border-border h-10" />
-                      <div className="flex items-start gap-2 text-blue-500 bg-blue-500/5 p-3 rounded-lg border border-blue-500/10">
-                        <TrendingUp className="h-4 w-4 mt-0.5 shrink-0" />
-                        <p className="text-[11px] leading-relaxed">
-                          Completing this goal will initiate <strong>Autonomous Decomposition</strong>. AI agents will begin drafting tasks to achieve this outcome.
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {createMutation.isPending && (
-                        <div className="flex items-center justify-center gap-2 text-accent py-2 animate-pulse">
-                            <Sparkles className="h-4 w-4" />
-                            <span className="text-xs font-bold uppercase tracking-widest">Generating Tasks...</span>
-                        </div>
-                    )}
-                  </div>
-                </Step>
-              </Stepper>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Informational banner when user cannot create goals */}
-        {!canCreate && (
-          <div className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-            Only users with <strong>CEO</strong> or <strong>CFO</strong> roles can create strategic goals. If you need access, request an executive role or sign in with an executive account.
+        {hasChildren && expanded.has(task.id) && (
+          <div className="space-y-0 ml-4">
+            {children.map(child => renderTask(child))}
           </div>
         )}
       </div>
+    );
+  };
 
-      {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-2xl border border-border bg-bg-surface flex items-center gap-4 shadow-sm hover:border-accent/30 transition-colors">
-          <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
-            <Target className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Total Objectives</p>
-            <p className="text-2xl font-bold text-text-primary tracking-tight">{stats.total}</p>
-          </div>
+  return (
+    <div className="space-y-2 border border-border rounded-lg bg-bg-surface">
+      {rootTasks.length > 0 ? (
+        rootTasks.map(task => renderTask(task))
+      ) : (
+        <div className="p-4 text-center text-text-secondary">
+          <p className="text-sm">No tasks yet. AI will decompose this goal into tasks.</p>
         </div>
-        <div className="p-4 rounded-2xl border border-border bg-bg-surface flex items-center gap-4 shadow-sm hover:border-green-500/30 transition-colors">
-          <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center text-green-500">
-            <TrendingUp className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Active Focus</p>
-            <p className="text-2xl font-bold text-text-primary tracking-tight">{stats.active}</p>
-          </div>
+      )}
+    </div>
+  );
+}
+
+export default function GoalsPage() {
+  const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalDescription, setGoalDescription] = useState('');
+  const [goalDeadline, setGoalDeadline] = useState('');
+  const [goalPriority, setGoalPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('active');
+
+  const queryClient = useQueryClient();
+
+  // Fetch goals
+  const goalsQuery = useQuery({
+    queryKey: ['goals', statusFilter],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
+      return apiFetch<{ items: Goal[] }>(`/api/goals?${params}`);
+    },
+    select: (data) => data.items || []
+  });
+
+  // Create goal mutation
+  const createGoalMutation = useMutation({
+    mutationFn: (payload: {
+      title: string;
+      description?: string;
+      deadline?: string;
+      priority: 'low' | 'medium' | 'high' | 'critical';
+    }) =>
+      apiFetch<{ id: string }>('/api/goals', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      }),
+    onSuccess: () => {
+      toast.success('Goal created! AI is decomposing it into tasks.');
+      void queryClient.invalidateQueries({ queryKey: ['goals'] });
+      setCreateOpen(false);
+      setGoalTitle('');
+      setGoalDescription('');
+      setGoalDeadline('');
+      setGoalPriority('medium');
+    },
+    onError: (err) => {
+      const msg = (err as any)?.message || 'Failed to create goal';
+      toast.error(msg);
+    }
+  });
+
+  // Delete goal mutation
+  const deleteGoalMutation = useMutation({
+    mutationFn: (goalId: string) =>
+      apiFetch(`/api/goals/${goalId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Goal deleted');
+      void queryClient.invalidateQueries({ queryKey: ['goals'] });
+      setSelectedGoal(null);
+    },
+    onError: (err) => {
+      const msg = (err as any)?.message || 'Failed to delete goal';
+      toast.error(msg);
+    }
+  });
+
+  const selectedGoalData = goalsQuery.data?.find(g => g.id === selectedGoal);
+
+  const handleCreateGoal = () => {
+    if (!goalTitle.trim()) {
+      toast.error('Goal title is required');
+      return;
+    }
+
+    createGoalMutation.mutate({
+      title: goalTitle,
+      description: goalDescription || undefined,
+      deadline: goalDeadline || undefined,
+      priority: goalPriority
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-text-primary">Goals</h1>
+          <p className="mt-1 text-sm text-text-secondary">Strategic objectives with AI-decomposed tasks</p>
         </div>
-        <div className="p-4 rounded-2xl border border-border bg-bg-surface flex items-center gap-4 shadow-sm hover:border-red-500/30 transition-colors">
-          <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500">
-            <AlertCircle className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">At Risk / Breached</p>
-            <p className="text-2xl font-bold text-text-primary tracking-tight">{stats.atRisk}</p>
-          </div>
-        </div>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-accent hover:bg-accent-hover">
+              <Plus className="mr-2 h-4 w-4" />
+              New Goal
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Goal</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-text-primary">Goal Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Launch new product feature"
+                  value={goalTitle}
+                  onChange={(e) => setGoalTitle(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-border rounded-md bg-bg-surface text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-text-primary">Description</label>
+                <textarea
+                  placeholder="Optional description and context..."
+                  value={goalDescription}
+                  onChange={(e) => setGoalDescription(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-border rounded-md bg-bg-surface text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-text-primary">Priority</label>
+                  <select
+                    value={goalPriority}
+                    onChange={(e) => setGoalPriority(e.target.value as any)}
+                    className="mt-1 w-full px-3 py-2 border border-border rounded-md bg-bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-text-primary">Deadline</label>
+                  <input
+                    type="date"
+                    value={goalDeadline}
+                    onChange={(e) => setGoalDeadline(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border border-border rounded-md bg-bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setCreateOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateGoal}
+                  disabled={createGoalMutation.isPending}
+                  className="flex-1 bg-accent hover:bg-accent-hover"
+                >
+                  {createGoalMutation.isPending ? 'Creating...' : 'Create Goal'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Main Content Area */}
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <GoalsTable 
-          goals={goalsQuery.data ?? []} 
-          tasks={tasksQuery.data ?? []} 
-          loading={goalsQuery.isLoading || tasksQuery.isLoading} 
-        />
+      {/* Filters */}
+      <div className="flex gap-2">
+        {(['all', 'active', 'completed'] as const).map((status) => (
+          <Button
+            key={status}
+            variant={statusFilter === status ? 'default' : 'outline'}
+            onClick={() => setStatusFilter(status)}
+            className={statusFilter === status ? 'bg-accent text-white' : ''}
+          >
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </Button>
+        ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Goals List */}
+        <div className="lg:col-span-1 space-y-3">
+          <h2 className="font-semibold text-text-primary">Goals ({goalsQuery.data?.length || 0})</h2>
+
+          {goalsQuery.isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : goalsQuery.data && goalsQuery.data.length > 0 ? (
+            <div className="space-y-2">
+              {goalsQuery.data.map((goal) => (
+                <Card
+                  key={goal.id}
+                  className={`p-3 cursor-pointer border transition-colors ${
+                    selectedGoal === goal.id
+                      ? 'border-accent bg-accent-subtle'
+                      : 'border-border hover:bg-bg-elevated'
+                  }`}
+                  onClick={() => setSelectedGoal(goal.id)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm text-text-primary truncate">{goal.title}</h3>
+                      <div className="mt-1 flex gap-1 flex-wrap">
+                        <Badge className={`text-xs ${priorityColors[goal.priority]}`}>
+                          {goal.priority}
+                        </Badge>
+                        <Badge className="text-xs bg-bg-subtle text-text-secondary">
+                          {goal.completed_count}/{goal.task_count} tasks
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="border-border bg-bg-surface">
+                        <DropdownMenuItem className="text-text-primary hover:bg-bg-elevated cursor-pointer">
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-red-600 hover:bg-red-50 cursor-pointer"
+                          onClick={() => deleteGoalMutation.mutate(goal.id)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="p-6 text-center border-border bg-bg-surface">
+              <Target className="mx-auto mb-2 h-6 w-6 text-text-secondary" />
+              <p className="text-sm text-text-secondary">No {statusFilter !== 'all' ? statusFilter : ''} goals</p>
+            </Card>
+          )}
+        </div>
+
+        {/* Goal Detail */}
+        <div className="lg:col-span-2">
+          {selectedGoalData ? (
+            <div className="space-y-4">
+              <Card className="border-border bg-bg-surface p-6">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-text-primary">{selectedGoalData.title}</h2>
+                    {selectedGoalData.description && (
+                      <p className="mt-2 text-text-secondary">{selectedGoalData.description}</p>
+                    )}
+                  </div>
+                  <Badge className={`${priorityColors[selectedGoalData.priority]}`}>
+                    {selectedGoalData.priority}
+                  </Badge>
+                </div>
+
+                <div className="grid gap-3 text-sm">
+                  {selectedGoalData.kpi && (
+                    <div>
+                      <span className="text-text-secondary">KPI:</span>
+                      <p className="text-text-primary font-medium">{selectedGoalData.kpi}</p>
+                    </div>
+                  )}
+                  {selectedGoalData.deadline && (
+                    <div>
+                      <span className="text-text-secondary">Deadline:</span>
+                      <p className="text-text-primary font-medium">
+                        {new Date(selectedGoalData.deadline).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-text-secondary">Progress:</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <div className="flex-1 bg-bg-subtle rounded-full h-2">
+                        <div
+                          className="bg-success h-2 rounded-full transition-all"
+                          style={{
+                            width: `${selectedGoalData.task_count > 0 ? (selectedGoalData.completed_count / selectedGoalData.task_count) * 100 : 0}%`
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium">
+                        {selectedGoalData.completed_count}/{selectedGoalData.task_count}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <div>
+                <h3 className="font-semibold text-text-primary mb-3">Task Breakdown</h3>
+                {selectedGoalData.tasks && selectedGoalData.tasks.length > 0 ? (
+                  <TaskTree tasks={selectedGoalData.tasks} />
+                ) : (
+                  <Card className="border-border bg-bg-surface p-6 text-center">
+                    <TrendingUp className="mx-auto mb-2 h-6 w-6 text-text-secondary" />
+                    <p className="text-sm text-text-secondary">AI is decomposing this goal into tasks...</p>
+                  </Card>
+                )}
+              </div>
+            </div>
+          ) : (
+            <Card className="border-border bg-bg-surface p-12 text-center">
+              <Target className="mx-auto mb-3 h-8 w-8 text-text-secondary" />
+              <p className="text-text-secondary">Select a goal to view tasks and progress</p>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

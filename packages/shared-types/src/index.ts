@@ -7,3 +7,6 @@ export * from "./report.schema.js";
 export * from "./recruitment.schema.js";
 export * from "./settings.schema.js";
 export * from "./user.schema.js";
+export * from "./credential.schema.js";
+export * from "./document.schema.js";
+export * from "./onboarding.schema.js";

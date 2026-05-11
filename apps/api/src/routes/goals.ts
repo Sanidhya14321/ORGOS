@@ -119,7 +119,8 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(202).send({ goalId: data.id });
   });
 
-  fastify.get("/goals", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+  // Allow any authenticated role to list goals (CEO/CFO/Manager/Worker)
+  fastify.get("/goals", { preHandler: requireRole("ceo", "cfo", "manager", "worker") }, async (request, reply) => {
     const parsed = GoalsListQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid query params");
@@ -131,7 +132,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
 
     let query = fastify.supabaseService
       .from("goals")
-      .select("id, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at, created_by, created_by_position_id, assigned_position_id", {
+      .select("id, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at, created_by", {
         count: "exact"
       })
       .order("created_at", { ascending: false })
@@ -156,7 +157,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const goalIds = (data ?? []).map((goal) => goal.id as string);
     const taskCountByGoal = new Map<string, number>();
-    const creatorsByUserId = new Map<string, { name: string; position_title: string }>();
+    const creatorsByUserId = new Map<string, { name: string; position_id: string | null; position_title: string }>();
     const positionsById = new Map<string, { title: string; level: number }>();
 
     // Fetch unique user and position IDs
@@ -166,7 +167,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     const positionIds = Array.from(
       new Set(
         (data ?? [])
-          .flatMap((goal) => [goal.created_by_position_id, goal.assigned_position_id])
+          .map((goal) => goal.created_by)
           .filter((id) => id)
       )
     );
@@ -175,13 +176,14 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     if (creatorUserIds.length > 0) {
       const { data: users, error: usersError } = await fastify.supabaseService
         .from("users")
-        .select("id, full_name")
+        .select("id, full_name, position_id")
         .in("id", creatorUserIds);
 
       if (!usersError && users) {
         for (const user of users) {
           creatorsByUserId.set(user.id as string, {
             name: (user.full_name as string) || "Unknown",
+            position_id: (user.position_id as string) ?? null,
             position_title: ""
           });
         }
@@ -239,15 +241,13 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       total: count ?? 0,
       items: (data ?? []).map((goal) => {
         const creator = creatorsByUserId.get(goal.created_by as string);
-        const assignedPos = positionsById.get(goal.assigned_position_id as string);
-        const createdByPos = positionsById.get(goal.created_by_position_id as string);
+        const createdByPos = creator?.position_id ? positionsById.get(creator.position_id) : undefined;
 
         return {
           ...goal,
           task_count: taskCountByGoal.get(goal.id as string) ?? 0,
           created_by_name: creator?.name,
-          created_by_position: createdByPos?.title || creator?.position_title,
-          assigned_position_title: assignedPos?.title
+          created_by_position: createdByPos?.title || creator?.position_title
         };
       })
     });

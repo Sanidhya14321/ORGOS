@@ -10,6 +10,9 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Popover/tokens used by Radix + UI components
+        popover: "var(--bg-surface)",
+        "popover-foreground": "var(--text-primary)",
         bg: {
           base: "var(--bg-base)",
           surface: "var(--bg-surface)",

@@ -48,6 +48,15 @@ const RegisterBodySchema = z.object({
   )
 });
 
+const SignupCeoBodySchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(8),
+  companyName: z.string().trim().min(1).max(200),
+  industry: z.string().trim().min(1).max(100).optional(),
+  companySize: z.enum(["1-10", "11-50", "51-200", "201-1000", "1000+"]).default("1-10"),
+  branchCount: z.number().int().positive().default(1)
+});
+
 const VerifyBodySchema = z.object({
   email: z.string().trim().email()
 });
@@ -233,6 +242,98 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({
       requiresVerification: true,
       message: "Verification email sent"
+    });
+  });
+
+  fastify.post("/auth/signup-ceo", async (request, reply) => {
+    const parsed = SignupCeoBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid CEO signup payload", {
+        details: parsed.error.flatten()
+      });
+    }
+
+    const { email, password, companyName, industry, companySize, branchCount } = parsed.data;
+
+    // 1. Create CEO user via Supabase Auth
+    const createAuthResult = await fastify.supabaseAnon.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${fastify.env.WEB_ORIGIN}/verify`,
+        data: {
+          full_name: companyName,
+          role: "ceo",
+          department: "Executive",
+          agent_enabled: true
+        }
+      }
+    });
+
+    if (createAuthResult.error || !createAuthResult.data.user) {
+      const message = createAuthResult.error?.message ?? "Unable to create account";
+      const lowered = message.toLowerCase();
+      const isConflict = lowered.includes("already") || lowered.includes("exists");
+      const isValidation = lowered.includes("invalid") || lowered.includes("email") || lowered.includes("password");
+      const status = isConflict ? 409 : isValidation ? 400 : 500;
+      const code = status === 409 ? "CONFLICT" : status === 400 ? "VALIDATION_ERROR" : "INTERNAL_ERROR";
+      return sendApiError(reply, request, status, code, message);
+    }
+
+    const createdUser = createAuthResult.data.user;
+    
+    // 2. Create organization record
+    const orgResult = await fastify.supabaseService
+      .from("organizations")
+      .insert({
+        name: companyName,
+        industry,
+        company_size: companySize,
+        branch_count: branchCount,
+        created_by: createdUser.id,
+        metadata: { signup_source: "web", signup_date: new Date().toISOString() }
+      })
+      .select("id")
+      .single();
+
+    if (orgResult.error || !orgResult.data) {
+      request.log.error({ err: orgResult.error }, "Failed to create organization");
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create organization");
+    }
+
+    const orgId = orgResult.data.id;
+
+    // 3. Create CEO user profile
+    const profile = buildUserProfileFromAuthUser({
+      id: createdUser.id,
+      email: createdUser.email ?? null,
+      user_metadata: {
+        full_name: companyName,
+        role: "ceo",
+        department: "Executive",
+        org_id: orgId,
+        agent_enabled: true
+      }
+    });
+
+    await persistUserProfile(fastify, profile);
+
+    // 4. Update user profile with org_id
+    const updateProfileResult = await fastify.supabaseService
+      .from("user_profiles")
+      .update({ org_id: orgId })
+      .eq("id", createdUser.id);
+
+    if (updateProfileResult.error) {
+      request.log.warn({ err: updateProfileResult.error }, "Failed to link org to user profile");
+    }
+
+    return reply.status(201).send({
+      org_id: orgId,
+      company_name: companyName,
+      next_step: "/onboarding/company-setup",
+      requiresVerification: true,
+      message: "Verification email sent. Complete email verification before proceeding with onboarding."
     });
   });
 
