@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+:root[data-theme="light"] {
   color-scheme: light;
   --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
@@ -33,18 +34,77 @@
   --muted: var(--text-secondary);
   --warn: var(--warning);
   --accent-rgb: 79, 102, 88;
+  --bg-gradient-accent: rgba(79, 102, 88, 0.08);
+  --bg-gradient-warm: rgba(196, 125, 41, 0.08);
+  --bg-gradient-start: #f7f2eb;
+  --bg-gradient-end: var(--bg-base);
+  --surface-glass: rgba(252, 251, 248, 0.86);
+  --surface-highlight: rgba(255, 255, 255, 0.7);
+  --kpi-gradient-start: rgba(255, 255, 255, 0.78);
+  --kpi-gradient-end: rgba(247, 242, 234, 0.95);
+  --dense-row-bg: rgba(255, 255, 255, 0.74);
+  --surface-card-shadow: 0 1px 3px rgba(23, 21, 19, 0.12), 0 1px 2px rgba(23, 21, 19, 0.08);
+  --dashboard-surface-shadow: 0 24px 80px rgba(23, 21, 19, 0.08);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+  --bg-base: #0d1316;
+  --bg-surface: #121a1f;
+  --bg-elevated: #172127;
+  --bg-subtle: #1c2a31;
+  --border: #24323a;
+  --border-strong: #31444d;
+  --text-primary: #edf3f1;
+  --text-secondary: #a0b2ab;
+  --text-muted: #79908a;
+  --accent: #7ba389;
+  --accent-hover: #8db59a;
+  --accent-subtle: rgba(123, 163, 137, 0.18);
+  --success: #58b486;
+  --success-subtle: rgba(88, 180, 134, 0.16);
+  --warning: #d6a463;
+  --warning-subtle: rgba(214, 164, 99, 0.16);
+  --danger: #df7a7a;
+  --danger-subtle: rgba(223, 122, 122, 0.16);
+  --info: #7ba6d9;
+  --info-subtle: rgba(123, 166, 217, 0.16);
+  --bg-main: var(--bg-base);
+  --surface: var(--bg-surface);
+  --surface-2: var(--bg-elevated);
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --warn: var(--warning);
+  --accent-rgb: 123, 163, 137;
+  --bg-gradient-accent: rgba(123, 163, 137, 0.13);
+  --bg-gradient-warm: rgba(214, 164, 99, 0.08);
+  --bg-gradient-start: #121a1f;
+  --bg-gradient-end: #0d1316;
+  --surface-glass: rgba(18, 26, 31, 0.88);
+  --surface-highlight: rgba(255, 255, 255, 0.04);
+  --kpi-gradient-start: rgba(24, 36, 42, 0.95);
+  --kpi-gradient-end: rgba(15, 22, 27, 0.98);
+  --dense-row-bg: rgba(22, 32, 38, 0.82);
+  --surface-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.32), 0 10px 30px rgba(0, 0, 0, 0.18);
+  --dashboard-surface-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
 }
 
 html,
 body {
   background:
-    radial-gradient(circle at top left, rgba(79, 102, 88, 0.08), transparent 28%),
-    radial-gradient(circle at 85% 10%, rgba(196, 125, 41, 0.08), transparent 24%),
-    linear-gradient(180deg, #f7f2eb 0%, var(--bg-base) 100%);
+    radial-gradient(circle at top left, var(--bg-gradient-accent), transparent 28%),
+    radial-gradient(circle at 85% 10%, var(--bg-gradient-warm), transparent 24%),
+    linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
   min-height: 100%;
   color: var(--text-primary);
   font-family: var(--font-sans), "Manrope", sans-serif;
   font-size: 14px;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
 }
 
 * {
@@ -78,8 +138,8 @@ select {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 28px;
-  background: rgba(252, 251, 248, 0.86);
-  box-shadow: 0 24px 80px rgba(23, 21, 19, 0.08);
+  background: var(--surface-glass);
+  box-shadow: var(--dashboard-surface-shadow);
   backdrop-filter: blur(16px);
 }
 
@@ -88,7 +148,7 @@ select {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent 24%);
+  background: linear-gradient(180deg, var(--surface-highlight), transparent 24%);
 }
 
 .dashboard-panel {
@@ -97,7 +157,7 @@ select {
 }
 
 .dashboard-kpi {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(247, 242, 234, 0.95));
+  background: linear-gradient(180deg, var(--kpi-gradient-start), var(--kpi-gradient-end));
   border: 1px solid var(--border);
   border-radius: 24px;
   box-shadow: 0 12px 30px rgba(23, 21, 19, 0.05);
@@ -106,7 +166,7 @@ select {
 .dashboard-dense-row {
   border: 1px solid var(--border);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--dense-row-bg);
 }
 
 .dashboard-label {
@@ -121,7 +181,7 @@ select {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--surface-card-shadow);
 }
 
 .skeleton-shimmer {

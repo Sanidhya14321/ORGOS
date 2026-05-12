@@ -1,8 +1,11 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { canAccessSection } from "@/lib/access";
 import { AppShell } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,11 +31,12 @@ export default function AnalyticsPage() {
     queryKey: ["analytics-me"], 
     queryFn: () => apiFetch<MeResponse>("/api/me") 
   });
+  const canViewAnalytics = canAccessSection(meQuery.data?.role, "analytics");
 
   const overviewQuery = useQuery({
     queryKey: ["analytics-overview"],
     queryFn: () => apiFetch<AnalyticsOverview>("/api/analytics/overview"),
-    enabled: Boolean(meQuery.data)
+    enabled: Boolean(meQuery.data) && canViewAnalytics
   });
 
   const snapshotMutation = useMutation({
@@ -43,6 +47,23 @@ export default function AnalyticsPage() {
   });
 
   const metrics = overviewQuery.data?.overview;
+  const analyticsHighlights = [
+    {
+      label: "Completion posture",
+      value: `${metrics?.completionRate ?? 0}%`,
+      description: "Delivery ratio across currently tracked work."
+    },
+    {
+      label: "Blocked pressure",
+      value: `${metrics?.blockedTasks ?? 0}`,
+      description: "Execution items currently waiting on intervention."
+    },
+    {
+      label: "Effort variance",
+      value: `${metrics?.estimateVarianceHours ?? 0}h`,
+      description: "Difference between planned and actual effort."
+    }
+  ];
 
   if (overviewQuery.isLoading) {
     return (
@@ -64,20 +85,52 @@ export default function AnalyticsPage() {
       role={meQuery.data?.role}
     >
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {/* Action Header */}
-        <div className="flex justify-end">
-          <Button 
-            variant="outline"
-            onClick={() => snapshotMutation.mutate()} 
-            disabled={snapshotMutation.isPending}
-            className="border-border bg-bg-surface hover:bg-bg-elevated transition-all active:scale-95"
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${snapshotMutation.isPending ? 'animate-spin' : ''}`} />
-            {snapshotMutation.isPending ? "Syncing..." : "Refresh Snapshot"}
-          </Button>
-        </div>
+        {!canViewAnalytics ? (
+          <Card className="p-5 text-sm text-text-secondary">
+            Analytics are available to CEO, CFO, and manager roles.
+          </Card>
+        ) : null}
 
-        {/* Bento Grid Metrics */}
+        <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+          <Card className="p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-3">
+                <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
+                  Live snapshot
+                </Badge>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
+                    Read the health of execution before you zoom into individual work.
+                  </h2>
+                  <p className="max-w-2xl text-sm leading-7 text-text-secondary">
+                    This surface summarizes strategy coverage, delivery throughput, blocked pressure, and estimate drift
+                    so leadership can react earlier.
+                  </p>
+                </div>
+              </div>
+
+              <Button 
+                variant="outline"
+                onClick={() => snapshotMutation.mutate()} 
+                disabled={!canViewAnalytics || snapshotMutation.isPending}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${snapshotMutation.isPending ? 'animate-spin' : ''}`} />
+                {snapshotMutation.isPending ? "Syncing..." : "Refresh Snapshot"}
+              </Button>
+            </div>
+          </Card>
+
+          <div className="grid gap-4">
+            {analyticsHighlights.map((item) => (
+              <Card key={item.label} className="p-5">
+                <p className="dashboard-label">{item.label}</p>
+                <p className="mt-3 text-2xl font-semibold tracking-tight text-text-primary">{item.value}</p>
+                <p className="mt-2 text-sm leading-6 text-text-secondary">{item.description}</p>
+              </Card>
+            ))}
+          </div>
+        </section>
+
         <div className="grid gap-4 md:grid-cols-3">
           <MetricCard 
             label="Total Goals" 
@@ -119,12 +172,31 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        {/* Optional: Visual Placeholder for future Knowledge Graph Analytics */}
-        <div className="rounded-2xl border border-dashed border-border p-12 flex flex-col items-center justify-center text-center bg-bg-subtle/30">
-          <BarChart3 className="h-10 w-10 text-text-secondary mb-4 opacity-20" />
-          <p className="text-sm font-medium text-text-secondary">Historical throughput charts are being processed.</p>
-          <p className="text-xs text-text-secondary/60">Updates based on the latest snapshot generation.</p>
-        </div>
+        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="flex flex-col items-center justify-center border-dashed p-12 text-center">
+            <BarChart3 className="mb-4 h-10 w-10 text-text-secondary opacity-30" />
+            <p className="text-sm font-medium text-text-secondary">Historical throughput charts are being processed.</p>
+            <p className="mt-1 text-xs text-text-muted">Updates appear after the latest snapshot generation completes.</p>
+          </Card>
+
+          <Card className="p-6">
+            <p className="dashboard-label">Interpretation guide</p>
+            <div className="mt-4 space-y-4 text-sm leading-6 text-text-secondary">
+              <div>
+                <p className="font-semibold text-text-primary">Completion rate</p>
+                <p>High completion with low variance indicates the execution model is matching the current planning horizon.</p>
+              </div>
+              <div>
+                <p className="font-semibold text-text-primary">Blocked nodes</p>
+                <p>Blocked work is the clearest signal that routing, dependencies, or approvals need leadership attention.</p>
+              </div>
+              <div>
+                <p className="font-semibold text-text-primary">Billable effort</p>
+                <p>Use billable hours and task count together to identify whether throughput is expanding efficiently.</p>
+              </div>
+            </div>
+          </Card>
+        </section>
       </div>
     </AppShell>
   );
@@ -133,24 +205,24 @@ export default function AnalyticsPage() {
 interface MetricCardProps {
   label: string;
   value: string | number;
-  icon: React.ReactNode;
+  icon: ReactNode;
   description: string;
   trend?: "positive" | "negative" | "neutral";
 }
 
 function MetricCard({ label, value, icon, description, trend }: MetricCardProps) {
   return (
-    <Card className="group relative overflow-hidden border border-border bg-bg-surface p-6 transition-all hover:border-accent/50 hover:shadow-2xl hover:shadow-accent/5">
+    <Card className="group relative overflow-hidden p-6 transition-all hover:-translate-y-0.5">
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary opacity-80">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-text-secondary opacity-80">
             {label}
           </p>
           <h3 className="text-3xl font-bold text-text-primary tracking-tight">
             {value}
           </h3>
         </div>
-        <div className={`p-2 rounded-xl border border-border bg-bg-subtle text-text-secondary group-hover:text-accent group-hover:border-accent/30 transition-colors`}>
+        <div className="rounded-2xl border border-border bg-bg-subtle p-2.5 text-text-secondary transition-colors group-hover:text-accent">
           {icon}
         </div>
       </div>
@@ -160,9 +232,6 @@ function MetricCard({ label, value, icon, description, trend }: MetricCardProps)
         {trend === "positive" && <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />}
         {trend === "negative" && <div className="h-1.5 w-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />}
       </div>
-
-      {/* Subtle Background Decorative Element */}
-      <div className="absolute -right-4 -bottom-4 h-24 w-24 bg-accent/5 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
     </Card>
   );
 }

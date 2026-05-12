@@ -19,10 +19,10 @@ export function KanbanView({ applicants, onOpen }: { applicants: Applicant[]; on
   return (
     <div className="grid gap-3 xl:grid-cols-6">
       {columns.map((column) => (
-        <section key={column} className="rounded-md border border-border bg-bg-surface p-2">
+        <section key={column} className="rounded-[24px] border border-border bg-bg-surface p-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs uppercase text-text-secondary">{column}</p>
-            <span className="rounded bg-bg-subtle px-1.5 py-0.5 text-[11px] text-text-secondary">{grouped.get(column)?.length ?? 0}</span>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">{column}</p>
+            <span className="rounded-full bg-bg-subtle px-2 py-1 text-[11px] text-text-secondary">{grouped.get(column)?.length ?? 0}</span>
           </div>
           <div className="space-y-2">
             {(grouped.get(column) ?? []).map((applicant) => (

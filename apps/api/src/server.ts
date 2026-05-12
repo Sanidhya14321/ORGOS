@@ -1,14 +1,17 @@
 import crypto from "node:crypto";
-import net from "node:net";
-import tls from "node:tls";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import type { Redis } from "@upstash/redis";
 import { readEnv, shouldRelaxSecurityForLocalTesting } from "./config/env.js";
-import { createRedisClient, createSupabaseAnonClient, createSupabaseServiceClient } from "./lib/clients.js";
+import type { AppRedisClient } from "./lib/clients.js";
+import {
+  canReachRedisUrl,
+  createRedisClient,
+  createSupabaseAnonClient,
+  createSupabaseServiceClient
+} from "./lib/clients.js";
 import { sendApiError } from "./lib/errors.js";
 import { initializeSentry, captureException } from "./lib/sentry.js";
 import { initializePrometheus, initializeHttpMetrics, exportMetricsText, recordHttpRequest } from "./lib/prometheus.js";
@@ -41,7 +44,7 @@ declare module "fastify" {
     env: ReturnType<typeof readEnv>;
     supabaseAnon: SupabaseClient;
     supabaseService: SupabaseClient;
-    redis: Redis;
+    redis: AppRedisClient;
   }
 
   interface FastifyRequest {
@@ -54,6 +57,9 @@ declare module "fastify" {
 export async function buildServer() {
   const env = readEnv();
   const relaxedLocalSecurity = shouldRelaxSecurityForLocalTesting(env);
+  const redis = await createRedisClient(env, {
+    allowMemoryFallback: relaxedLocalSecurity
+  });
   const fastify = Fastify({
     logger: {
       level: env.NODE_ENV === "production" ? "info" : "debug"
@@ -63,7 +69,11 @@ export async function buildServer() {
   fastify.decorate("env", env);
   fastify.decorate("supabaseAnon", createSupabaseAnonClient(env));
   fastify.decorate("supabaseService", createSupabaseServiceClient(env));
-  fastify.decorate("redis", createRedisClient(env));
+  fastify.decorate("redis", redis);
+
+  if (redis.mode === "memory") {
+    fastify.log.warn("Redis unavailable; using in-memory fallback for API cache and rate limiting");
+  }
 
   fastify.addHook("onRequest", async (request) => {
     request.requestId = crypto.randomUUID();
@@ -186,45 +196,8 @@ export async function start() {
   initializeNotifier(server);
   const workers: Array<{ close: () => Promise<void> }> = [];
 
-  async function canReachQueueRedis(redisUrlRaw: string): Promise<boolean> {
-    try {
-      const redisUrl = new URL(redisUrlRaw);
-      const isRediss = redisUrl.protocol === "rediss:";
-      const isHttpsRest = redisUrl.protocol === "https:";
-      const tlsMode = isRediss || isHttpsRest;
-      const port = redisUrl.port ? Number(redisUrl.port) : 6379;
-
-      await new Promise<void>((resolve, reject) => {
-        const timeoutMs = 1200;
-        const socket = tlsMode
-          ? tls.connect({ host: redisUrl.hostname, port })
-          : net.createConnection({ host: redisUrl.hostname, port });
-
-        const onError = (error: Error) => {
-          socket.destroy();
-          reject(error);
-        };
-
-        socket.setTimeout(timeoutMs, () => {
-          socket.destroy();
-          reject(new Error("Redis preflight timeout"));
-        });
-
-        socket.once("error", onError);
-        socket.once("connect", () => {
-          socket.end();
-          resolve();
-        });
-      });
-
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   try {
-    const redisReachable = await canReachQueueRedis(server.env.UPSTASH_REDIS_URL);
+    const redisReachable = await canReachRedisUrl(server.env.UPSTASH_REDIS_URL);
     if (!redisReachable) {
       throw new Error("Queue Redis endpoint is unreachable");
     }
@@ -252,6 +225,7 @@ export async function start() {
   }
 
   server.addHook("onClose", async () => {
+    await server.redis.close();
     await Promise.all(workers.map(async (worker) => worker.close()));
   });
 

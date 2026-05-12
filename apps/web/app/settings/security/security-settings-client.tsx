@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
 type SessionItem = {
@@ -77,20 +78,28 @@ export function SecuritySettingsClient() {
   return (
     <AppShell eyebrow="Security" title="Active sessions" description="Review devices currently signed in to ORGOS.">
       {loading ? <p className="text-sm text-[var(--muted)]">Loading sessions...</p> : null}
-      {error ? <p className="rounded-2xl border border-[#3a2f1f] bg-[#25170f] px-4 py-3 text-sm text-[#fdba74]">{error}</p> : null}
+      {error ? <div className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</div> : null}
 
       {!loading ? (
         <div className="space-y-3">
-          {sessions.length === 0 ? <p className="text-sm text-[var(--muted)]">No active sessions found.</p> : null}
+          {sessions.length === 0 ? (
+            <Card className="p-6 text-sm text-text-secondary">
+              No active sessions found. New browser or device logins will appear here automatically.
+            </Card>
+          ) : null}
 
           {sessions.map((session) => (
-            <Card key={session.id} className="border border-[var(--border)] bg-[#0f1115] p-4">
+            <Card key={session.id} className="p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1 text-sm text-[var(--muted)]">
-                  <p className="text-[var(--ink)]">
-                    {session.device ?? "Unknown device"} {session.current ? "(current)" : ""}
+                <div className="space-y-2 text-sm text-[var(--muted)]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-[var(--ink)]">{session.device ?? "Unknown device"}</p>
+                    {session.current ? <Badge variant="secondary">Current</Badge> : null}
+                    {session.revoked ? <Badge variant="outline">Revoked</Badge> : null}
+                  </div>
+                  <p>
+                    {session.browser ?? "Unknown browser"}
                   </p>
-                  <p>{session.browser ?? "Unknown browser"}</p>
                   <p>
                     {session.country ?? "Unknown country"} · {session.ip ?? "Unknown IP"}
                   </p>
@@ -99,7 +108,6 @@ export function SecuritySettingsClient() {
 
                 <Button
                   variant="outline"
-                  className="border-[var(--border)] hover:bg-[#151922]"
                   onClick={() => revokeSession(session.id)}
                   disabled={pendingSessionId === session.id || session.revoked}
                 >

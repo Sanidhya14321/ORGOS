@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiFetch } from '@/lib/api';
+import { canManageGoals } from '@/lib/access';
 import { 
   Target, Plus, ChevronRight, ChevronDown, AlertCircle, CheckCircle2, Clock, 
   Zap, MoreVertical, Trash2, Edit, TrendingUp
@@ -48,6 +49,19 @@ interface Goal {
   completed_count: number;
 }
 
+type GoalTaskNode = {
+  task: Task;
+  children: GoalTaskNode[];
+};
+
+type GoalDetail = Omit<Goal, 'tasks'> & {
+  tasks?: GoalTaskNode[];
+};
+
+type MeResponse = {
+  role: 'ceo' | 'cfo' | 'manager' | 'worker';
+};
+
 const priorityColors: Record<string, string> = {
   low: 'bg-blue-50 text-blue-700 border-blue-200',
   medium: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -84,7 +98,7 @@ function TaskTree({ tasks }: { tasks: Task[] }) {
     setExpanded(newExpanded);
   };
 
-  const rootTasks = tasks.filter(t => t.depth === 0);
+  const rootTasks = tasks.filter((task) => !task.parent_id);
 
   const renderTask = (task: Task) => {
     const children = tasks.filter(t => t.parent_id === task.id);
@@ -152,6 +166,17 @@ function TaskTree({ tasks }: { tasks: Task[] }) {
   );
 }
 
+function flattenTaskNodes(nodes: GoalTaskNode[], parentId: string | null = null): Task[] {
+  return nodes.flatMap((node) => {
+    const task = {
+      ...node.task,
+      parent_id: parentId,
+      depth: typeof node.task.depth === 'number' ? node.task.depth : parentId ? 1 : 0
+    };
+    return [task, ...flattenTaskNodes(node.children ?? [], task.id)];
+  });
+}
+
 export default function GoalsPage() {
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -162,6 +187,11 @@ export default function GoalsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('active');
 
   const queryClient = useQueryClient();
+  const meQuery = useQuery({
+    queryKey: ['me', 'goals-page'],
+    queryFn: () => apiFetch<MeResponse>('/api/me')
+  });
+  const canEditGoals = canManageGoals(meQuery.data?.role);
 
   // Fetch goals
   const goalsQuery = useQuery({
@@ -174,6 +204,22 @@ export default function GoalsPage() {
       return apiFetch<{ items: Goal[] }>(`/api/goals?${params}`);
     },
     select: (data) => data.items || []
+  });
+
+  useEffect(() => {
+    if (!selectedGoal && goalsQuery.data && goalsQuery.data.length > 0) {
+      setSelectedGoal(goalsQuery.data[0].id);
+    }
+  }, [goalsQuery.data, selectedGoal]);
+
+  const goalDetailQuery = useQuery({
+    queryKey: ['goal-detail', selectedGoal],
+    queryFn: () => apiFetch<GoalDetail>(`/api/goals/${selectedGoal}`),
+    enabled: Boolean(selectedGoal),
+    refetchInterval: (query) => {
+      const goal = query.state.data as GoalDetail | undefined;
+      return goal && Array.isArray(goal.tasks) && goal.tasks.length > 0 ? false : 5000;
+    }
   });
 
   // Create goal mutation
@@ -191,6 +237,7 @@ export default function GoalsPage() {
     onSuccess: () => {
       toast.success('Goal created! AI is decomposing it into tasks.');
       void queryClient.invalidateQueries({ queryKey: ['goals'] });
+      void queryClient.invalidateQueries({ queryKey: ['goal-detail'] });
       setCreateOpen(false);
       setGoalTitle('');
       setGoalDescription('');
@@ -210,6 +257,7 @@ export default function GoalsPage() {
     onSuccess: () => {
       toast.success('Goal deleted');
       void queryClient.invalidateQueries({ queryKey: ['goals'] });
+      void queryClient.invalidateQueries({ queryKey: ['goal-detail'] });
       setSelectedGoal(null);
     },
     onError: (err) => {
@@ -218,7 +266,18 @@ export default function GoalsPage() {
     }
   });
 
-  const selectedGoalData = goalsQuery.data?.find(g => g.id === selectedGoal);
+  const selectedGoalSummary = goalsQuery.data?.find(g => g.id === selectedGoal) ?? null;
+  const flattenedGoalTasks = flattenTaskNodes(goalDetailQuery.data?.tasks ?? []);
+  const derivedCompletedCount = flattenedGoalTasks.filter((task) => task.status === 'completed').length;
+  const selectedGoalData = goalDetailQuery.data
+    ? {
+        ...selectedGoalSummary,
+        ...goalDetailQuery.data,
+        task_count: selectedGoalSummary?.task_count ?? flattenedGoalTasks.length,
+        completed_count: selectedGoalSummary?.completed_count ?? derivedCompletedCount,
+        tasks: flattenedGoalTasks
+      }
+    : selectedGoalSummary;
 
   const handleCreateGoal = () => {
     if (!goalTitle.trim()) {
@@ -244,7 +303,7 @@ export default function GoalsPage() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-accent hover:bg-accent-hover">
+            <Button className="bg-accent hover:bg-accent-hover" disabled={!canEditGoals}>
               <Plus className="mr-2 h-4 w-4" />
               New Goal
             </Button>
@@ -312,7 +371,7 @@ export default function GoalsPage() {
                 </Button>
                 <Button
                   onClick={handleCreateGoal}
-                  disabled={createGoalMutation.isPending}
+                  disabled={!canEditGoals || createGoalMutation.isPending}
                   className="flex-1 bg-accent hover:bg-accent-hover"
                 >
                   {createGoalMutation.isPending ? 'Creating...' : 'Create Goal'}
@@ -373,26 +432,28 @@ export default function GoalsPage() {
                       </div>
                     </div>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="border-border bg-bg-surface">
-                        <DropdownMenuItem className="text-text-primary hover:bg-bg-elevated cursor-pointer">
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-red-600 hover:bg-red-50 cursor-pointer"
-                          onClick={() => deleteGoalMutation.mutate(goal.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {canEditGoals ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="border-border bg-bg-surface">
+                          <DropdownMenuItem className="text-text-primary hover:bg-bg-elevated cursor-pointer">
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-600 hover:bg-red-50 cursor-pointer"
+                            onClick={() => deleteGoalMutation.mutate(goal.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
                   </div>
                 </Card>
               ))}
@@ -458,12 +519,21 @@ export default function GoalsPage() {
 
               <div>
                 <h3 className="font-semibold text-text-primary mb-3">Task Breakdown</h3>
-                {selectedGoalData.tasks && selectedGoalData.tasks.length > 0 ? (
+                {goalDetailQuery.isLoading && selectedGoal ? (
+                  <Card className="border-border bg-bg-surface p-6 text-center">
+                    <TrendingUp className="mx-auto mb-2 h-6 w-6 animate-pulse text-text-secondary" />
+                    <p className="text-sm text-text-secondary">Loading saved task breakdown...</p>
+                  </Card>
+                ) : selectedGoalData?.tasks && selectedGoalData.tasks.length > 0 ? (
                   <TaskTree tasks={selectedGoalData.tasks} />
                 ) : (
                   <Card className="border-border bg-bg-surface p-6 text-center">
                     <TrendingUp className="mx-auto mb-2 h-6 w-6 text-text-secondary" />
-                    <p className="text-sm text-text-secondary">AI is decomposing this goal into tasks...</p>
+                    <p className="text-sm text-text-secondary">
+                      {selectedGoal
+                        ? 'AI is decomposing this goal into tasks and saving them to the database...'
+                        : 'Select a goal to view its saved task breakdown.'}
+                    </p>
                   </Card>
                 )}
               </div>

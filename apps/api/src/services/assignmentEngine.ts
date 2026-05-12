@@ -10,7 +10,14 @@ interface CandidateUser {
   skills: string[] | null;
   position_id?: string | null;
   department?: string | null;
+  role?: string | null;
 }
+
+type AssignmentSelectionInput = {
+  candidates: CandidateUser[];
+  task: Task;
+  positionCapacityById?: Map<string, number>;
+};
 
 type AssignTaskOptions = {
   persistTaskUpdate?: boolean;
@@ -34,39 +41,8 @@ function scoreCandidate(candidate: CandidateUser, requiredSkills: string[], pref
   return positionBonus + matched * 100 - candidate.open_task_count;
 }
 
-export async function assignTask(task: Task, options: AssignTaskOptions = {}): Promise<Task> {
-  const env = readEnv();
-  const supabase = createSupabaseServiceClient(env);
-  const persistTaskUpdate = options.persistTaskUpdate ?? true;
-  const reserveCapacity = options.reserveCapacity ?? true;
-  const emitAssignmentEvent = options.emitAssignmentEvent ?? true;
-
-  let query = supabase
-    .from("users")
-    .select("id, open_task_count, skills, position_id, department")
-    .eq("role", task.assigned_role)
-    .eq("agent_enabled", true)
-    .eq("status", "active")
-    .lte("open_task_count", MAX_OPEN_TASKS)
-    .order("open_task_count", { ascending: true });
-
-  const eligibleAssigneeIds = (task as Task & { eligible_assignee_ids?: string[] }).eligible_assignee_ids;
-  if (eligibleAssigneeIds && eligibleAssigneeIds.length > 0) {
-    query = query.in("id", eligibleAssigneeIds);
-  }
-
-  const taskOrgId = (task as Task & { org_id?: string }).org_id;
-  if (taskOrgId) {
-    query = query.eq("org_id", taskOrgId);
-  }
-
-  const { data: candidates, error: candidatesError } = await query;
-
-  if (candidatesError) {
-    throw new Error(`Failed to load assignment candidates: ${candidatesError.message}`);
-  }
-
-  const candidateList = (candidates ?? []) as CandidateUser[];
+export function selectAssignmentCandidate(input: AssignmentSelectionInput): CandidateUser | null {
+  const { candidates, task, positionCapacityById = new Map<string, number>() } = input;
   const requiredSkills = task.required_skills ?? [];
   const preferredPositionIds = [
     ...(((task as Task & { assigned_position_id?: string | null }).assigned_position_id
@@ -74,8 +50,30 @@ export async function assignTask(task: Task, options: AssignTaskOptions = {}): P
       : [])),
     ...(((task as Task & { suggested_position_ids?: string[] }).suggested_position_ids ?? []).map((value) => String(value)))
   ];
+  const eligiblePositionIds = (task as Task & { eligible_position_ids?: string[] }).eligible_position_ids ?? [];
 
-  const selected = candidateList
+  let filteredCandidates = candidates.filter((candidate) => {
+    const positionCapacity = candidate.position_id
+      ? (positionCapacityById.get(candidate.position_id) ?? MAX_OPEN_TASKS)
+      : MAX_OPEN_TASKS;
+    return candidate.open_task_count < positionCapacity;
+  });
+
+  if (eligiblePositionIds.length > 0) {
+    filteredCandidates = filteredCandidates.filter((candidate) => candidate.position_id && eligiblePositionIds.includes(candidate.position_id));
+  }
+
+  if (preferredPositionIds.length === 0 && task.assigned_role) {
+    filteredCandidates = filteredCandidates.filter((candidate) => candidate.role === task.assigned_role);
+  }
+
+  const exactPositionCandidates = preferredPositionIds.length > 0
+    ? filteredCandidates.filter((candidate) => candidate.position_id && preferredPositionIds.includes(candidate.position_id))
+    : [];
+
+  const candidatePool = exactPositionCandidates.length > 0 ? exactPositionCandidates : filteredCandidates;
+
+  return candidatePool
     .map((candidate) => ({
       candidate,
       score: scoreCandidate(candidate, requiredSkills, preferredPositionIds),
@@ -91,6 +89,77 @@ export async function assignTask(task: Task, options: AssignTaskOptions = {}): P
       return a.candidate.open_task_count - b.candidate.open_task_count;
     })
     .at(0)?.candidate ?? null;
+}
+
+export async function assignTask(task: Task, options: AssignTaskOptions = {}): Promise<Task> {
+  const env = readEnv();
+  const supabase = createSupabaseServiceClient(env);
+  const persistTaskUpdate = options.persistTaskUpdate ?? true;
+  const reserveCapacity = options.reserveCapacity ?? true;
+  const emitAssignmentEvent = options.emitAssignmentEvent ?? true;
+
+  let query = supabase
+    .from("users")
+    .select("id, open_task_count, skills, position_id, department, role")
+    .eq("agent_enabled", true)
+    .eq("status", "active")
+    .order("open_task_count", { ascending: true });
+
+  const eligibleAssigneeIds = (task as Task & { eligible_assignee_ids?: string[] }).eligible_assignee_ids;
+  if (eligibleAssigneeIds && eligibleAssigneeIds.length > 0) {
+    query = query.in("id", eligibleAssigneeIds);
+  }
+
+  const taskOrgId = (task as Task & { org_id?: string }).org_id;
+  if (taskOrgId) {
+    query = query.eq("org_id", taskOrgId);
+  }
+
+  const eligiblePositionIds = (task as Task & { eligible_position_ids?: string[] }).eligible_position_ids ?? [];
+
+  const { data: candidates, error: candidatesError } = await query;
+
+  if (candidatesError) {
+    throw new Error(`Failed to load assignment candidates: ${candidatesError.message}`);
+  }
+
+  const candidateList = (candidates ?? []) as CandidateUser[];
+
+  const positionIds = Array.from(
+    new Set(
+      candidateList
+        .map((candidate) => candidate.position_id)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+    )
+  );
+
+  const positionCapacityById = new Map<string, number>();
+  if (positionIds.length > 0) {
+    const { data: positions, error: positionsError } = await supabase
+      .from("positions")
+      .select("id, max_concurrent_tasks")
+      .in("id", positionIds);
+
+    if (positionsError) {
+      throw new Error(`Failed to load position capacities: ${positionsError.message}`);
+    }
+
+    for (const position of positions ?? []) {
+      positionCapacityById.set(
+        String(position.id),
+        Math.max(1, Number(position.max_concurrent_tasks ?? MAX_OPEN_TASKS))
+      );
+    }
+  }
+
+  const selected = selectAssignmentCandidate({
+    candidates: candidateList,
+    task: {
+      ...task,
+      ...(eligiblePositionIds.length > 0 ? { eligible_position_ids: eligiblePositionIds } : {})
+    } as Task,
+    positionCapacityById
+  });
 
   if (!selected) {
     const fallbackTask: Task = {

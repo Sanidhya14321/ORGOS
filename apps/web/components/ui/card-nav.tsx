@@ -65,9 +65,9 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
 
   const cardTints = useMemo(
     () => [
-      "bg-accent-subtle border-border/40",
-      "bg-success-subtle border-border/40",
-      "bg-info-subtle border-border/40"
+      "bg-accent-subtle/70 border-border/60",
+      "bg-success-subtle/70 border-border/60",
+      "bg-info-subtle/70 border-border/60"
     ],
     []
   );
@@ -149,7 +149,7 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
     <nav
       ref={navRef}
       className={cn(
-        "w-full overflow-hidden sticky rounded-xl border border-border/40 bg-bg-base shadow-lg",
+        "w-full overflow-hidden sticky rounded-[28px] border border-border/60 bg-bg-surface/85 shadow-[0_24px_60px_rgba(23,21,19,0.10)] backdrop-blur-xl",
         className
       )}
       aria-label="Primary navigation"
@@ -158,7 +158,7 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
         <button
           type="button"
           onClick={toggleMenu}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-bg-subtle text-text-primary transition hover:bg-bg-elevated"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-bg-elevated/80 text-text-primary transition hover:bg-bg-subtle"
           aria-expanded={menuOpen}
           aria-controls="card-nav-content"
           aria-label={menuOpen ? "Collapse navigation menu" : "Expand navigation menu"}
@@ -171,7 +171,7 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
           className="absolute left-1/2 hidden -translate-x-1/2 flex-col items-center md:flex"
           aria-label="ORGOS dashboard home"
         >
-          <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-secondary">ORGOS</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.26em] text-text-secondary">ORGOS</span>
           <span className="-mt-0.5 text-sm font-semibold text-text-primary">{pageTitle}</span>
         </Link>
 
@@ -179,9 +179,9 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
           {actions}
           <Link
             href={ctaHref}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-text-primary px-3 py-2 text-xs font-semibold text-bg-base transition hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-transparent bg-accent px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white shadow-[0_16px_28px_rgba(var(--accent-rgb),0.22)] transition hover:-translate-y-0.5 hover:bg-accent-hover"
           >
-            Get Started
+            Command
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -195,9 +195,9 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
               ref={(element) => {
                 cardRefs.current[index] = element;
               }}
-              className={cn("rounded-xl border p-3", cardTints[index] ?? "bg-bg-subtle border-border/40")}
+              className={cn("rounded-[24px] border p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]", cardTints[index] ?? "bg-bg-subtle border-border/40")}
             >
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">{item.label}</p>
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-secondary">{item.label}</p>
               <ul className="space-y-1.5">
                 {item.links.map((link) => {
                   const Icon = iconForLink(link.label);
@@ -205,7 +205,7 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="group flex items-center justify-between rounded-lg px-2.5 py-2 text-sm font-medium text-text-primary transition hover:bg-bg-elevated"
+                        className="group flex items-center justify-between rounded-2xl border border-transparent px-3 py-2.5 text-sm font-medium text-text-primary transition hover:border-border/70 hover:bg-bg-surface/80"
                       >
                         <span className="flex items-center gap-2">
                           <Icon className="h-4 w-4 text-text-secondary transition group-hover:text-text-primary" />

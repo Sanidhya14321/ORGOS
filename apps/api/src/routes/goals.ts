@@ -5,7 +5,8 @@ import { sanitizeGoalInput, SanitizationError } from "@orgos/agent-core";
 import { getCsuiteQueue } from "../queue/index.js";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
-import { buildSimulationPreview, buildTaskTree, recomputeGoalRollup, updateGoalStatus } from "../services/goalEngine.js";
+import { canAccessTaskWithHierarchy, getHierarchyScope } from "../services/hierarchyScope.js";
+import { buildSimulationPreview, recomputeGoalRollup, updateGoalStatus } from "../services/goalEngine.js";
 
 const CreateGoalSchema = z.object({
   title: z.string().min(3).max(200),
@@ -152,22 +153,16 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    const requesterOrgId = await getRequesterOrgId(requesterId);
-    if (!requesterOrgId) {
+    const scope = await getHierarchyScope(fastify, requesterId);
+    if (!scope) {
       return reply.send({ page, limit, total: 0, items: [] });
     }
 
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
     let query = fastify.supabaseService
       .from("goals")
-      .select("id, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at, created_by", {
-        count: "exact"
-      })
-      .eq("org_id", requesterOrgId)
-      .order("created_at", { ascending: false })
-      .range(from, to);
+      .select("id, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at, created_by")
+      .eq("org_id", scope.orgId)
+      .order("created_at", { ascending: false });
 
     if (status) {
       query = query.eq("status", status);
@@ -176,7 +171,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       query = query.eq("priority", priority);
     }
 
-    const { data, count, error } = await query;
+    const { data, error } = await query;
     if (error) {
       if (isSchemaCacheUnavailable(error)) {
         request.log.warn({ err: error }, "goals table missing in schema cache; returning empty list");
@@ -186,10 +181,12 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch goals");
     }
 
-    const goalIds = (data ?? []).map((goal) => goal.id as string);
+    const allGoals = data ?? [];
+    const goalIds = allGoals.map((goal) => goal.id as string);
     const taskCountByGoal = new Map<string, number>();
     const creatorsByUserId = new Map<string, { name: string; position_id: string | null; position_title: string }>();
     const positionsById = new Map<string, { title: string; level: number }>();
+    const accessibleGoalIds = new Set<string>();
 
     // Fetch unique user and position IDs
     const creatorUserIds = Array.from(
@@ -240,7 +237,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     if (goalIds.length > 0) {
       const { data: taskRows, error: tasksError } = await fastify.supabaseService
         .from("tasks")
-        .select("goal_id")
+        .select("goal_id, org_id, assigned_to, assigned_position_id, owner_id, assignees, watchers")
         .in("goal_id", goalIds);
 
       if (tasksError) {
@@ -249,8 +246,8 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.send({
             page,
             limit,
-            total: count ?? 0,
-            items: (data ?? []).map((goal) => ({
+            total: 0,
+            items: allGoals.map((goal) => ({
               ...goal,
               task_count: 0
             }))
@@ -262,15 +259,25 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
 
       for (const row of taskRows ?? []) {
         const goalId = row.goal_id as string;
-        taskCountByGoal.set(goalId, (taskCountByGoal.get(goalId) ?? 0) + 1);
+        if (scope.executive || canAccessTaskWithHierarchy(row, scope)) {
+          accessibleGoalIds.add(goalId);
+          taskCountByGoal.set(goalId, (taskCountByGoal.get(goalId) ?? 0) + 1);
+        }
       }
     }
+
+    const visibleGoals = scope.executive
+      ? allGoals
+      : allGoals.filter((goal) => accessibleGoalIds.has(goal.id as string));
+    const total = visibleGoals.length;
+    const from = (page - 1) * limit;
+    const pagedGoals = visibleGoals.slice(from, from + limit);
 
     return reply.send({
       page,
       limit,
-      total: count ?? 0,
-      items: (data ?? []).map((goal) => {
+      total,
+      items: pagedGoals.map((goal) => {
         const creator = creatorsByUserId.get(goal.created_by as string);
         const createdByPos = creator?.position_id ? positionsById.get(creator.position_id) : undefined;
 
@@ -298,8 +305,8 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    const requesterOrgId = await getRequesterOrgId(requesterId);
-    if (!requesterOrgId) {
+    const scope = await getHierarchyScope(fastify, requesterId);
+    if (!scope) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
     }
 
@@ -307,7 +314,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       .from("goals")
       .select("id, created_by, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at")
       .eq("id", goalId)
-      .eq("org_id", requesterOrgId)
+      .eq("org_id", scope.orgId)
       .maybeSingle();
 
     if (error) {
@@ -328,8 +335,55 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Goal not found");
     }
 
-    const tasks = await buildTaskTree(fastify.supabaseService, goalId);
-    return reply.send({ ...goal, tasks });
+    const taskRowsResult = await fastify.supabaseService
+      .from("tasks")
+      .select("id, goal_id, parent_id, depth, title, description, success_criteria, assigned_to, assigned_role, is_agent_task, status, deadline, created_at, org_id, assigned_position_id, owner_id, assignees, watchers")
+      .eq("goal_id", goalId)
+      .order("depth", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (taskRowsResult.error) {
+      if (isSchemaCacheUnavailable(taskRowsResult.error)) {
+        return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Goal/task tables are not available yet; apply DB migrations first");
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load goal tasks");
+    }
+
+    const visibleTasks = scope.executive
+      ? (taskRowsResult.data ?? [])
+      : (taskRowsResult.data ?? []).filter((task) => canAccessTaskWithHierarchy(task, scope));
+
+    if (!scope.executive && visibleTasks.length === 0) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Goal is outside your scope");
+    }
+
+    const taskIds = new Set(visibleTasks.map((task) => String(task.id)));
+    const nodeById = new Map<string, { task: Record<string, unknown>; children: Array<{ task: Record<string, unknown>; children: unknown[] }> }>();
+    const roots: Array<{ task: Record<string, unknown>; children: unknown[] }> = [];
+
+    for (const task of visibleTasks) {
+      nodeById.set(String(task.id), { task: task as Record<string, unknown>, children: [] });
+    }
+
+    for (const task of visibleTasks) {
+      const node = nodeById.get(String(task.id));
+      if (!node) {
+        continue;
+      }
+
+      const parentId = (task.parent_id as string | null | undefined) ?? null;
+      if (parentId && taskIds.has(parentId)) {
+        const parent = nodeById.get(parentId);
+        if (parent) {
+          parent.children.push(node);
+          continue;
+        }
+      }
+
+      roots.push(node);
+    }
+
+    return reply.send({ ...goal, tasks: roots });
   });
 
   fastify.patch("/goals/:id", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {

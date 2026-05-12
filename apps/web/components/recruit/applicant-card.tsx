@@ -12,7 +12,7 @@ export function ApplicantCard({ applicant, onOpen }: { applicant: Applicant; onO
     <button
       type="button"
       onClick={() => onOpen(applicant.id)}
-      className="w-full rounded-xl border border-border bg-bg-surface p-6 text-left border-l-[3px] border-l-info hover:bg-bg-elevated shadow-sm transition-all duration-200"
+      className="w-full rounded-[24px] border border-border bg-bg-surface p-5 text-left shadow-[0_16px_40px_rgba(23,21,19,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-bg-elevated"
     >
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -23,8 +23,8 @@ export function ApplicantCard({ applicant, onOpen }: { applicant: Applicant; onO
       </div>
 
       <div className="mt-2 flex flex-wrap gap-2">
-        <Badge className="bg-bg-subtle text-text-secondary">{applicant.stage}</Badge>
-        <Badge className="bg-bg-subtle text-text-secondary">{applicant.source}</Badge>
+        <Badge variant="outline">{applicant.stage}</Badge>
+        <Badge variant="secondary">{applicant.source}</Badge>
       </div>
 
       <div className="mt-3 space-y-1">

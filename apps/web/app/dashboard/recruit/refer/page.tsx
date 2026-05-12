@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { canAccessSection } from "@/lib/access";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Job } from "@/lib/models";
+import type { Job, Role } from "@/lib/models";
 
 type Referral = {
   id: string;
@@ -20,6 +21,10 @@ type Referral = {
   status: string;
 };
 
+type MeResponse = {
+  role: Role;
+};
+
 export default function ReferralPage() {
   const [open, setOpen] = useState(false);
   const [jobId, setJobId] = useState<string>("");
@@ -27,18 +32,25 @@ export default function ReferralPage() {
   const [applicantEmail, setApplicantEmail] = useState("");
   const [relationship, setRelationship] = useState("");
   const [note, setNote] = useState("");
+  const meQuery = useQuery({
+    queryKey: ["me", "referrals-page"],
+    queryFn: () => apiFetch<MeResponse>("/api/me")
+  });
+  const canViewRecruitment = canAccessSection(meQuery.data?.role, "recruitment");
 
   const jobsQuery = useQuery({
     queryKey: ["recruitment-jobs", "refer"],
     queryFn: () => apiFetch<{ items: Job[] }>("/api/recruitment/jobs?limit=100"),
-    select: (data) => data.items
+    select: (data) => data.items,
+    enabled: canViewRecruitment
   });
 
   const referralsQuery = useQuery({
     queryKey: ["my-referrals"],
     queryFn: () => apiFetch<{ items: Referral[] }>("/api/recruitment/referrals"),
     select: (data) => data.items,
-    retry: false
+    retry: false,
+    enabled: canViewRecruitment
   });
 
   const referMutation = useMutation({
@@ -58,6 +70,11 @@ export default function ReferralPage() {
 
   return (
     <div className="space-y-8 p-8">
+      {!canViewRecruitment ? (
+        <div className="rounded-xl border border-border bg-bg-surface p-4 text-sm text-text-secondary">
+          Candidate referrals are available to CEO, CFO, and manager roles.
+        </div>
+      ) : null}
       <h2 className="text-xl font-bold tracking-tight text-text-primary">Refer candidates</h2>
 
       <Tabs defaultValue="open-jobs">

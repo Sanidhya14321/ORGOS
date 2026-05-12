@@ -6,6 +6,7 @@ import { useRealtimeQueryInvalidation, useSocket } from "@/lib/socket";
 import { Topbar } from "@/components/shell/topbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGoalsQuery, useMeQuery, useOrgAccountsQuery, usePendingMembersQuery, useTasksQuery } from "@/lib/queries";
+import { isExecutiveRole } from "@/lib/access";
 import type { Applicant } from "@/lib/models";
 
 function titleFromPath(pathname: string): string {
@@ -32,9 +33,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const meQuery = useMeQuery();
   const tasksQuery = useTasksQuery();
-  const goalsQuery = useGoalsQuery(meQuery.data?.role !== "worker");
+  const goalsQuery = useGoalsQuery(Boolean(meQuery.data?.role));
   const pendingQuery = usePendingMembersQuery(meQuery.data?.role);
-  const peopleQuery = useOrgAccountsQuery(meQuery.data?.org_id ?? undefined, meQuery.data?.role);
+  const peopleQuery = useOrgAccountsQuery(meQuery.data?.org_id ?? undefined, isExecutiveRole(meQuery.data?.role) ? meQuery.data?.role : undefined);
 
   const applicants: Applicant[] = useMemo(() => [], []);
 

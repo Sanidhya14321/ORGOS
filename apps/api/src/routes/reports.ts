@@ -5,6 +5,7 @@ import { ReportSchema, type Report } from "@orgos/shared-types";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { getIngestQueue, getSynthesizeQueue } from "../queue/index.js";
+import { canAccessTaskWithHierarchy, getHierarchyScope } from "../services/hierarchyScope.js";
 import { emitTaskReportSubmittedCascade } from "../services/notifier.js";
 import { getTaskWithScope } from "../services/taskAccess.js";
 import { recomputeGoalRollup } from "../services/goalEngine.js";
@@ -29,7 +30,7 @@ async function canSubmitReport(
 ): Promise<boolean | "unavailable"> {
   const { data: task, error: taskError } = await fastify.supabaseService
     .from("tasks")
-    .select("id, assigned_to")
+    .select("id, org_id, assigned_to, assigned_position_id, owner_id, assignees, watchers")
     .eq("id", taskId)
     .maybeSingle();
 
@@ -48,41 +49,20 @@ async function canSubmitReport(
     return true;
   }
 
+  const scope = await getHierarchyScope(fastify, userId);
+  if (!scope) {
+    return false;
+  }
+
+  if (scope.executive) {
+    return true;
+  }
+
   if (userRole !== "manager") {
     return false;
   }
 
-  const { data: manager, error: managerError } = await fastify.supabaseService
-    .from("users")
-    .select("department")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (managerError) {
-    if (isSchemaCacheUnavailable(managerError)) {
-      return "unavailable";
-    }
-    return false;
-  }
-
-  if (!manager?.department) {
-    return false;
-  }
-
-  const { data: assignee, error: assigneeError } = await fastify.supabaseService
-    .from("users")
-    .select("department")
-    .eq("id", task.assigned_to)
-    .maybeSingle();
-
-  if (assigneeError) {
-    if (isSchemaCacheUnavailable(assigneeError)) {
-      return "unavailable";
-    }
-    return false;
-  }
-
-  return assignee?.department === manager.department;
+  return canAccessTaskWithHierarchy(task, scope);
 }
 
 async function collectSubtreeTaskIds(

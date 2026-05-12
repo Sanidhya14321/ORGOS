@@ -59,28 +59,59 @@ export default function ReportsPage() {
       role={meQuery.data?.role}
     >
       <div className="space-y-6">
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            onClick={() => void reportsQuery.refetch()}
-            disabled={reportsQuery.isFetching}
-            className="border-border bg-bg-surface hover:bg-bg-elevated"
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${reportsQuery.isFetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
+        <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+          <Card className="p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-3">
+                <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
+                  Report review
+                </Badge>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
+                    Review confidence, escalation pressure, and report quality by task.
+                  </h2>
+                  <p className="max-w-2xl text-sm leading-7 text-text-secondary">
+                    Select a task on the left to inspect its report stream, then use the confidence and escalation flags
+                    to decide where leadership attention is needed.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => void reportsQuery.refetch()}
+                disabled={reportsQuery.isFetching}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${reportsQuery.isFetching ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <p className="dashboard-label">Selected task state</p>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-[22px] border border-border bg-bg-elevated px-4 py-4">
+                <p className="text-sm font-semibold text-text-primary">
+                  {(tasksQuery.data ?? []).find((task) => task.id === firstTaskId)?.title ?? "No task selected"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-text-secondary">
+                  Reports stay scoped to one task at a time so status, confidence, and escalations are easy to compare.
+                </p>
+              </div>
+            </div>
+          </Card>
+        </section>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <Card className="border border-border bg-bg-surface p-4">
+          <Card className="p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-text-secondary">Reports</p>
             <p className="mt-2 text-3xl font-semibold text-text-primary">{reportsQuery.data?.length ?? 0}</p>
           </Card>
-          <Card className="border border-border bg-bg-surface p-4">
+          <Card className="p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-text-secondary">Escalations</p>
             <p className="mt-2 text-3xl font-semibold text-text-primary">{(reportsQuery.data ?? []).filter((report) => report.escalate).length}</p>
           </Card>
-          <Card className="border border-border bg-bg-surface p-4">
+          <Card className="p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-text-secondary">Average Confidence</p>
             <p className="mt-2 text-3xl font-semibold text-text-primary">
               {reportsQuery.data && reportsQuery.data.length > 0
@@ -91,7 +122,7 @@ export default function ReportsPage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[280px_1fr]">
-          <Card className="border border-border bg-bg-surface p-4">
+          <Card className="p-4">
             <div className="mb-3 flex items-center gap-2">
               <FileText className="h-4 w-4 text-text-secondary" />
               <p className="text-sm font-semibold text-text-primary">Tasks</p>
@@ -109,7 +140,7 @@ export default function ReportsPage() {
                     key={task.id}
                     type="button"
                     onClick={() => setSelectedTaskId(task.id)}
-                    className={`w-full rounded-2xl border px-3 py-3 text-left transition ${firstTaskId === task.id ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--ink)]" : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)] hover:bg-[var(--surface)]"}`}
+                    className={`w-full rounded-2xl border px-4 py-3 text-left transition ${firstTaskId === task.id ? "border-accent bg-accent-subtle text-text-primary shadow-[0_12px_24px_rgba(var(--accent-rgb),0.14)]" : "border-border bg-bg-elevated text-text-secondary hover:bg-bg-surface hover:text-text-primary"}`}
                   >
                     <p className="text-sm font-semibold">{task.title}</p>
                     <p className="mt-1 text-xs uppercase tracking-[0.18em]">{task.status}</p>
@@ -139,12 +170,12 @@ export default function ReportsPage() {
                 </>
               ) : filteredReports.length > 0 ? (
                 filteredReports.map((report) => (
-                  <Card key={report.id} className="border border-border bg-bg-surface p-4">
+                  <Card key={report.id} className="p-5">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={report.escalate ? "destructive" : report.status === "completed" ? "default" : "secondary"}>
                         {report.status}
                       </Badge>
-                      {report.escalate ? <Badge variant="outline" className="border-amber-500 text-amber-500">Escalated</Badge> : null}
+                      {report.escalate ? <Badge variant="outline">Escalated</Badge> : null}
                       <span className="text-xs text-text-secondary">Confidence {(report.confidence * 100).toFixed(0)}%</span>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-text-primary">{report.insight}</p>
@@ -155,7 +186,7 @@ export default function ReportsPage() {
                   </Card>
                 ))
               ) : (
-                <Card className="border border-dashed border-border bg-bg-surface p-8 text-center text-text-secondary">
+                <Card className="border-dashed p-8 text-center text-text-secondary">
                   <ShieldAlert className="mx-auto mb-3 h-8 w-8 opacity-70" />
                   <p className="text-sm font-semibold text-text-primary">No reports found</p>
                   <p className="mt-1 text-sm">Select a task on the left or adjust the search filter.</p>

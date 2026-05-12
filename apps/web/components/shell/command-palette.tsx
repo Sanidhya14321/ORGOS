@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Target, CheckSquare, UserRound, BriefcaseBusiness, Sparkles } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
+import { canAccessSection, canManageGoals } from "@/lib/access";
 import type { Goal, Task, User, Applicant } from "@/lib/models";
 
 type ActionItem = {
@@ -19,12 +20,14 @@ export function CommandPalette({
   goals,
   tasks,
   people,
-  applicants
+  applicants,
+  role
 }: {
   goals: Goal[];
   tasks: Task[];
   people: User[];
   applicants: Applicant[];
+  role?: User["role"];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,11 +50,20 @@ export function CommandPalette({
 
   const actions: ActionItem[] = useMemo(
     () => [
-      { id: "create-goal", label: "Create Goal", description: "Open goals dashboard", href: "/dashboard/goals", icon: Sparkles },
-      { id: "create-task", label: "Create Task", description: "Open task board", href: "/dashboard/task-board", icon: CheckSquare },
-      { id: "open-collaboration", label: "Open Collaboration Hub", description: "Manage team threads and seat access", href: "/dashboard/team", icon: UserRound }
+      ...(canManageGoals(role)
+        ? [{ id: "create-goal", label: "Create Goal", description: "Open goals dashboard", href: "/dashboard/goals", icon: Sparkles }]
+        : []),
+      ...(canAccessSection(role, "taskBoard")
+        ? [{ id: "create-task", label: "Create Task", description: "Open task board", href: "/dashboard/task-board", icon: CheckSquare }]
+        : []),
+      ...(canAccessSection(role, "team")
+        ? [{ id: "open-collaboration", label: "Open Collaboration Hub", description: "Manage team threads and seat access", href: "/dashboard/team", icon: UserRound }]
+        : []),
+      ...(canAccessSection(role, "recruitment")
+        ? [{ id: "open-recruitment", label: "Open Recruitment", description: "Review positions and applicants", href: "/dashboard/recruit", icon: BriefcaseBusiness }]
+        : [])
     ],
-    []
+    [role]
   );
 
   return (

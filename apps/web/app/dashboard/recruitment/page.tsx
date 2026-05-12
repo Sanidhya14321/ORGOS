@@ -8,11 +8,13 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { apiFetch } from '@/lib/api';
+import { canAccessSection, canManageRecruitment } from '@/lib/access';
 import { Users, Briefcase, AlertCircle } from 'lucide-react';
 
 interface CurrentUser {
   id: string;
   org_id?: string | null;
+  role?: 'ceo' | 'cfo' | 'manager' | 'worker';
 }
 
 interface PositionItem {
@@ -28,12 +30,14 @@ export default function RecruitmentPage() {
     queryKey: ['me'],
     queryFn: () => apiFetch<CurrentUser>('/api/me')
   });
+  const canViewRecruitment = canAccessSection(meQuery.data?.role, 'recruitment');
+  const canCreateJobs = canManageRecruitment(meQuery.data?.role);
 
   const positionsQuery = useQuery({
     queryKey: ['org-positions', meQuery.data?.org_id],
     queryFn: () => apiFetch<{ items: PositionItem[] }>(`/api/orgs/${meQuery.data?.org_id}/positions`),
     select: (data) => data.items ?? [],
-    enabled: Boolean(meQuery.data?.org_id)
+    enabled: Boolean(meQuery.data?.org_id) && canViewRecruitment
   });
 
   const queryClient = useQueryClient();
@@ -72,6 +76,12 @@ export default function RecruitmentPage() {
           </p>
         </div>
       </div>
+
+      {!canViewRecruitment ? (
+        <Card className="border-border bg-bg-surface p-4 text-sm text-text-secondary">
+          Recruitment workflows are available to CEO, CFO, and manager roles.
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
         <Card className="border-border bg-bg-surface p-6">
@@ -137,7 +147,7 @@ export default function RecruitmentPage() {
                           description: `Hiring for ${position.title} (level ${position.level})`
                         })
                       }
-                      disabled={createJobMutation.isPending}
+                      disabled={!canCreateJobs || createJobMutation.isPending}
                     >
                       {createJobMutation.isPending ? 'Creating...' : 'Create job'}
                     </Button>

@@ -126,7 +126,13 @@ function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<stri
   }
 
   const roots = Array.from(nodes.values()).filter((n) => !n.parentId);
-  if (roots.length > 0) positionNode(roots[0].id, 600, 100);
+  if (roots.length > 0) {
+    const rootSpacing = 280;
+    const totalWidth = (roots.length - 1) * rootSpacing;
+    roots.forEach((root, index) => {
+      positionNode(root.id, 600 - totalWidth / 2 + index * rootSpacing, 100);
+    });
+  }
 
   return { nodes, edges };
 }

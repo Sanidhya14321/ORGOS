@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -128,27 +129,36 @@ export function RegisterWizard() {
 
   return (
     <div className="space-y-5">
-      <p className="text-xs uppercase tracking-[0.2em] text-text-secondary">{stepText}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs uppercase tracking-[0.2em] text-text-secondary">{stepText}</p>
+        <div className="flex items-center gap-2">
+          {[1, 2, 3].map((index) => (
+            <Badge key={index} variant={index === step ? "default" : "outline"} className={index === step ? "" : "border-border bg-bg-elevated"}>
+              {index === 1 ? "Account" : index === 2 ? "Organization" : "Position"}
+            </Badge>
+          ))}
+        </div>
+      </div>
 
       <AnimatePresence mode="wait">
         {step === 1 ? (
           <motion.div key="step1" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="fullName">Full name</Label>
-              <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} className="border-border bg-bg-subtle" />
+              <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="border-border bg-bg-subtle" />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="border-border bg-bg-subtle" />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Executive role</Label>
               <Select value={role} onValueChange={(v) => setRole(v as "ceo" | "cfo")}>
-                <SelectTrigger className="border-border bg-bg-subtle">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -157,7 +167,7 @@ export function RegisterWizard() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full bg-accent hover:bg-accent-hover" disabled={loading || !fullName || !email || password.length < 8} onClick={handleRegisterBase}>
+            <Button className="w-full" disabled={loading || !fullName || !email || password.length < 8} onClick={handleRegisterBase}>
               {loading ? "Creating account..." : "Continue"}
             </Button>
           </motion.div>
@@ -175,7 +185,6 @@ export function RegisterWizard() {
                   setOrgQuery(next);
                   void searchOrgs(next);
                 }}
-                className="border-border bg-bg-subtle"
                 placeholder="Type org name"
               />
             </div>
@@ -193,7 +202,7 @@ export function RegisterWizard() {
                     key={org.id}
                     type="button"
                     onClick={() => setSelectedOrgId(org.id)}
-                    className={`focus-ring w-full rounded-md border px-3 py-2 text-left text-sm ${selectedOrgId === org.id ? "border-accent bg-accent-subtle text-accent" : "border-border bg-bg-subtle text-text-secondary"}`}
+                    className={`focus-ring w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${selectedOrgId === org.id ? "border-accent bg-accent-subtle text-text-primary shadow-[0_12px_24px_rgba(var(--accent-rgb),0.14)]" : "border-border bg-bg-subtle/70 text-text-secondary hover:bg-bg-elevated hover:text-text-primary"}`}
                   >
                     {org.name}
                   </button>
@@ -204,12 +213,12 @@ export function RegisterWizard() {
             {role === "ceo" ? (
               <div className="space-y-2">
                 <Label htmlFor="newOrg">Or create organization</Label>
-                <Input id="newOrg" value={createOrgName} onChange={(e) => setCreateOrgName(e.target.value)} className="border-border bg-bg-subtle" />
+                <Input id="newOrg" value={createOrgName} onChange={(e) => setCreateOrgName(e.target.value)} />
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Industry</Label>
                     <Select value={industry} onValueChange={(value) => setIndustry(value as Industry)}>
-                      <SelectTrigger className="border-border bg-bg-subtle">
+                      <SelectTrigger>
                         <SelectValue placeholder="Select industry" />
                       </SelectTrigger>
                       <SelectContent>
@@ -229,7 +238,7 @@ export function RegisterWizard() {
                   <div className="space-y-2">
                     <Label>Company size</Label>
                     <Select value={companySize} onValueChange={(value) => setCompanySize(value as CompanySize)}>
-                      <SelectTrigger className="border-border bg-bg-subtle">
+                      <SelectTrigger>
                         <SelectValue placeholder="Select company size" />
                       </SelectTrigger>
                       <SelectContent>
@@ -243,7 +252,7 @@ export function RegisterWizard() {
               </div>
             ) : null}
 
-            <Button className="w-full bg-accent hover:bg-accent-hover" disabled={loading} onClick={handleOrgContinue}>
+            <Button className="w-full" disabled={loading} onClick={handleOrgContinue}>
               {loading ? "Saving organization..." : "Continue"}
             </Button>
           </motion.div>
@@ -254,7 +263,7 @@ export function RegisterWizard() {
             <div className="space-y-2">
               <Label>Choose position</Label>
               <Select value={positionId} onValueChange={setPositionId}>
-                <SelectTrigger className="border-border bg-bg-subtle">
+                <SelectTrigger>
                   <SelectValue placeholder="Select a position" />
                 </SelectTrigger>
                 <SelectContent>
@@ -264,14 +273,14 @@ export function RegisterWizard() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full bg-accent hover:bg-accent-hover" disabled={loading} onClick={completeProfile}>
+            <Button className="w-full" disabled={loading} onClick={completeProfile}>
               {loading ? "Finishing setup..." : "Finish setup"}
             </Button>
           </motion.div>
         ) : null}
       </AnimatePresence>
 
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {error ? <div className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</div> : null}
     </div>
   );
 }

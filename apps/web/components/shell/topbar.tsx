@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { CardNav, type CardNavItem } from "@/components/ui/card-nav";
 import { NotificationsDrawer } from "@/components/shell/notifications-drawer";
 import { CommandPalette } from "@/components/shell/command-palette";
+import { canAccessSection } from "@/lib/access";
 import type { Goal, Task, User, PendingMember, Applicant, Role } from "@/lib/models";
 
 const BASE_CARD_NAV_ITEMS: CardNavItem[] = [
@@ -37,18 +38,10 @@ const BASE_CARD_NAV_ITEMS: CardNavItem[] = [
 
 function getCardNavItemsForRole(role?: Role): CardNavItem[] {
   const items = JSON.parse(JSON.stringify(BASE_CARD_NAV_ITEMS)) as CardNavItem[];
-  if (!role) return items;
+  if (!role) return [];
 
   // Add role-specific Overview link at the front of Operations
   items[0].links.unshift({ label: "Overview", href: `/dashboard/${role}` });
-
-  // Add Org Tree for manager-like roles (ensure no duplicate)
-  if (role === "ceo" || role === "cfo" || role === "manager") {
-    const peopleLinks = items[1].links.map((l) => l.href);
-    if (!peopleLinks.includes("/dashboard/org-tree")) {
-      items[1].links.splice(1, 0, { label: "Org Tree", href: "/dashboard/org-tree" });
-    }
-  }
 
   // CEO control link
   if (role === "ceo") {
@@ -58,7 +51,22 @@ function getCardNavItemsForRole(role?: Role): CardNavItem[] {
     }
   }
 
-  return items;
+  return items
+    .map((group) => ({
+      ...group,
+      links: group.links.filter((link) => {
+        if (link.href === "/dashboard/recruit") return canAccessSection(role, "recruitment");
+        if (link.href === "/dashboard/forecast") return canAccessSection(role, "forecast");
+        if (link.href === "/dashboard/analytics") return canAccessSection(role, "analytics");
+        if (link.href === "/dashboard/settings") return canAccessSection(role, "orgSettings");
+        if (link.href === "/dashboard/org-tree") return canAccessSection(role, "orgTree");
+        if (link.href === "/dashboard/goals") return canAccessSection(role, "goals");
+        if (link.href === "/dashboard/team") return canAccessSection(role, "team");
+        if (link.href === "/dashboard/task-board") return canAccessSection(role, "taskBoard");
+        return true;
+      })
+    }))
+    .filter((group) => group.links.length > 0);
 }
 
 export function Topbar({
@@ -113,7 +121,7 @@ export function Topbar({
         }
       />
 
-      <CommandPalette goals={goals} tasks={tasks} people={people} applicants={applicants} />
+      <CommandPalette goals={goals} tasks={tasks} people={people} applicants={applicants} role={role} />
     </header>
   );
 }

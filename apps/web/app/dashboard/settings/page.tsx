@@ -10,7 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils'; // Assuming you have a cn utility for classes
+import { cn } from '@/lib/utils';
+import { useTheme } from '@/components/providers/theme-provider';
+import type { ThemePreference } from '@/lib/theme';
 import { 
   Bell, Lock, Eye, Clock, Mail, Save, 
   RotateCcw, AlertCircle, Check, ShieldCheck, 
@@ -24,6 +26,7 @@ type SettingsTab = 'general' | 'notifications' | 'security';
 export default function SettingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { themePreference, setThemePreference } = useTheme();
   
   // Tab State
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -59,11 +62,20 @@ export default function SettingsPage() {
     }
   }, [preferences]);
 
+  useEffect(() => {
+    if (preferences?.theme) {
+      setThemePreference(preferences.theme);
+    }
+  }, [preferences?.theme, setThemePreference]);
+
   const updatePrefsMutation = useMutation({
     mutationFn: (updates: UserPreferencesUpdate) =>
       apiFetch('/api/settings/preferences', { method: 'PATCH', body: JSON.stringify(updates) }),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['settings', 'preferences'] });
+      if (variables.theme) {
+        setThemePreference(variables.theme);
+      }
       setSuccessMessage('Settings saved successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     },
@@ -119,6 +131,13 @@ export default function SettingsPage() {
     }
     changePasswordMutation.mutate({ current_password: currentPassword, new_password: newPassword });
   };
+
+  const selectedTheme = (localPrefs.theme ?? preferences?.theme ?? themePreference ?? 'light') as ThemePreference;
+  const themeOptions: Array<{ value: ThemePreference; label: string; description: string }> = [
+    { value: 'light', label: 'Light', description: 'Bright, paper-like surfaces for daytime work.' },
+    { value: 'dark', label: 'Dark', description: 'Low-glare control surfaces for focused sessions.' },
+    { value: 'auto', label: 'Auto', description: 'Match your operating system preference automatically.' },
+  ];
 
   if (prefsQuery.isLoading) {
     return (
@@ -219,9 +238,31 @@ export default function SettingsPage() {
                       <label className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] flex items-center gap-2">
                         <Moon className="h-3.5 w-3.5" /> Aesthetic Theme
                       </label>
-                      <div className="flex items-center gap-3 p-1.5 bg-bg-subtle border border-border rounded-xl w-fit">
-                        <Button size="sm" className="bg-accent text-white h-8 rounded-lg font-bold text-xs shadow-lg shadow-accent/20">Dark</Button>
-                        <span className="text-[9px] uppercase font-bold text-text-secondary px-3 opacity-40 cursor-not-allowed">Light (N/A)</span>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {themeOptions.map((option) => {
+                          const isActive = selectedTheme === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setLocalPrefs({ ...localPrefs, theme: option.value })}
+                              className={cn(
+                                "rounded-2xl border px-4 py-3 text-left transition-all",
+                                isActive
+                                  ? "border-accent bg-accent/10 shadow-[0_10px_24px_rgba(var(--accent-rgb),0.16)]"
+                                  : "border-border bg-bg-subtle/60 hover:bg-bg-subtle"
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-semibold text-text-primary">{option.label}</span>
+                                {isActive ? (
+                                  <Badge className="border-transparent bg-accent text-white">Active</Badge>
+                                ) : null}
+                              </div>
+                              <p className="mt-2 text-[11px] leading-5 text-text-secondary">{option.description}</p>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

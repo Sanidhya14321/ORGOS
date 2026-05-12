@@ -2,8 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { canAccessSection } from "@/lib/access";
 import { AppShell } from "@/components/app-shell";
-import { DashboardMetric, DashboardPageFrame, DashboardSection } from "@/components/dashboard/dashboard-surface";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { DashboardMetric, DashboardSection } from "@/components/dashboard/dashboard-surface";
 import { Progress } from "@/components/ui/progress";
 import type { ForecastResponse, Role } from "@/lib/models";
 
@@ -11,19 +14,48 @@ type MeResponse = { role: Role; org_id?: string | null };
 
 export default function ForecastPage() {
   const meQuery = useQuery({ queryKey: ["forecast-me"], queryFn: () => apiFetch<MeResponse>("/api/me") });
+  const canViewForecast = canAccessSection(meQuery.data?.role, "forecast");
   const forecastQuery = useQuery({
     queryKey: ["forecast", meQuery.data?.org_id],
     queryFn: () => apiFetch<ForecastResponse>(`/api/orgs/${meQuery.data?.org_id}/forecast`),
-    enabled: Boolean(meQuery.data?.org_id)
+    enabled: Boolean(meQuery.data?.org_id) && canViewForecast
   });
 
   return (
     <AppShell eyebrow="Forecast" title="Delivery outlook" description="See how much work is open and where the pressure sits." role={meQuery.data?.role}>
-      <DashboardPageFrame
-        eyebrow="Forecast panel"
-        title="Delivery outlook"
-        description="A compact view of effort, priority pressure, and horizon completion."
-      >
+      <div className="space-y-8">
+        {!canViewForecast ? (
+          <Card className="p-4 text-sm text-[var(--muted)]">
+            Forecasting is available to CEO, CFO, and manager roles.
+          </Card>
+        ) : null}
+
+        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="p-6">
+            <div className="space-y-3">
+              <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
+                Forecast engine
+              </Badge>
+              <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
+                Read future delivery pressure before it becomes today&apos;s blocker.
+              </h2>
+              <p className="max-w-2xl text-sm leading-7 text-text-secondary">
+                Horizon buckets combine open effort, priority mix, blockers, and staffing pressure into a lighter-weight
+                planning surface for executive and manager review.
+              </p>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <p className="dashboard-label">Planning posture</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <ForecastStat label="Open effort" value={`${forecastQuery.data?.openEffortHours ?? 0}h`} />
+              <ForecastStat label="Blocked" value={forecastQuery.data?.blockedTaskCount ?? 0} />
+              <ForecastStat label="Staffing" value={`${Math.round((forecastQuery.data?.staffingPressure ?? 0) * 100)}%`} />
+            </div>
+          </Card>
+        </section>
+
         <div className="space-y-6">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <DashboardMetric label="Open effort" value={`${forecastQuery.data?.openEffortHours ?? 0}h`} tone="info" loading={forecastQuery.isLoading} />
@@ -81,7 +113,16 @@ export default function ForecastPage() {
             </div>
           </DashboardSection>
         </div>
-      </DashboardPageFrame>
+      </div>
     </AppShell>
+  );
+}
+
+function ForecastStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-[22px] border border-border bg-bg-elevated p-4">
+      <p className="dashboard-label">{label}</p>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-text-primary">{value}</p>
+    </div>
   );
 }

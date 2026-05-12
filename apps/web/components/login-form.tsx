@@ -62,12 +62,11 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-5">
       <label className="block space-y-2">
-        <Label htmlFor="email" className="text-sm font-medium text-text-secondary">Email</Label>
+        <Label htmlFor="email">Email</Label>
         <Input
           id="email"
-          className="border-border bg-bg-subtle text-text-primary"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -78,11 +77,11 @@ export function LoginForm() {
       </label>
 
       <label className="block space-y-2">
-        <Label htmlFor="password" className="text-sm font-medium text-text-secondary">Password</Label>
+        <Label htmlFor="password">Password</Label>
         <div className="relative">
           <Input
             id="password"
-            className="border-border bg-bg-subtle pr-10 text-text-primary"
+            className="pr-10"
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -93,7 +92,7 @@ export function LoginForm() {
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
-            className="focus-ring absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary"
+            className="focus-ring absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-text-secondary transition hover:bg-bg-elevated hover:text-text-primary"
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -101,13 +100,17 @@ export function LoginForm() {
         </div>
       </label>
 
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {error ? (
+        <div className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      ) : null}
 
       <Button
         type="submit"
         disabled={pending}
         aria-busy={pending}
-        className="w-full bg-accent text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-[var(--accent)]/70 disabled:text-white/80"
+        className="w-full"
       >
         {pending ? (
           <span className="inline-flex items-center gap-2">

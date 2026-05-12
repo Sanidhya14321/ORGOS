@@ -18,6 +18,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { isExecutiveRole } from "@/lib/access";
 import type { Task } from "@/lib/models";
 import type { Goal } from "@orgos/shared-types";
 import { ChevronDown, X } from "lucide-react";
@@ -36,7 +37,12 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
   const [dragOverStatus, setDragOverStatus] = useState<Task["status"] | null>(null);
   const allGoalsValue = "__all_goals__";
   const socket = useSocket();
+  const meQuery = useQuery({
+    queryKey: ["me", "task-board"],
+    queryFn: () => apiFetch<{ id: string; role: "ceo" | "cfo" | "manager" | "worker" }>("/api/me")
+  });
   const [suggestionCounts, setSuggestionCounts] = useState<Record<string, number>>({});
+  const canDragTask = (task: Task) => task.assigned_to === meQuery.data?.id || isExecutiveRole(meQuery.data?.role);
 
   useEffect(() => {
     const onRoutingReady = (payload: { taskId?: string; suggestions?: Array<unknown> }) => {
@@ -217,7 +223,10 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOverStatus(null);
-                if (draggedTask && draggedTask.status !== group.key) {
+                const canMutateDraggedTask = draggedTask
+                  ? draggedTask.assigned_to === meQuery.data?.id || isExecutiveRole(meQuery.data?.role)
+                  : false;
+                if (draggedTask && draggedTask.status !== group.key && canMutateDraggedTask) {
                   updateTaskStatusMutation.mutate({
                     taskId: draggedTask.id,
                     newStatus: group.key
@@ -243,6 +252,7 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
                       onDragStart={(task) => setDraggedTask(task)}
                       onDragEnd={() => setDraggedTask(null)}
                       suggestionCounts={suggestionCounts}
+                      canDragTask={canDragTask}
                     />
                 )}
               </div>
@@ -262,13 +272,15 @@ function VirtualTaskColumn({
   onOpen,
   onDragStart,
   onDragEnd,
-  suggestionCounts
+  suggestionCounts,
+  canDragTask
 }: { 
   tasks: Task[]
   onOpen: (task: Task) => void
   onDragStart?: (task: Task) => void
   onDragEnd?: () => void
   suggestionCounts?: Record<string, number>
+  canDragTask?: (task: Task) => boolean
 }) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const rowVirtualizer = useVirtualizer({
@@ -286,8 +298,12 @@ function VirtualTaskColumn({
           return (
             <div
               key={task.id}
-              draggable
-              onDragStart={() => onDragStart?.(task)}
+              draggable={canDragTask?.(task) ?? false}
+              onDragStart={() => {
+                if (canDragTask?.(task) ?? false) {
+                  onDragStart?.(task);
+                }
+              }}
               onDragEnd={() => onDragEnd?.()}
               style={{
                 position: "absolute",

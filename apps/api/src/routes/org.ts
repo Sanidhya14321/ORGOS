@@ -4,6 +4,7 @@ import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { invalidateOrgPromptCache } from "../services/promptCache.js";
+import { getHierarchyScope } from "../services/hierarchyScope.js";
 import {
   CompanySizeValues,
   IndustryValues,
@@ -114,6 +115,7 @@ const EmployeeImportBodySchema = z.object({
 
 const OrgTreeNodeSchema = z.object({
   id: z.string().uuid(),
+  user_id: z.string().uuid().nullable().optional(),
   full_name: z.string(),
   email: z.string().email().optional(),
   role: z.enum(["ceo", "cfo", "manager", "worker"]),
@@ -543,24 +545,11 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    const requester = await fastify.supabaseService
-      .from("users")
-      .select("id, org_id, role, position_id")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (requester.error) {
-      if (isMissingTableSchemaCache(requester.error)) {
-        request.log.warn({ err: requester.error }, "users table missing in schema cache; returning empty org tree");
-        return reply.send({ orgId: parsed.data.id, nodes: [], positions: [] });
-      }
-      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to resolve requester profile");
-    }
-
-    const requesterOrgId = requester.data?.org_id as string | null | undefined;
-    if (!requesterOrgId || requesterOrgId !== parsed.data.id) {
+    const scope = await getHierarchyScope(fastify, userId);
+    if (!scope || scope.orgId !== parsed.data.id) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
     }
+
     const positionsResult = await fastify.supabaseService
       .from("positions")
       .select("id, title, level, department, branch_id, reports_to_position_id, power_level, visibility_scope, max_concurrent_tasks, is_custom, confirmed")
@@ -643,6 +632,7 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
         const occupant = usersByPositionId.get(String(position.id));
         return OrgTreeNodeSchema.parse({
           id: position.id,
+          user_id: occupant?.id ?? null,
           full_name: occupant?.full_name ?? `${position.title} Seat`,
           email: occupant?.email ?? (assignment?.invite_email as string | undefined),
           role: deriveRoleFromPosition({ title: position.title as string, level: Number(position.level ?? 2) }),
@@ -663,49 +653,9 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
         });
       });
 
-    const requesterRole = requester.data?.role as string | undefined;
-    const requesterPositionId = (requester.data?.position_id as string | null | undefined) ?? null;
-
-    const parentsById = new Map<string, string | null>();
-    const childrenByParent = new Map<string, string[]>();
-    for (const node of allNodes) {
-      parentsById.set(node.id, node.reports_to ?? null);
-      if (!node.reports_to) {
-        continue;
-      }
-      const list = childrenByParent.get(node.reports_to) ?? [];
-      list.push(node.id);
-      childrenByParent.set(node.reports_to, list);
-    }
-
-    const visiblePositionIds = new Set<string>();
-    if (requesterRole === "ceo" || requesterRole === "cfo" || !requesterPositionId) {
-      for (const node of allNodes) {
-        visiblePositionIds.add(node.id);
-      }
-    } else {
-      let cursor: string | null = requesterPositionId;
-      while (cursor) {
-        visiblePositionIds.add(cursor);
-        cursor = parentsById.get(cursor) ?? null;
-      }
-
-      if (requesterRole === "manager") {
-        const stack = [requesterPositionId];
-        while (stack.length > 0) {
-          const current = stack.pop() as string;
-          visiblePositionIds.add(current);
-          const children = childrenByParent.get(current) ?? [];
-          for (const child of children) {
-            stack.push(child);
-          }
-        }
-      }
-    }
-
-    const nodes = allNodes.filter((node) => visiblePositionIds.has(node.id));
+    const nodes = allNodes.filter((node) => scope.visibleTreePositionIds.has(node.id));
     const positionsWithFilled = (positionsResult.data ?? [])
-      .filter((position) => visiblePositionIds.has(String(position.id)))
+      .filter((position) => scope.visibleTreePositionIds.has(String(position.id)))
       .map((pos: any) => ({
         id: pos.id,
         title: pos.title,

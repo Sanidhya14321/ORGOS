@@ -11,7 +11,11 @@ function createReportResolver() {
   let currentStatus = "in_progress";
 
   return (operation: QueryOperation) => {
-    if (operation.table === "tasks" && operation.action === "select" && operation.select === "id, assigned_to") {
+    if (
+      operation.table === "tasks" &&
+      operation.action === "select" &&
+      operation.select === "id, org_id, assigned_to, assigned_position_id, owner_id, assignees, watchers"
+    ) {
       return { data: { id: taskId, assigned_to: userId } };
     }
 

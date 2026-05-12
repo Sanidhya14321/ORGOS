@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, CheckSquare, ChevronRight, Layers3, Search, Sparkles, Target, TrendingUp } from "lucide-react";
 import type { Goal, Role, Task } from "@/lib/models";
@@ -112,6 +113,32 @@ export default function ProjectsDashboardPage() {
       role={meQuery.data?.role}
     >
       <div className="space-y-8">
+        <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <Card className="p-6">
+            <div className="space-y-3">
+              <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
+                Goal-to-task map
+              </Badge>
+              <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
+                Move from strategic objectives to execution boards without losing context.
+              </h2>
+              <p className="max-w-2xl text-sm leading-7 text-text-secondary">
+                This view consolidates the goal description, task throughput, and direct navigation into the relevant
+                execution surface so project leaders can spot drift quickly.
+              </p>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <p className="dashboard-label">Project integrity</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <IntegrityStat label="Completion" value={`${metrics.completionRate}%`} />
+              <IntegrityStat label="Blocked tasks" value={metrics.blockedTasks} />
+              <IntegrityStat label="Tracked goals" value={metrics.totalGoals} />
+            </div>
+          </Card>
+        </section>
+
         <section className="grid gap-4 md:grid-cols-5">
           <MetricCard label="Goals" value={metrics.totalGoals} icon={<Target className="h-5 w-5" />} caption="Strategic objectives" />
           <MetricCard label="Tasks" value={metrics.totalTasks} icon={<Layers3 className="h-5 w-5" />} caption="Execution nodes" />
@@ -121,7 +148,7 @@ export default function ProjectsDashboardPage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
-          <Card className="border border-border bg-bg-surface p-4">
+          <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">Project map</p>
@@ -138,17 +165,18 @@ export default function ProjectsDashboardPage() {
                     className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                   />
                 </div>
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value as Goal["status"] | "all")}
-                  className="h-10 rounded-xl border border-border bg-bg-surface px-3 text-sm text-text-primary"
-                >
-                  <option value="all">All statuses</option>
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as Goal["status"] | "all")}>
+                  <SelectTrigger className="w-[170px] bg-bg-surface">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="paused">Paused</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -161,17 +189,16 @@ export default function ProjectsDashboardPage() {
                 </>
               ) : filteredRows.length > 0 ? (
                 filteredRows.map((row) => (
-                  <Card key={row.goal.id} className="border border-border bg-bg-surface p-5">
+                  <Card key={row.goal.id} className="p-5">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">Goal</Badge>
                           <Badge variant={row.goal.status === "completed" ? "default" : row.goal.status === "paused" ? "secondary" : "outline"}>{row.goal.status}</Badge>
                           <Badge variant="outline">Priority {row.goal.priority}</Badge>
-                          {/* Goal Creator/Manager Context */}
                           {(row.goal as any).created_by_position && (
-                            <Badge className="bg-blue-50 text-blue-700 border border-blue-200">
-                              📍 Created by {(row.goal as any).created_by_position}
+                            <Badge variant="outline">
+                              Created by {(row.goal as any).created_by_position}
                             </Badge>
                           )}
                         </div>
@@ -213,13 +240,13 @@ export default function ProjectsDashboardPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <Button asChild variant="outline" className="border-border bg-bg-surface hover:bg-bg-elevated">
+                        <Button asChild variant="outline">
                           <Link href={`/dashboard/goals?expand=${row.goal.id}`}>
                             Open goal
                             <ChevronRight className="ml-2 h-4 w-4" />
                           </Link>
                         </Button>
-                        <Button asChild className="bg-accent text-[#0f1115] hover:bg-accent/90">
+                        <Button asChild>
                           <Link href={`/dashboard/task-board?goalId=${row.goal.id}`}>
                             Open task board
                             <Sparkles className="ml-2 h-4 w-4" />
@@ -262,7 +289,7 @@ export default function ProjectsDashboardPage() {
           </Card>
 
           <div className="space-y-4">
-            <Card className="border border-border bg-bg-surface p-5">
+            <Card className="p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">How this is mapped</p>
               <div className="mt-4 space-y-3 text-sm text-text-secondary">
                 <p><strong className="text-text-primary">Goals</strong> define the strategic outcome.</p>
@@ -271,7 +298,7 @@ export default function ProjectsDashboardPage() {
               </div>
             </Card>
 
-            <Card className="border border-border bg-bg-surface p-5">
+            <Card className="p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">Project integrity</p>
               <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between rounded-2xl border border-border bg-bg-subtle px-4 py-3">
@@ -292,6 +319,15 @@ export default function ProjectsDashboardPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function IntegrityStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-[22px] border border-border bg-bg-elevated p-4">
+      <p className="dashboard-label">{label}</p>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-text-primary">{value}</p>
+    </div>
   );
 }
 

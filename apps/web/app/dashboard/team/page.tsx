@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { DashboardPageFrame } from "@/components/dashboard/dashboard-surface";
 import { apiFetch } from "@/lib/api";
 import type { Task, User } from "@/lib/models";
 import {
@@ -28,6 +29,16 @@ import {
 import { toast } from "sonner";
 
 type TeamMember = User & {
+  position_title?: string | null;
+};
+
+type OrgTreeMember = {
+  id: string;
+  user_id?: string | null;
+  full_name: string;
+  email?: string | null;
+  role: User["role"];
+  department?: string | null;
   position_title?: string | null;
 };
 
@@ -74,15 +85,15 @@ function formatTimestamp(value?: string | null): string {
 
 function statusTone(status?: string | null): string {
   if (status === "completed" || status === "activated" || status === "active") {
-    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+    return "bg-success-subtle text-success border border-success/20";
   }
   if (status === "blocked" || status === "breached") {
-    return "bg-red-50 text-red-700 border border-red-200";
+    return "bg-danger-subtle text-danger border border-danger/20";
   }
   if (status === "pending" || status === "routing") {
-    return "bg-amber-50 text-amber-700 border border-amber-200";
+    return "bg-warning-subtle text-warning border border-warning/20";
   }
-  return "bg-slate-50 text-slate-700 border border-slate-200";
+  return "bg-bg-elevated text-text-secondary border border-border";
 }
 
 export default function TeamPage() {
@@ -106,8 +117,20 @@ export default function TeamPage() {
 
   const membersQuery = useQuery({
     queryKey: ["team-members", meQuery.data?.org_id],
-    queryFn: () => apiFetch<{ items: TeamMember[] }>(`/api/orgs/${meQuery.data?.org_id}/accounts?limit=150`),
-    select: (data) => data.items ?? [],
+    queryFn: () => apiFetch<{ nodes: OrgTreeMember[] }>(`/api/orgs/${meQuery.data?.org_id}/tree`),
+    select: (data) =>
+      (data.nodes ?? [])
+        .filter((node) => Boolean(node.user_id))
+        .map((node) => ({
+          id: node.user_id as string,
+          email: node.email ?? "",
+          full_name: node.full_name,
+          role: node.role,
+          status: "active" as const,
+          department: node.department ?? undefined,
+          position_id: node.id,
+          position_title: node.position_title ?? null
+        })),
     enabled: Boolean(meQuery.data?.org_id)
   });
 
@@ -203,19 +226,13 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">Collaboration Hub</p>
-          <h1 className="mt-2 text-3xl font-bold text-text-primary">Task and goal conversations</h1>
-          <p className="mt-1 max-w-3xl text-sm text-text-secondary">
-            Turn workstreams into focused threads, keep contributors aligned on goal execution, and manage CEO-issued seat access from the same workspace.
-          </p>
-        </div>
-
-        {isCeo ? (
+    <DashboardPageFrame
+      eyebrow="Collaboration hub"
+      title="Task and goal conversations"
+      description="Keep execution threads, people context, and CEO-issued seat access in one shared workspace."
+      actions={
+        isCeo ? (
           <Button
-            className="bg-accent hover:bg-accent-hover"
             onClick={() => {
               const orgId = meQuery.data?.org_id;
               if (orgId) {
@@ -226,9 +243,10 @@ export default function TeamPage() {
             <Download className="mr-2 h-4 w-4" />
             Export Access Sheet
           </Button>
-        ) : null}
-      </div>
-
+        ) : undefined
+      }
+    >
+      <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border border-border bg-bg-surface p-4">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-text-secondary">Active threads</p>
@@ -565,6 +583,7 @@ export default function TeamPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </DashboardPageFrame>
   );
 }

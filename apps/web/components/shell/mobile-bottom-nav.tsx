@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, CheckSquare, Target, BriefcaseBusiness, Network, UserCheck, UserPlus } from "lucide-react";
+import { canAccessSection } from "@/lib/access";
+import type { Role } from "@/lib/models";
 import { useMeQuery } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard, show: () => true },
   { href: "/dashboard/task-board", label: "Tasks", icon: CheckSquare, show: () => true },
-  { href: "/dashboard/goals", label: "Goals", icon: Target, show: (role: string) => role !== "worker" },
-  { href: "/dashboard/recruit", label: "Recruit", icon: BriefcaseBusiness, show: (role: string) => role === "ceo" || role === "cfo" || role === "manager" },
-  { href: "/dashboard/org-tree", label: "Tree", icon: Network, show: (role: string) => role !== "worker" },
-  { href: "/dashboard/approvals", label: "Approve", icon: UserCheck, show: (role: string) => role === "ceo" || role === "cfo" || role === "manager" },
-  { href: "/dashboard/recruit/refer", label: "Refer", icon: UserPlus, show: (role: string) => role === "ceo" || role === "cfo" || role === "manager" }
+  { href: "/dashboard/goals", label: "Goals", icon: Target, show: (role: Role) => canAccessSection(role, "goals") },
+  { href: "/dashboard/recruit", label: "Recruit", icon: BriefcaseBusiness, show: (role: Role) => canAccessSection(role, "recruitment") },
+  { href: "/dashboard/org-tree", label: "Tree", icon: Network, show: (role: Role) => canAccessSection(role, "orgTree") },
+  { href: "/dashboard/approvals", label: "Approve", icon: UserCheck, show: (role: Role) => canAccessSection(role, "approvals") },
+  { href: "/dashboard/recruit/refer", label: "Refer", icon: UserPlus, show: (role: Role) => canAccessSection(role, "recruitment") }
 ] as const;
 
 export function MobileBottomNav() {
