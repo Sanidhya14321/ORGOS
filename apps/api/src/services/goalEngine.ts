@@ -79,6 +79,46 @@ export async function updateGoalStatus(
   }
 }
 
+export async function recomputeGoalRollup(
+  supabase: SupabaseClient,
+  goalId: string
+): Promise<{ status: "active" | "paused" | "completed" | "cancelled"; completionPct: number; totalTasks: number; completedTasks: number }> {
+  const { data: tasks, error } = await supabase
+    .from("tasks")
+    .select("id, status")
+    .eq("goal_id", goalId);
+
+  if (error) {
+    throw new Error(`Failed to load goal rollup tasks: ${error.message}`);
+  }
+
+  const totalTasks = tasks?.length ?? 0;
+  const completedTasks = (tasks ?? []).filter((task) => task.status === "completed").length;
+  const cancelledTasks = (tasks ?? []).filter((task) => task.status === "cancelled").length;
+  const completionPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  let status: "active" | "paused" | "completed" | "cancelled" = "active";
+  if (totalTasks > 0 && completedTasks === totalTasks) {
+    status = "completed";
+  } else if (totalTasks > 0 && cancelledTasks === totalTasks) {
+    status = "cancelled";
+  }
+
+  const { error: updateError } = await supabase
+    .from("goals")
+    .update({
+      status,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", goalId);
+
+  if (updateError) {
+    throw new Error(`Failed to update goal rollup: ${updateError.message}`);
+  }
+
+  return { status, completionPct, totalTasks, completedTasks };
+}
+
 export function buildSimulationPreview(input: {
   title: string;
   description?: string;

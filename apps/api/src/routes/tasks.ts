@@ -8,6 +8,7 @@ import { assignTask } from "../services/assignmentEngine.js";
 import { emitTaskAssigned, emitTaskStatusChanged, emitToUser } from "../services/notifier.js";
 import { getManagerQueue } from "../queue/index.js";
 import { persistRoutingOutcome } from "../services/routingMemory.js";
+import { recomputeGoalRollup } from "../services/goalEngine.js";
 
 const ListQuerySchema = z.object({
   status: TaskStatusSchema.optional(),
@@ -42,6 +43,7 @@ const CreateTaskBodySchema = z.object({
   requiredSkills: z.array(z.string().trim().min(1)).max(30).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   assignedRole: z.enum(["ceo", "cfo", "manager", "worker"]),
+  assignedPositionId: z.string().uuid().optional(),
   depth: z.union([z.literal(0), z.literal(1), z.literal(2)]).default(0),
   deadline: z.string().datetime().optional(),
   ownerId: z.string().uuid().optional(),
@@ -53,6 +55,18 @@ const CreateTaskBodySchema = z.object({
   recurrenceTimezone: z.string().trim().max(60).default("UTC"),
   requiresEvidence: z.boolean().default(false),
   estimatedEffortHours: z.number().positive().max(10000).optional()
+});
+
+const EditTaskBodySchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().trim().max(2000).optional(),
+  successCriteria: z.string().trim().min(1).max(2000).optional(),
+  priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+  deadline: z.string().datetime().nullable().optional(),
+  assignedRole: z.enum(["ceo", "cfo", "manager", "worker"]).optional(),
+  assignedPositionId: z.string().uuid().nullable().optional()
+}).refine((value) => Object.keys(value).length > 0, {
+  message: "At least one editable field is required"
 });
 
 const CreateAttachmentBodySchema = z.object({
@@ -357,6 +371,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         success_criteria: payload.successCriteria,
         priority: payload.priority,
         assigned_role: payload.assignedRole,
+        assigned_position_id: payload.assignedPositionId ?? null,
         assigned_to: payload.assignees?.[0] ?? null,
         assignees: payload.assignees ?? [],
         watchers: payload.watchers ?? [],
@@ -383,6 +398,53 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.status(202).send(data);
+  });
+
+  fastify.patch("/tasks/:id/details", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+    const params = IdParamSchema.safeParse(request.params);
+    const body = EditTaskBodySchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task edit payload", {
+        details: {
+          params: params.success ? null : params.error.flatten(),
+          body: body.success ? null : body.error.flatten()
+        }
+      });
+    }
+
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scoped = await getTaskWithScope(fastify, params.data.id, userId, request.userRole);
+    if (scoped.reason !== "ok" || !scoped.task) {
+      return sendApiError(reply, request, scoped.reason === "not_found" ? 404 : 403, scoped.reason === "not_found" ? "NOT_FOUND" : "FORBIDDEN", "Task is not editable in your scope");
+    }
+
+    const patch = {
+      ...(body.data.title !== undefined ? { title: body.data.title } : {}),
+      ...(body.data.description !== undefined ? { description: body.data.description } : {}),
+      ...(body.data.successCriteria !== undefined ? { success_criteria: body.data.successCriteria } : {}),
+      ...(body.data.priority !== undefined ? { priority: body.data.priority } : {}),
+      ...(body.data.deadline !== undefined ? { deadline: body.data.deadline, sla_deadline: body.data.deadline } : {}),
+      ...(body.data.assignedRole !== undefined ? { assigned_role: body.data.assignedRole } : {}),
+      ...(body.data.assignedPositionId !== undefined ? { assigned_position_id: body.data.assignedPositionId } : {}),
+      updated_at: new Date().toISOString()
+    };
+
+    const updateResult = await fastify.supabaseService
+      .from("tasks")
+      .update(patch)
+      .eq("id", params.data.id)
+      .select("*")
+      .single();
+
+    if (updateResult.error || !updateResult.data) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update task details");
+    }
+
+    return reply.send(updateResult.data);
   });
 
   fastify.post("/tasks/:id/routing-suggest", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
@@ -800,7 +862,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data: task, error } = await fastify.supabaseService
       .from("tasks")
-      .select("id, status, assigned_to, assigned_role, requires_evidence, completion_approved, blocked_by_count")
+      .select("id, goal_id, status, assigned_to, assigned_role, requires_evidence, completion_approved, blocked_by_count")
       .eq("id", params.data.id)
       .maybeSingle();
 
@@ -909,6 +971,10 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       status: targetStatus
     });
 
+    if (task.goal_id) {
+      await recomputeGoalRollup(fastify.supabaseService, String(task.goal_id));
+    }
+
     return reply.send(updated);
   });
 
@@ -932,7 +998,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
 
     const taskResult = await fastify.supabaseService
       .from("tasks")
-      .select("id, org_id, assigned_to, assigned_role, status")
+      .select("id, org_id, goal_id, assigned_to, assigned_role, status")
       .eq("id", params.data.id)
       .maybeSingle();
 
@@ -978,6 +1044,10 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         taskId: params.data.id,
         status: approvedStatus
       });
+    }
+
+    if (taskResult.data.goal_id) {
+      await recomputeGoalRollup(fastify.supabaseService, String(taskResult.data.goal_id));
     }
 
     return reply.send(updated.data);

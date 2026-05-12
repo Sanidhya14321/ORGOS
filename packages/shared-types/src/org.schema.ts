@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OrgStructureKindSchema } from "./org-structure.schema.js";
+import { OrgBranchSchema } from "./position.schema.js";
 
 /**
  * Legacy Org Schema - DEPRECATED
@@ -8,7 +9,7 @@ import { OrgStructureKindSchema } from "./org-structure.schema.js";
 export const OrgSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(200),
-  domain: z.string().min(1).optional(),
+  domain: z.string().min(1).nullable().optional(),
   created_by: z.string().uuid().nullable().optional(),
   created_at: z.string().datetime().optional()
 });
@@ -20,26 +21,16 @@ export const OrgSearchResultSchema = OrgSchema.pick({
 });
 
 /**
- * Enhanced Organization Schema with Hierarchy Settings
+ * Current organization payloads are a composition of the `orgs` row and
+ * optional org-setting fields surfaced by onboarding/settings endpoints.
  */
-export const OrganizationSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1).max(255),
-  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
-  domain: z.string().url().optional(),
-  description: z.string().max(500).optional(),
-  logo_url: z.string().url().optional(),
-  
-  // Hierarchy settings
-  max_hierarchy_depth: z.number().int().min(1).max(20).default(6),
+export const OrganizationSchema = OrgSchema.extend({
+  industry: z.string().optional(),
+  company_size: z.string().optional(),
   org_structure: OrgStructureKindSchema.optional(),
-  allow_multi_position: z.boolean().default(true),
-  allow_skip_level_delegation: z.boolean().default(false),
-  
-  // Metadata
-  created_by: z.string().uuid().nullable().optional(),
-  created_at: z.string().datetime().optional(),
-  updated_at: z.string().datetime().optional(),
+  branch_count: z.number().int().positive().optional(),
+  branches: z.array(OrgBranchSchema).optional(),
+  updated_at: z.string().datetime().optional()
 });
 
 export type Org = z.infer<typeof OrgSchema>;

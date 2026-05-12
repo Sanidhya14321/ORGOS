@@ -27,6 +27,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm --workspace @orgos/shared-types run build && tsx --test test/**/*.test.ts",
     "smoke:local": "bash ../../scripts/smoke-e2e-local.sh",
     "smoke:e2e": "node ../../scripts/e2e-smoke-test.mjs"
   },

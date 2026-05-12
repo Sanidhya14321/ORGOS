@@ -1,8 +1,8 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { sendApiError } from "../lib/errors.js";
-import { hashSessionToken, isMfaCookieValid, MFA_VERIFIED_COOKIE, getRoleSessionTimeoutMs } from "../lib/session-security.js";
-import { isLocalDevelopmentEnv } from "../config/env.js";
+import { hashSessionToken, isMfaCookieValid, MFA_VERIFIED_COOKIE, getAuthCookieSigningSecret, getRoleSessionTimeoutMs } from "../lib/session-security.js";
+import { shouldRelaxSecurityForLocalTesting } from "../config/env.js";
 
 const PUBLIC_ROUTES = new Set([
   "/api/auth/login",
@@ -93,7 +93,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("onRequest", async (request, reply) => {
     request.user = null;
     request.userRole = null;
-    const localDevelopment = isLocalDevelopmentEnv(fastify.env);
+    const relaxedLocalSecurity = shouldRelaxSecurityForLocalTesting(fastify.env);
 
     const path = normalizePath(request.url);
     const isPublicRoute = PUBLIC_ROUTES.has(path) || isDynamicPublicRoute(path);
@@ -111,7 +111,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     const authHeader = readFirstHeaderValue(headers.authorization);
     const cookieHeader = readFirstHeaderValue(headers.cookie);
     const usingCookieAuth = !authHeader && !!extractCookieValue(cookieHeader, ACCESS_TOKEN_COOKIE);
-    if (!localDevelopment && usingCookieAuth && MUTATING_METHODS.has(request.method) && !isPublicRoute) {
+    if (!relaxedLocalSecurity && usingCookieAuth && MUTATING_METHODS.has(request.method) && !isPublicRoute) {
       const originHeader = request.headers.origin;
       if (!originMatchesWebOrigin(originHeader, fastify.env.WEB_ORIGIN)) {
         return sendApiError(reply, request, 403, "FORBIDDEN", "Invalid request origin");
@@ -136,12 +136,26 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
     const profileRole = normalizeRole(profile.data?.role);
     const metadataRole = normalizeRole(data.user.user_metadata?.role);
-    request.userRole = profileRole ?? metadataRole;
+    if (profileRole && metadataRole && profileRole !== metadataRole) {
+      request.log.warn(
+        {
+          userId: data.user.id,
+          metadataRole,
+          profileRole
+        },
+        "Ignoring auth metadata role because profile role is authoritative"
+      );
+    }
+    request.userRole = profileRole;
+
+    if (!request.userRole && !isPublicRoute) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "User role is not configured");
+    }
 
     const mfaEnabled = profile.data?.mfa_enabled === true;
-    if (!localDevelopment && (request.userRole === "ceo" || request.userRole === "cfo") && mfaEnabled && !isMfaBypassPath(path)) {
+    if (!relaxedLocalSecurity && (request.userRole === "ceo" || request.userRole === "cfo") && mfaEnabled && !isMfaBypassPath(path)) {
       const mfaCookieValue = extractCookieValue(cookieHeader, MFA_VERIFIED_COOKIE);
-      const mfaVerified = isMfaCookieValid(mfaCookieValue, token, fastify.env.SUPABASE_SERVICE_ROLE_KEY);
+      const mfaVerified = isMfaCookieValid(mfaCookieValue, token, getAuthCookieSigningSecret(fastify.env));
       if (!mfaVerified) {
         return sendApiError(reply, request, 403, "MFA_REQUIRED", "MFA verification required", {
           setupPath: "/setup-mfa"

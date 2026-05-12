@@ -7,7 +7,15 @@ interface CandidateUser {
   id: string;
   open_task_count: number;
   skills: string[] | null;
+  position_id?: string | null;
+  department?: string | null;
 }
+
+type AssignTaskOptions = {
+  persistTaskUpdate?: boolean;
+  reserveCapacity?: boolean;
+  emitAssignmentEvent?: boolean;
+};
 
 const MAX_OPEN_TASKS = 8;
 
@@ -16,21 +24,25 @@ function hasRequiredSkills(candidate: CandidateUser, requiredSkills: string[]): 
   return requiredSkills.every((skill) => candidateSkills.includes(skill));
 }
 
-function scoreCandidate(candidate: CandidateUser, requiredSkills: string[]): number {
+function scoreCandidate(candidate: CandidateUser, requiredSkills: string[], preferredPositionIds: string[]): number {
   const candidateSkills = new Set(candidate.skills ?? []);
   const matched = requiredSkills.reduce((count, skill) => (candidateSkills.has(skill) ? count + 1 : count), 0);
+  const positionBonus = candidate.position_id && preferredPositionIds.includes(candidate.position_id) ? 150 : 0;
 
-  // Heavily weight skill coverage, then prefer lower load.
-  return matched * 100 - candidate.open_task_count;
+  // Prefer exact seat match, then skill coverage, then lower load.
+  return positionBonus + matched * 100 - candidate.open_task_count;
 }
 
-export async function assignTask(task: Task): Promise<Task> {
+export async function assignTask(task: Task, options: AssignTaskOptions = {}): Promise<Task> {
   const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
+  const persistTaskUpdate = options.persistTaskUpdate ?? true;
+  const reserveCapacity = options.reserveCapacity ?? true;
+  const emitAssignmentEvent = options.emitAssignmentEvent ?? true;
 
   let query = supabase
     .from("users")
-    .select("id, open_task_count, skills")
+    .select("id, open_task_count, skills, position_id, department")
     .eq("role", task.assigned_role)
     .eq("agent_enabled", true)
     .eq("status", "active")
@@ -55,11 +67,17 @@ export async function assignTask(task: Task): Promise<Task> {
 
   const candidateList = (candidates ?? []) as CandidateUser[];
   const requiredSkills = task.required_skills ?? [];
+  const preferredPositionIds = [
+    ...(((task as Task & { assigned_position_id?: string | null }).assigned_position_id
+      ? [String((task as Task & { assigned_position_id?: string | null }).assigned_position_id)]
+      : [])),
+    ...(((task as Task & { suggested_position_ids?: string[] }).suggested_position_ids ?? []).map((value) => String(value)))
+  ];
 
   const selected = candidateList
     .map((candidate) => ({
       candidate,
-      score: scoreCandidate(candidate, requiredSkills),
+      score: scoreCandidate(candidate, requiredSkills, preferredPositionIds),
       coversAllSkills: hasRequiredSkills(candidate, requiredSkills)
     }))
     .sort((a, b) => {
@@ -80,65 +98,72 @@ export async function assignTask(task: Task): Promise<Task> {
       is_agent_task: true
     };
 
-    if (task.id) {
+    if (task.id && persistTaskUpdate) {
       const { data: existingTask } = await supabase.from("tasks").select("id").eq("id", task.id).maybeSingle();
       if (existingTask) {
-      const { error: taskUpdateError } = await supabase
-        .from("tasks")
-        .update({ assigned_to: null, is_agent_task: true })
-        .eq("id", task.id);
+        const { error: taskUpdateError } = await supabase
+          .from("tasks")
+          .update({ assigned_to: null, is_agent_task: true })
+          .eq("id", task.id);
 
-      if (taskUpdateError) {
-        throw new Error(`Failed to persist fallback assignment: ${taskUpdateError.message}`);
-      }
+        if (taskUpdateError) {
+          throw new Error(`Failed to persist fallback assignment: ${taskUpdateError.message}`);
+        }
       }
     }
 
     return fallbackTask;
   }
 
-  // Compensating update strategy: increment load first, then task assignment,
-  // and roll back counter if task update fails.
-  const { error: incrementError } = await supabase
-    .from("users")
-    .update({ open_task_count: selected.open_task_count + 1 })
-    .eq("id", selected.id);
+  if (reserveCapacity) {
+    // Compensating update strategy: increment load first, then task assignment,
+    // and roll back counter if task update fails.
+    const { error: incrementError } = await supabase
+      .from("users")
+      .update({ open_task_count: selected.open_task_count + 1 })
+      .eq("id", selected.id);
 
-  if (incrementError) {
-    throw new Error(`Failed to increment assignee task count: ${incrementError.message}`);
+    if (incrementError) {
+      throw new Error(`Failed to increment assignee task count: ${incrementError.message}`);
+    }
   }
 
   try {
-    if (task.id) {
+    if (task.id && persistTaskUpdate) {
       const { data: existingTask } = await supabase.from("tasks").select("id").eq("id", task.id).maybeSingle();
       if (existingTask) {
-      const { error: taskUpdateError } = await supabase
-        .from("tasks")
-        .update({ assigned_to: selected.id, is_agent_task: false })
-        .eq("id", task.id);
+        const { error: taskUpdateError } = await supabase
+          .from("tasks")
+          .update({ assigned_to: selected.id, is_agent_task: false })
+          .eq("id", task.id);
 
-      if (taskUpdateError) {
-        throw new Error(taskUpdateError.message);
-      }
+        if (taskUpdateError) {
+          throw new Error(taskUpdateError.message);
+        }
       }
     }
 
-    emitTaskAssigned(selected.id, {
-      taskId: task.id,
-      role: task.assigned_role,
-      isAgentTask: false
-    });
+    if (emitAssignmentEvent) {
+      emitTaskAssigned(selected.id, {
+        taskId: task.id,
+        role: task.assigned_role,
+        isAgentTask: false
+      });
+    }
 
     return {
       ...task,
       assigned_to: selected.id,
+      assigned_position_id: (selected.position_id as string | null | undefined) ?? (task as Task & { assigned_position_id?: string | null }).assigned_position_id ?? null,
       is_agent_task: false
     };
   } catch (error) {
-    await supabase
-      .from("users")
-      .update({ open_task_count: selected.open_task_count })
-      .eq("id", selected.id);
+    if (reserveCapacity) {
+      await supabase
+        .from("users")
+        .update({ open_task_count: selected.open_task_count })
+        .eq("id", selected.id);
+    }
 
     throw new Error(`Failed to assign task: ${error instanceof Error ? error.message : "unknown error"}`);
   }

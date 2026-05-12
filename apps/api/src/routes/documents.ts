@@ -85,6 +85,11 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
         file_name: fileName,
         file_content: encryptText(extractedText),
         doc_type: docType,
+        summary: parsed.data.summary ?? null,
+        branch_id: parsed.data.branch_id ?? null,
+        department: parsed.data.department ?? null,
+        retrieval_mode: parsed.data.retrieval_mode,
+        normalized_content: extractedText,
         file_size: extractedText.length,
         mime_type: "text/plain",
         is_indexed: false,
@@ -101,7 +106,11 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Queue indexing job (async)
     try {
-      await indexDocument(fastify.supabaseService, doc.id, extractedText);
+      await indexDocument(fastify.supabaseService, doc.id, extractedText, undefined, {
+        orgId,
+        branchId: parsed.data.branch_id ?? null,
+        department: parsed.data.department ?? null
+      });
     } catch (e) {
       request.log.warn({ err: e }, "Failed to index document");
     }
@@ -148,6 +157,10 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
         page_count: doc.page_count || 0,
         key_topics: doc.key_topics || [],
         is_indexed: doc.is_indexed,
+        summary: doc.summary ?? null,
+        branch_id: doc.branch_id ?? null,
+        department: doc.department ?? null,
+        section_count: doc.section_count ?? 0,
         uploaded_at: doc.uploaded_at,
         indexed_at: doc.indexed_at
       }))
@@ -228,8 +241,10 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       file_name: doc.file_name,
       doc_type: doc.doc_type,
       file_content: decryptText(doc.file_content) ?? "",
+      summary: doc.summary ?? null,
       key_topics: doc.key_topics,
       page_count: doc.page_count,
+      section_count: doc.section_count ?? 0,
       uploaded_at: doc.uploaded_at
     });
   });

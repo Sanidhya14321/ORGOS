@@ -5,7 +5,6 @@ import type { FormEvent } from "react";
 import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { setRoleCookie } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -47,7 +46,6 @@ export function LoginForm() {
         mfaRequired?: boolean;
         mfaSetupRequired?: boolean;
       };
-      setRoleCookie(data.user.role);
       const localDevelopment = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
       if (!localDevelopment && (data.mfaRequired || data.mfaSetupRequired) && (data.user.role === "ceo" || data.user.role === "cfo")) {
         router.push("/setup-mfa");

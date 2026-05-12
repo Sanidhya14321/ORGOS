@@ -32,6 +32,11 @@ export default function ForecastPage() {
             <DashboardMetric label="14d completion" value={`${forecastQuery.data?.forecast[1]?.expectedCompletion ?? 0}%`} tone="success" loading={forecastQuery.isLoading} />
           </section>
 
+          <section className="grid gap-4 md:grid-cols-2">
+            <DashboardMetric label="Blocked tasks" value={`${forecastQuery.data?.blockedTaskCount ?? 0}`} tone="warning" loading={forecastQuery.isLoading} />
+            <DashboardMetric label="Staffing pressure" value={`${Math.round((forecastQuery.data?.staffingPressure ?? 0) * 100)}%`} tone="info" loading={forecastQuery.isLoading} />
+          </section>
+
           <DashboardSection title="Horizon" description="Each bucket shows expected completion and remaining effort.">
             <div className="grid gap-4 lg:grid-cols-2">
               {(forecastQuery.data?.forecast ?? []).map((bucket) => (
@@ -48,6 +53,28 @@ export default function ForecastPage() {
                   <div className="mt-4 space-y-2">
                     <Progress value={bucket.expectedCompletion} className="h-2" />
                     <p className="text-sm text-[var(--muted)]">Expected completion: {bucket.expectedCompletion}%</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </DashboardSection>
+
+          <DashboardSection title="Goal Risk Signals" description="Advisory signals derived from open effort, blockers, and staffing pressure.">
+            <div className="grid gap-4">
+              {(forecastQuery.data?.goalSignals ?? []).map((signal) => (
+                <article key={signal.goalId} className="dashboard-dense-row p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="dashboard-label">{signal.title}</p>
+                      <p className="mt-2 text-sm text-[var(--muted)]">{signal.remainingHours} hours remaining</p>
+                    </div>
+                    <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--muted)]">
+                      Risk {Math.round(signal.risk * 100)}%
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <Progress value={signal.expectedCompletion14d} className="h-2" />
+                    <p className="text-sm text-[var(--muted)]">Expected 14d completion: {signal.expectedCompletion14d}%</p>
                   </div>
                 </article>
               ))}

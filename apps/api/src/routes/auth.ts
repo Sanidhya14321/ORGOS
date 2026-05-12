@@ -7,11 +7,13 @@ import {
   buildClearMfaCookie,
   buildMfaCookie,
   buildSessionMetadata,
+  getAuthCookieSigningSecret,
   hashSessionToken,
   getRoleSessionLimit,
   getRoleSessionTimeoutMs
 } from "../lib/session-security.js";
-import { isLocalDevelopmentEnv } from "../config/env.js";
+import { shouldRelaxSecurityForLocalTesting } from "../config/env.js";
+import { activatePositionCredential } from "../services/credentialService.js";
 
 const ACCESS_TOKEN_COOKIE = "orgos_access_token";
 
@@ -60,6 +62,25 @@ const SignupCeoBodySchema = z.object({
 const VerifyBodySchema = z.object({
   tokenHash: z.string().trim().min(1),
   type: z.enum(["signup", "invite", "magiclink", "recovery", "email_change", "email"])
+});
+
+const ActivateSeatBodySchema = z.object({
+  inviteToken: z.string().trim().min(12).optional(),
+  inviteCode: z.string().trim().min(4).max(32).optional(),
+  email: z.string().trim().email().optional(),
+  temporaryPassword: z.string().min(8).optional(),
+  password: z.string().min(8),
+  fullName: z.string().trim().min(1).max(120),
+  department: z.string().trim().max(120).optional(),
+  skills: z.array(z.string().trim().min(1)).max(30).optional()
+}).superRefine((value, ctx) => {
+  if (!value.inviteToken && !value.inviteCode && !value.email) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Provide an invite token, invite code, or work email",
+      path: ["inviteToken"]
+    });
+  }
 });
 
 const CompleteProfileBodySchema = z.object({
@@ -142,7 +163,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const userProfile = await loadUserProfile(fastify, data.user);
     const isExecutive = userProfile.role === "ceo" || userProfile.role === "cfo";
-    const localBypass = isLocalDevelopmentEnv(fastify.env);
+    const localBypass = shouldRelaxSecurityForLocalTesting(fastify.env);
     const mfaEnabled = (userProfile as { mfa_enabled?: boolean }).mfa_enabled === true;
     const secureCookie = fastify.env.NODE_ENV === "production";
 
@@ -152,7 +173,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       .eq("user_id", data.user.id)
       .eq("revoked", false);
 
-    if (!sessionQuery.error && Array.isArray(sessionQuery.data)) {
+    if (!localBypass && !sessionQuery.error && Array.isArray(sessionQuery.data)) {
       const now = Date.now();
       const recentCount = sessionQuery.data.filter((row) => {
         const lastActiveValue = row.last_active ? new Date(String(row.last_active)).getTime() : now;
@@ -388,6 +409,70 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  fastify.post("/auth/activate-seat", async (request, reply) => {
+    const parsed = ActivateSeatBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid seat activation payload", {
+        details: parsed.error.flatten()
+      });
+    }
+
+    try {
+      const activation = await activatePositionCredential(fastify, {
+        password: parsed.data.password,
+        fullName: parsed.data.fullName,
+        ...(parsed.data.inviteToken ? { inviteToken: parsed.data.inviteToken } : {}),
+        ...(parsed.data.inviteCode ? { inviteCode: parsed.data.inviteCode } : {}),
+        ...(parsed.data.email ? { email: parsed.data.email } : {}),
+        ...(parsed.data.temporaryPassword ? { temporaryPassword: parsed.data.temporaryPassword } : {}),
+        ...(parsed.data.department ? { department: parsed.data.department } : {}),
+        ...(parsed.data.skills ? { skills: parsed.data.skills } : {})
+      });
+      const signInResult = await fastify.supabaseAnon.auth.signInWithPassword({
+        email: activation.email,
+        password: parsed.data.password
+      });
+
+      if (signInResult.error || !signInResult.data.session || !signInResult.data.user) {
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Seat activated, but automatic sign-in failed");
+      }
+
+      const currentSessionTokenHash = hashSessionToken(signInResult.data.session.access_token);
+      const metadata = buildSessionMetadata(request);
+      await fastify.supabaseService.from("sessions").upsert({
+        user_id: activation.userId,
+        session_token_hash: currentSessionTokenHash,
+        device: metadata.device,
+        browser: metadata.browser,
+        ip: metadata.ip,
+        country: metadata.country,
+        revoked: false,
+        last_active: new Date().toISOString()
+      }, { onConflict: "session_token_hash" });
+
+      const secureCookie = fastify.env.NODE_ENV === "production";
+      reply.header("Set-Cookie", [
+        buildCookie(signInResult.data.session.access_token, secureCookie),
+        buildClearMfaCookie(secureCookie)
+      ]);
+
+      const userProfile = await loadUserProfile(fastify, signInResult.data.user);
+      return reply.status(201).send({
+        user: userProfile,
+        orgId: activation.orgId,
+        positionId: activation.positionId
+      });
+    } catch (error) {
+      return sendApiError(
+        reply,
+        request,
+        400,
+        "VALIDATION_ERROR",
+        error instanceof Error ? error.message : "Unable to activate seat"
+      );
+    }
+  });
+
   fastify.post("/auth/complete-profile", async (request, reply) => {
     const parsed = CompleteProfileBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -401,7 +486,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    if (isLocalDevelopmentEnv(fastify.env)) {
+    if (shouldRelaxSecurityForLocalTesting(fastify.env)) {
       return reply.send({ required: false, enabled: false, role: request.userRole ?? "ceo" });
     }
 
@@ -468,7 +553,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    if (isLocalDevelopmentEnv(fastify.env)) {
+    if (shouldRelaxSecurityForLocalTesting(fastify.env)) {
       return reply.send({ required: false, enabled: false, role: request.userRole ?? "ceo" });
     }
 
@@ -541,7 +626,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
     }
 
-    if (isLocalDevelopmentEnv(fastify.env)) {
+    if (shouldRelaxSecurityForLocalTesting(fastify.env)) {
       return reply.send({ verified: true, role: request.userRole ?? "ceo" });
     }
 
@@ -567,8 +652,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (!currentToken) {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing session token");
     }
-    reply.header("Set-Cookie", buildMfaCookie(currentToken, fastify.env.SUPABASE_SERVICE_ROLE_KEY, secureCookie));
-
+    reply.header("Set-Cookie", buildMfaCookie(currentToken, getAuthCookieSigningSecret(fastify.env), secureCookie));
     return reply.send({ enrolled: true });
   });
 
@@ -612,7 +696,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (!currentToken) {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing session token");
     }
-    reply.header("Set-Cookie", buildMfaCookie(currentToken, fastify.env.SUPABASE_SERVICE_ROLE_KEY, secureCookie));
+    reply.header("Set-Cookie", buildMfaCookie(currentToken, getAuthCookieSigningSecret(fastify.env), secureCookie));
 
     return reply.send({ verified: true, role: profile.data.role });
   });

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { FastifyRequest } from "fastify";
+import type { Env } from "../config/env.js";
 
 export const MFA_VERIFIED_COOKIE = "orgos_mfa_verified";
 
@@ -39,6 +40,10 @@ export function buildSessionMetadata(request: FastifyRequest): {
     ip,
     country
   };
+}
+
+export function getAuthCookieSigningSecret(env: Env): string {
+  return env.AUTH_COOKIE_SIGNING_SECRET?.trim() || env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
 export function isMfaCookieValid(cookieValue: string | null, accessToken: string, signingSecret: string): boolean {

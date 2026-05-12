@@ -7,7 +7,7 @@ import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Redis } from "@upstash/redis";
-import { readEnv } from "./config/env.js";
+import { readEnv, shouldRelaxSecurityForLocalTesting } from "./config/env.js";
 import { createRedisClient, createSupabaseAnonClient, createSupabaseServiceClient } from "./lib/clients.js";
 import { sendApiError } from "./lib/errors.js";
 import { initializeSentry, captureException } from "./lib/sentry.js";
@@ -35,7 +35,6 @@ import { startIngestWorker } from "./queue/workers/ingest.worker.js";
 import { ensureSlaSchedule, startSlaWorker } from "./queue/workers/sla.worker.js";
 import { startSynthesizeWorker } from "./queue/workers/synthesize.worker.js";
 import { initializeNotifier } from "./services/notifier.js";
-import { isLocalDevelopmentEnv } from "./config/env.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -54,6 +53,7 @@ declare module "fastify" {
 
 export async function buildServer() {
   const env = readEnv();
+  const relaxedLocalSecurity = shouldRelaxSecurityForLocalTesting(env);
   const fastify = Fastify({
     logger: {
       level: env.NODE_ENV === "production" ? "info" : "debug"
@@ -97,21 +97,23 @@ export async function buildServer() {
     credentials: true
   });
 
-  await fastify.register(rateLimit, {
-    max: 100,
-    timeWindow: "1 minute",
-    keyGenerator: (request) => request.user?.id ?? request.ip,
-    errorResponseBuilder: (request) => ({
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many requests",
-        requestId: request.requestId
-      }
-    })
-  });
+  if (!relaxedLocalSecurity) {
+    await fastify.register(rateLimit, {
+      max: 100,
+      timeWindow: "1 minute",
+      keyGenerator: (request) => request.user?.id ?? request.ip,
+      errorResponseBuilder: (request) => ({
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many requests",
+          requestId: request.requestId
+        }
+      })
+    });
+  }
 
   fastify.addHook("preHandler", async (request, reply) => {
-    if (isLocalDevelopmentEnv(fastify.env)) {
+    if (shouldRelaxSecurityForLocalTesting(fastify.env)) {
       return;
     }
 

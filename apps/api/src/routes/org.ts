@@ -117,10 +117,18 @@ const OrgTreeNodeSchema = z.object({
   full_name: z.string(),
   email: z.string().email().optional(),
   role: z.enum(["ceo", "cfo", "manager", "worker"]),
-  status: z.enum(["pending", "active", "rejected"]).optional(),
+  status: z.string().optional(),
   department: z.string().nullable().optional(),
   position_id: z.string().uuid().nullable().optional(),
-  reports_to: z.string().uuid().nullable().optional()
+  reports_to: z.string().uuid().nullable().optional(),
+  branch_id: z.string().uuid().nullable().optional(),
+  branch_name: z.string().nullable().optional(),
+  position_title: z.string().optional(),
+  power_level: z.number().int().optional(),
+  visibility_scope: z.string().optional(),
+  assignment_status: z.string().optional(),
+  current_load: z.number().int().optional(),
+  max_load: z.number().int().optional()
 });
 
 function isMissingTableSchemaCache(error: { code?: string } | null | undefined): boolean {
@@ -145,6 +153,18 @@ function inferLevelFromRole(role: z.infer<typeof MemberRoleSchema>): 0 | 1 | 2 {
   }
 
   return 2;
+}
+
+function deriveRoleFromPosition(position: { title?: string | null; level?: number | null }): "ceo" | "cfo" | "manager" | "worker" {
+  const title = (position.title ?? "").toLowerCase();
+  if (title.includes("chief financial") || title === "cfo") {
+    return "cfo";
+  }
+  if (title.includes("chief executive") || title === "ceo") {
+    return "ceo";
+  }
+  const level = Number(position.level ?? 2);
+  return level <= 1 ? "manager" : "worker";
 }
 
 function generatePassword(): string {
@@ -512,7 +532,7 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
-  fastify.get("/orgs/:id/tree", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+  fastify.get("/orgs/:id/tree", { preHandler: requireRole("ceo", "cfo", "manager", "worker") }, async (request, reply) => {
     const parsed = OrgIdParamSchema.safeParse(request.params);
     if (!parsed.success) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization id");
@@ -525,7 +545,7 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
 
     const requester = await fastify.supabaseService
       .from("users")
-      .select("id, org_id, role")
+      .select("id, org_id, role, position_id")
       .eq("id", userId)
       .maybeSingle();
 
@@ -541,94 +561,160 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     if (!requesterOrgId || requesterOrgId !== parsed.data.id) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
     }
-    const requesterRole = requester.data?.role as string | undefined;
-
-    const usersResult = await fastify.supabaseService
-      .from("users")
-      .select("id, full_name, email, role, status, department, position_id, reports_to")
-      .eq("org_id", parsed.data.id)
-      .order("full_name", { ascending: true });
-
-    if (usersResult.error) {
-      if (isMissingTableSchemaCache(usersResult.error)) {
-        request.log.warn({ err: usersResult.error }, "users table missing in schema cache; returning empty org tree");
-        return reply.send({ orgId: parsed.data.id, nodes: [], positions: [] });
-      }
-      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization tree");
-    }
-
     const positionsResult = await fastify.supabaseService
       .from("positions")
-      .select("id, title, level, is_custom, confirmed")
+      .select("id, title, level, department, branch_id, reports_to_position_id, power_level, visibility_scope, max_concurrent_tasks, is_custom, confirmed")
       .eq("org_id", parsed.data.id)
       .order("level", { ascending: true })
       .order("title", { ascending: true });
 
     if (positionsResult.error) {
       if (isMissingTableSchemaCache(positionsResult.error)) {
-        request.log.warn({ err: positionsResult.error }, "positions table missing in schema cache; returning org tree without positions");
-        const nodes = (usersResult.data ?? [])
-          .map((row) => OrgTreeNodeSchema.safeParse(row))
-          .filter((result) => result.success)
-          .map((result) => result.data);
-
-        return reply.send({
-          orgId: parsed.data.id,
-          nodes,
-          positions: []
-        });
+        request.log.warn({ err: positionsResult.error }, "positions table missing in schema cache; returning empty org tree");
+        return reply.send({ orgId: parsed.data.id, nodes: [], positions: [] });
       }
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization positions");
     }
 
-    const allNodes = (usersResult.data ?? [])
-      .map((row) => OrgTreeNodeSchema.safeParse(row))
-      .filter((result) => result.success)
-      .map((result) => result.data);
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("id, full_name, email, status, department, position_id, open_task_count")
+      .eq("org_id", parsed.data.id);
+    if (usersResult.error) {
+      if (isMissingTableSchemaCache(usersResult.error)) {
+        return reply.send({ orgId: parsed.data.id, nodes: [], positions: [] });
+      }
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization members");
+    }
 
-    // Managers can only view their own reporting subtree, while C-suite can view the full org.
-    const nodes = requesterRole === "manager"
-      ? (() => {
-          const childrenByManager = new Map<string, string[]>();
-          for (const node of allNodes) {
-            if (!node.reports_to) {
-              continue;
-            }
-            const list = childrenByManager.get(node.reports_to) ?? [];
-            list.push(node.id);
-            childrenByManager.set(node.reports_to, list);
+    const assignmentsResult = await fastify.supabaseService
+      .from("position_assignments")
+      .select("position_id, user_id, assignment_status, activation_state, seat_label, invite_email, branch_id")
+      .eq("org_id", parsed.data.id)
+      .is("deactivated_at", null);
+    if (assignmentsResult.error && !isMissingTableSchemaCache(assignmentsResult.error)) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization assignments");
+    }
+
+    const branchesResult = await fastify.supabaseService
+      .from("org_branches")
+      .select("id, name")
+      .eq("org_id", parsed.data.id);
+    if (branchesResult.error && !isMissingTableSchemaCache(branchesResult.error)) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization branches");
+    }
+
+    const usersByPositionId = new Map<string, {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      status: string | null;
+      department: string | null;
+      open_task_count: number;
+    }>();
+    for (const row of usersResult.data ?? []) {
+      const positionId = (row.position_id as string | null | undefined) ?? null;
+      if (!positionId) {
+        continue;
+      }
+      usersByPositionId.set(positionId, {
+        id: String(row.id),
+        full_name: (row.full_name as string | null | undefined) ?? null,
+        email: (row.email as string | null | undefined) ?? null,
+        status: (row.status as string | null | undefined) ?? null,
+        department: (row.department as string | null | undefined) ?? null,
+        open_task_count: Number(row.open_task_count ?? 0)
+      });
+    }
+
+    const assignmentsByPositionId = new Map<string, Record<string, unknown>>();
+    for (const row of assignmentsResult.data ?? []) {
+      assignmentsByPositionId.set(String(row.position_id), row as Record<string, unknown>);
+    }
+
+    const branchNamesById = new Map<string, string>();
+    for (const row of branchesResult.data ?? []) {
+      branchNamesById.set(String(row.id), String(row.name));
+    }
+
+    const allNodes = (positionsResult.data ?? [])
+      .map((position) => {
+        const assignment = assignmentsByPositionId.get(String(position.id));
+        const occupant = usersByPositionId.get(String(position.id));
+        return OrgTreeNodeSchema.parse({
+          id: position.id,
+          full_name: occupant?.full_name ?? `${position.title} Seat`,
+          email: occupant?.email ?? (assignment?.invite_email as string | undefined),
+          role: deriveRoleFromPosition({ title: position.title as string, level: Number(position.level ?? 2) }),
+          status: occupant?.status ?? (assignment?.assignment_status as string | undefined) ?? "vacant",
+          department: (position.department as string | null | undefined) ?? occupant?.department ?? null,
+          position_id: position.id,
+          reports_to: (position.reports_to_position_id as string | null | undefined) ?? null,
+          branch_id: ((assignment?.branch_id ?? position.branch_id) as string | null | undefined) ?? null,
+          branch_name: ((assignment?.branch_id ?? position.branch_id) as string | null | undefined)
+            ? branchNamesById.get(String((assignment?.branch_id ?? position.branch_id) as string)) ?? null
+            : null,
+          position_title: position.title,
+          power_level: Number(position.power_level ?? 50),
+          visibility_scope: String(position.visibility_scope ?? "org"),
+          assignment_status: (assignment?.assignment_status as string | undefined) ?? (occupant ? "active" : "vacant"),
+          current_load: occupant?.open_task_count ?? 0,
+          max_load: Number(position.max_concurrent_tasks ?? 10)
+        });
+      });
+
+    const requesterRole = requester.data?.role as string | undefined;
+    const requesterPositionId = (requester.data?.position_id as string | null | undefined) ?? null;
+
+    const parentsById = new Map<string, string | null>();
+    const childrenByParent = new Map<string, string[]>();
+    for (const node of allNodes) {
+      parentsById.set(node.id, node.reports_to ?? null);
+      if (!node.reports_to) {
+        continue;
+      }
+      const list = childrenByParent.get(node.reports_to) ?? [];
+      list.push(node.id);
+      childrenByParent.set(node.reports_to, list);
+    }
+
+    const visiblePositionIds = new Set<string>();
+    if (requesterRole === "ceo" || requesterRole === "cfo" || !requesterPositionId) {
+      for (const node of allNodes) {
+        visiblePositionIds.add(node.id);
+      }
+    } else {
+      let cursor: string | null = requesterPositionId;
+      while (cursor) {
+        visiblePositionIds.add(cursor);
+        cursor = parentsById.get(cursor) ?? null;
+      }
+
+      if (requesterRole === "manager") {
+        const stack = [requesterPositionId];
+        while (stack.length > 0) {
+          const current = stack.pop() as string;
+          visiblePositionIds.add(current);
+          const children = childrenByParent.get(current) ?? [];
+          for (const child of children) {
+            stack.push(child);
           }
+        }
+      }
+    }
 
-          const visible = new Set<string>();
-          const stack: string[] = [userId];
-          while (stack.length > 0) {
-            const current = stack.pop() as string;
-            if (visible.has(current)) {
-              continue;
-            }
-            visible.add(current);
-            const children = childrenByManager.get(current) ?? [];
-            for (const child of children) {
-              stack.push(child);
-            }
-          }
-
-          return allNodes.filter((node) => visible.has(node.id));
-        })()
-      : allNodes;
-
-    // mark positions as filled if any user in the org has that position_id assigned
-    const positionsWithFilled = (positionsResult.data ?? []).map((pos: any) => {
-      const filled = (allNodes ?? []).some((u) => (u.position_id ?? null) === pos.id);
-      return {
+    const nodes = allNodes.filter((node) => visiblePositionIds.has(node.id));
+    const positionsWithFilled = (positionsResult.data ?? [])
+      .filter((position) => visiblePositionIds.has(String(position.id)))
+      .map((pos: any) => ({
         id: pos.id,
         title: pos.title,
         level: pos.level,
+        power_level: Number(pos.power_level ?? 50),
         is_custom: pos.is_custom,
         confirmed: pos.confirmed,
-        filled
-      };
-    });
+        filled: Boolean(usersByPositionId.get(String(pos.id)))
+      }));
 
     return reply.send({
       orgId: parsed.data.id,

@@ -1,10 +1,5 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { TaskBoardView } from "@/components/tasks/task-board-view";
-import { ROLE_COOKIE } from "@/lib/auth";
-import type { Role } from "@/lib/models";
-
-const allowedRoles: Role[] = ["ceo", "cfo", "manager", "worker"];
+import { requireServerSessionUser } from "@/lib/server-session";
 
 type TaskBoardPageProps = {
   searchParams?: {
@@ -17,18 +12,10 @@ function readParam(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
-export default function TaskBoardPage({ searchParams }: TaskBoardPageProps) {
-  const cookieRole = cookies().get(ROLE_COOKIE)?.value as Role | undefined;
+export default async function TaskBoardPage({ searchParams }: TaskBoardPageProps) {
+  await requireServerSessionUser();
   const initialGoalId = readParam(searchParams?.goalId);
   const initialTaskId = readParam(searchParams?.taskId);
-
-  if (!cookieRole) {
-    redirect("/login");
-  }
-
-  if (!allowedRoles.includes(cookieRole)) {
-    redirect("/dashboard");
-  }
 
   return <TaskBoardView initialGoalId={initialGoalId} initialTaskId={initialTaskId} />;
 }

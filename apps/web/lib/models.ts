@@ -123,6 +123,9 @@ export type ApplicantStage = "applied" | "screening" | "interview" | "offer" | "
 export interface Job {
   id: string;
   org_id: string;
+  position_id?: string | null;
+  branch_id?: string | null;
+  hiring_manager_position_id?: string | null;
   title: string;
   department: string;
   description: string;
@@ -133,6 +136,7 @@ export interface Job {
   salary_min?: number;
   salary_max?: number;
   status: JobStatus;
+  vacancy_status?: "open" | "backfill" | "pipeline" | "filled" | "cancelled";
   closes_at?: string;
 }
 
@@ -140,6 +144,7 @@ export interface Applicant {
   id: string;
   job_id: string;
   org_id: string;
+  hired_position_assignment_id?: string | null;
   full_name: string;
   email: string;
   phone?: string;
@@ -147,6 +152,7 @@ export interface Applicant {
   stage: ApplicantStage;
   ai_score?: number;
   ai_summary?: string;
+  candidate_resume_summary?: string | null;
   applied_at: string;
 }
 
@@ -225,9 +231,18 @@ export interface ForecastResponse {
     low: number;
   };
   openEffortHours: number;
+  staffingPressure?: number;
+  blockedTaskCount?: number;
   forecast: Array<{
     bucket: string;
     expectedCompletion: number;
+    remainingHours: number;
+  }>;
+  goalSignals?: Array<{
+    goalId: string;
+    title: string;
+    risk: number;
+    expectedCompletion14d: number;
     remainingHours: number;
   }>;
 }

@@ -5,7 +5,7 @@ import { sanitizeGoalInput, SanitizationError } from "@orgos/agent-core";
 import { getCsuiteQueue } from "../queue/index.js";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
-import { buildSimulationPreview, buildTaskTree, updateGoalStatus } from "../services/goalEngine.js";
+import { buildSimulationPreview, buildTaskTree, recomputeGoalRollup, updateGoalStatus } from "../services/goalEngine.js";
 
 const CreateGoalSchema = z.object({
   title: z.string().min(3).max(200),
@@ -309,6 +309,18 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     };
 
     if (patch.status) {
+      if (patch.status === "completed") {
+        const rollup = await recomputeGoalRollup(fastify.supabaseService, params.data.id);
+        if (rollup.status !== "completed") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "VALIDATION_ERROR",
+            "A goal can only be completed when every task and subtask is completed"
+          );
+        }
+      }
       await updateGoalStatus(fastify.supabaseService, params.data.id, patch.status);
     }
 

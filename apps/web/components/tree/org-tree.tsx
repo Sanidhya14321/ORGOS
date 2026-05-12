@@ -23,6 +23,11 @@ type TreeNode = {
   role: string;
   reports_to?: string | null;
   position_id?: string | null;
+  position_title?: string;
+  branch_name?: string | null;
+  assignment_status?: string;
+  visibility_scope?: string;
+  power_level?: number;
   current_load?: number;
   max_load?: number;
   sla_status?: "on_track" | "at_risk" | "breached";
@@ -38,6 +43,8 @@ interface CircleNode {
   role: string;
   email?: string;
   department?: string;
+  branch_name?: string | null;
+  visibility_scope?: string;
   sla_status: "on_track" | "at_risk" | "breached";
   current_load: number;
   max_load: number;
@@ -76,6 +83,8 @@ function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<stri
       children: [],
       position_title: node.position_id ? positions.get(node.position_id) : node.role,
       position_filled: node.position_id ? (positionsFilled?.get(node.position_id) ?? true) : true,
+      branch_name: node.branch_name,
+      visibility_scope: node.visibility_scope,
     });
     if (node.reports_to) {
       if (!childrenMap.has(node.reports_to)) childrenMap.set(node.reports_to, []);
@@ -328,9 +337,20 @@ export function OrgTree() {
                         <p className="text-sm font-medium">{selectedNode.department || "N/A"}</p>
                     </div>
                     <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Status</p>
-                  <Badge variant="outline" className="capitalize border-[var(--border)] bg-[var(--bg-subtle)]">{selectedNode.sla_status.replace('_', ' ')}</Badge>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Position</p>
+                  <Badge variant="outline" className="capitalize border-[var(--border)] bg-[var(--bg-subtle)]">{selectedNode.position_title ?? selectedNode.role}</Badge>
                     </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Branch</p>
+                    <p className="text-sm font-medium">{selectedNode.branch_name || "Main org"}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">Visibility</p>
+                    <p className="text-sm font-medium">{selectedNode.visibility_scope || "org"}</p>
+                  </div>
                 </div>
 
                 <div className="space-y-3">

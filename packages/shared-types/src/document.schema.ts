@@ -17,6 +17,8 @@ export const DocumentTypeSchema = z.enum([
 export const OrgDocumentSchema = z.object({
   id: z.string().uuid(),
   org_id: z.string().uuid(),
+  branch_id: z.string().uuid().nullable().optional(),
+  department: z.string().nullable().optional(),
   
   // File info
   file_name: z.string().min(1).max(255),
@@ -27,12 +29,15 @@ export const OrgDocumentSchema = z.object({
   file_content: z.string(), // Raw text (post-OCR if PDF)
   summary: z.string().optional(), // User-provided or AI-generated summary
   doc_type: DocumentTypeSchema,
+  normalized_content: z.string().optional(),
+  retrieval_mode: z.enum(["vectorless", "vector", "hybrid"]).default("vectorless"),
   
   // RAG indexing
   is_indexed: z.boolean().default(false),
   indexed_at: z.string().datetime().nullable().optional(),
   page_count: z.number().int().nonnegative().optional(),
   key_topics: z.array(z.string()).optional(), // Auto-extracted or user-provided
+  section_count: z.number().int().nonnegative().optional(),
   
   // Metadata
   uploaded_by: z.string().uuid(),
@@ -52,7 +57,27 @@ export const DocumentUploadRequestSchema = z.object({
   file_content: z.string(), // Base64 or raw text
   doc_type: DocumentTypeSchema,
   summary: z.string().optional(),
+  branch_id: z.string().uuid().optional(),
+  department: z.string().max(120).optional(),
+  retrieval_mode: z.enum(["vectorless", "vector", "hybrid"]).default("vectorless"),
 });
+
+export const OrgDocumentSectionSchema = z.object({
+  id: z.string().uuid(),
+  org_id: z.string().uuid(),
+  document_id: z.string().uuid(),
+  branch_id: z.string().uuid().nullable().optional(),
+  department: z.string().nullable().optional(),
+  section_index: z.number().int().nonnegative(),
+  page_start: z.number().int().positive().nullable().optional(),
+  page_end: z.number().int().positive().nullable().optional(),
+  heading: z.string().nullable().optional(),
+  content: z.string(),
+  keyword_terms: z.array(z.string()).default([]),
+  created_at: z.string().datetime().optional()
+});
+
+export type OrgDocumentSection = z.infer<typeof OrgDocumentSectionSchema>;
 
 /**
  * Document List Response
@@ -76,6 +101,7 @@ export const RAGContextSchema = z.object({
       summary: z.string(),
       key_topics: z.array(z.string()).optional(),
       excerpt: z.string().max(2000), // Truncated content
+      section_index: z.number().int().nonnegative().optional(),
     })
   ),
   context_instruction: z.string(), // e.g., "Use the company handbook to understand our values"

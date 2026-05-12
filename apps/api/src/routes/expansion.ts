@@ -257,7 +257,7 @@ const expansionRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data: tasks, error } = await fastify.supabaseService
       .from("tasks")
-      .select("id, status, priority, estimated_effort_hours, actual_hours, deadline, assigned_role")
+      .select("id, goal_id, status, priority, estimated_effort_hours, actual_hours, deadline, assigned_role, assigned_to, blocked_by_count")
       .eq("org_id", params.data.orgId);
 
     if (error) {
@@ -267,6 +267,22 @@ const expansionRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to build forecast");
     }
 
+    const goalsResult = await fastify.supabaseService
+      .from("goals")
+      .select("id, title, status, deadline, created_at")
+      .eq("org_id", params.data.orgId);
+    if (goalsResult.error && !isMissingSchemaCache(goalsResult.error)) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load goals for forecast");
+    }
+
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("id, open_task_count, status")
+      .eq("org_id", params.data.orgId);
+    if (usersResult.error && !isMissingSchemaCache(usersResult.error)) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load staffing signals for forecast");
+    }
+
     const byPriority = {
       critical: tasks?.filter((task) => task.priority === "critical").length ?? 0,
       high: tasks?.filter((task) => task.priority === "high").length ?? 0,
@@ -274,18 +290,86 @@ const expansionRoutes: FastifyPluginAsync = async (fastify) => {
       low: tasks?.filter((task) => task.priority === "low").length ?? 0
     };
 
-    const openEffort = (tasks ?? []).filter((task) => task.status !== "completed" && task.status !== "cancelled").reduce((total, task) => total + Number(task.estimated_effort_hours ?? 0), 0);
+    const openTasks = (tasks ?? []).filter((task) => task.status !== "completed" && task.status !== "cancelled");
+    const completedTasks = (tasks ?? []).filter((task) => task.status === "completed");
+    const blockedTasks = openTasks.filter((task) => task.status === "blocked" || Number(task.blocked_by_count ?? 0) > 0);
+    const openEffort = openTasks.reduce((total, task) => total + Number(task.estimated_effort_hours ?? 0), 0);
+    const activeUsers = (usersResult.data ?? []).filter((user) => user.status === "active");
+    const averageLoad = activeUsers.length > 0
+      ? activeUsers.reduce((sum, user) => sum + Number(user.open_task_count ?? 0), 0) / activeUsers.length
+      : 0;
+    const completionRate = tasks && tasks.length > 0 ? completedTasks.length / tasks.length : 0;
+    const blockedRatio = openTasks.length > 0 ? blockedTasks.length / openTasks.length : 0;
+    const staffingPressure = Math.min(1, averageLoad / 8);
+    const  goalSignals = (goalsResult.data ?? []).map((goal) => {
+      const goalTasks = (tasks ?? []).filter((task) => task.goal_id === goal.id);
+      const goalOpen = goalTasks.filter((task) => task.status !== "completed" && task.status !== "cancelled");
+      const goalDone = goalTasks.filter((task) => task.status === "completed").length;
+      const goalBlocked = goalOpen.filter((task) => task.status === "blocked" || Number(task.blocked_by_count ?? 0) > 0).length;
+      const goalEffort = goalOpen.reduce((sum, task) => sum + Number(task.estimated_effort_hours ?? 0), 0);
+      const goalCompletion = goalTasks.length > 0 ? goalDone / goalTasks.length : 0;
+      const goalRisk = Math.min(
+        1,
+        (1 - goalCompletion) * 0.45 +
+        (goalOpen.length > 0 ? goalBlocked / goalOpen.length : 0) * 0.25 +
+        staffingPressure * 0.2 +
+        (goalEffort > 40 ? 0.1 : goalEffort / 400)
+      );
+      return {
+        goalId: goal.id,
+        title: goal.title,
+        risk: Number(goalRisk.toFixed(2)),
+        expectedCompletion14d: Math.max(0, Math.min(100, Math.round((1 - goalRisk * 0.8) * 100))),
+        remainingHours: Math.round(goalEffort * 10) / 10
+      };
+    });
+
     const forecast = [
-      { bucket: "7d", expectedCompletion: Math.min(100, Math.round((tasks?.filter((task) => task.status === "completed").length ?? 0) / Math.max(tasks?.length ?? 1, 1) * 120)), remainingHours: Math.round(openEffort * 0.45 * 10) / 10 },
-      { bucket: "14d", expectedCompletion: Math.min(100, Math.round((tasks?.filter((task) => task.status === "completed").length ?? 0) / Math.max(tasks?.length ?? 1, 1) * 140)), remainingHours: Math.round(openEffort * 0.25 * 10) / 10 },
-      { bucket: "30d", expectedCompletion: Math.min(100, Math.round((tasks?.filter((task) => task.status === "completed").length ?? 0) / Math.max(tasks?.length ?? 1, 1) * 170)), remainingHours: Math.round(openEffort * 0.1 * 10) / 10 }
+      {
+        bucket: "7d",
+        expectedCompletion: Math.max(0, Math.min(100, Math.round((completionRate * 100) + 20 - blockedRatio * 18 - staffingPressure * 12))),
+        remainingHours: Math.round(openEffort * 0.5 * 10) / 10
+      },
+      {
+        bucket: "14d",
+        expectedCompletion: Math.max(0, Math.min(100, Math.round((completionRate * 100) + 36 - blockedRatio * 22 - staffingPressure * 14))),
+        remainingHours: Math.round(openEffort * 0.3 * 10) / 10
+      },
+      {
+        bucket: "30d",
+        expectedCompletion: Math.max(0, Math.min(100, Math.round((completionRate * 100) + 55 - blockedRatio * 26 - staffingPressure * 18))),
+        remainingHours: Math.round(openEffort * 0.12 * 10) / 10
+      }
     ];
+
+    for (const signal of goalSignals) {
+      await fastify.supabaseService
+        .from("goal_forecasts")
+        .upsert({
+          org_id: params.data.orgId,
+          goal_id: signal.goalId,
+          horizon_days: 14,
+          expected_completion_pct: signal.expectedCompletion14d,
+          remaining_hours: signal.remainingHours,
+          confidence: Number((1 - signal.risk).toFixed(2)),
+          factors: {
+            staffingPressure: Number(staffingPressure.toFixed(2)),
+            blockedRatio: Number(blockedRatio.toFixed(2)),
+            completionRate: Number(completionRate.toFixed(2))
+          }
+        }, { onConflict: "goal_id,horizon_days" });
+    }
 
     return reply.send({
       horizonDays: 30,
       byPriority,
       openEffortHours: Math.round(openEffort * 10) / 10,
-      forecast
+      forecast,
+      staffingPressure: Number(staffingPressure.toFixed(2)),
+      blockedTaskCount: blockedTasks.length,
+      goalSignals: goalSignals
+        .sort((left, right) => right.risk - left.risk)
+        .slice(0, 5)
     });
   });
 

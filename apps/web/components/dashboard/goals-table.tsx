@@ -20,8 +20,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { Goal, Task } from "@/lib/models";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { useMeQuery } from "@/lib/queries";
 import { toast } from "sonner";
-import { getRoleFromBrowser } from "@/lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
   const [expanded, setExpanded] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const queryClient = useQueryClient();
+  const meQuery = useMeQuery();
 
   // Edit dialog state
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -166,7 +167,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
   }
 
   // Role gating for edit visibility
-  const currentRole = typeof window !== "undefined" ? getRoleFromBrowser() : null;
+  const currentRole = meQuery.data?.role ?? null;
   const canEdit = currentRole ? ["ceo", "cfo"].includes(currentRole.toLowerCase()) : false;
 
   return (

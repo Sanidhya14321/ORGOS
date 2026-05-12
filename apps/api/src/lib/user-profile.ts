@@ -85,7 +85,11 @@ export async function loadUserProfile(fastify: FastifyInstance, authUser: Supaba
     fastify.log.warn({ err: profileQuery.error }, "Falling back to auth metadata for user profile");
   }
 
-  return buildUserProfileFromAuthUser(authUser);
+  const fallbackProfile = buildUserProfileFromAuthUser(authUser);
+  return {
+    ...fallbackProfile,
+    role: "worker"
+  };
 }
 
 export async function persistUserProfile(fastify: FastifyInstance, profile: User): Promise<void> {

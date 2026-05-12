@@ -4,23 +4,18 @@
  */
 
 import type { FastifyPluginAsync } from "fastify";
-import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
 import {
   OrgStructureSuggestionRequestSchema,
   ApplyStructureSuggestionSchema,
-  DocumentUploadRequestSchema
+  OnboardingPositionImportSchema
 } from "@orgos/shared-types";
 import {
   createPositionCredentials,
+  ensurePositionAssignment,
   exportOrgCredentials,
   resetPositionCredentials
 } from "../services/credentialService.js";
-import {
-  getOrgDocuments,
-  archiveDocument,
-  indexDocument
-} from "../services/ragRetrieval.js";
 
 /**
  * Suggested org structure configurations
@@ -126,6 +121,31 @@ function suggestOrgStructure(
     })),
     confidence
   };
+}
+
+function slugify(input: string): string {
+  const value = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return value || "orgos";
+}
+
+function derivePowerLevel(level: number): number {
+  if (level <= 0) {
+    return 100;
+  }
+  if (level === 1) {
+    return 80;
+  }
+  if (level === 2) {
+    return 60;
+  }
+  if (level === 3) {
+    return 40;
+  }
+  return 20;
 }
 
 const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
@@ -248,20 +268,7 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
    * CEO imports positions via CSV or manual entry
    */
   fastify.post("/onboarding/positions/import", async (request, reply) => {
-    const bodySchema = z.object({
-      org_id: z.string().uuid(),
-      positions: z.array(
-        z.object({
-          title: z.string().min(1).max(100),
-          department: z.string().optional(),
-          level: z.number().int().min(0).max(5),
-          email_prefix: z.string().min(1), // e.g., "engineer-1"
-          auto_generate_credentials: z.boolean().default(true)
-        })
-      )
-    });
-
-    const parsed = bodySchema.safeParse(request.body);
+    const parsed = OnboardingPositionImportSchema.safeParse(request.body);
     if (!parsed.success) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid import payload", {
         details: parsed.error.flatten()
@@ -272,7 +279,7 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can import positions");
     }
 
-    const { org_id, positions } = parsed.data;
+    const { org_id, branches, positions, import_source } = parsed.data;
 
     // Get org domain for email generation
     const { data: org, error: orgError } = await fastify.supabaseService
@@ -286,22 +293,55 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found");
     }
 
-    const domain = org.domain || "orgos.ai";
-    const createdPositions = [];
-    const credentials = [];
+    const domain = (org.domain || `${slugify(org.name)}.orgos.ai`).toLowerCase();
+    const createdPositions: string[] = [];
+    const credentials: Array<Record<string, unknown>> = [];
+    const branchIdByCode = new Map<string, string>();
+    const positionIdsByTitle = new Map<string, string>();
+
+    if (branches.length > 0) {
+      for (const branch of branches) {
+        const branchInsert = await fastify.supabaseService
+          .from("org_branches")
+          .upsert({
+            org_id,
+            name: branch.name,
+            code: branch.code,
+            city: branch.city ?? null,
+            country: branch.country ?? null,
+            timezone: branch.timezone ?? "UTC",
+            is_headquarters: branch.is_headquarters,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "org_id,code" })
+          .select("id, code")
+          .single();
+
+        if (branchInsert.error || !branchInsert.data) {
+          return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Failed to create branch ${branch.name}`);
+        }
+
+        branchIdByCode.set(String(branchInsert.data.code), String(branchInsert.data.id));
+      }
+    }
 
     for (const pos of positions) {
-      // Create position
+      const branchId = pos.branch_code ? branchIdByCode.get(pos.branch_code) ?? null : null;
       const { data: position, error: posError } = await fastify.supabaseService
         .from("positions")
         .insert({
           org_id,
-          name: pos.title,
-          slug: pos.title.toLowerCase().replace(/\s+/g, "-"),
+          branch_id: branchId,
+          title: pos.title,
+          department: pos.department ?? null,
           level: pos.level,
-          department: pos.department,
-          power_level: Math.max(0, 100 - pos.level * 10),
-          created_at: new Date().toISOString()
+          power_level: pos.power_level ?? derivePowerLevel(pos.level),
+          visibility_scope: pos.visibility_scope,
+          max_concurrent_tasks: pos.max_concurrent_tasks ?? 10,
+          compensation_band: pos.compensation_band ?? {},
+          is_custom: true,
+          confirmed: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
         .select("id")
         .single();
@@ -311,21 +351,53 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       createdPositions.push(position.id);
+      positionIdsByTitle.set(pos.title.toLowerCase(), position.id);
 
-      // Generate credentials if requested
-      if (pos.auto_generate_credentials) {
-        const email = `${pos.email_prefix}@${domain}`;
-        const cred = await createPositionCredentials(fastify.supabaseService, org_id, position.id, email);
-        credentials.push({
-          position_id: position.id,
-          position_title: pos.title,
-          email: cred.email,
-          plaintext_password: cred.plaintext_password
-        });
+      await ensurePositionAssignment(fastify.supabaseService, {
+        orgId: org_id,
+        positionId: position.id,
+        branchId,
+        inviteEmail: pos.invite_email ?? `${pos.email_prefix}@${domain}`,
+        seatLabel: pos.seat_label ?? pos.title,
+        assignmentStatus: "invited",
+        activationState: "pending",
+        invitedBy: request.user.id
+      });
+
+      const email = `${pos.email_prefix}@${domain}`;
+      const cred = await createPositionCredentials(fastify.supabaseService, org_id, position.id, email, {
+        ...(pos.invite_email ? { inviteEmail: pos.invite_email } : {}),
+        issueMode: pos.issue_mode,
+        invitationBaseUrl: fastify.env.WEB_ORIGIN
+      });
+      credentials.push({
+        position_id: position.id,
+        position_title: pos.title,
+        email: cred.email,
+        plaintext_password: cred.plaintext_password,
+        invite_code: cred.invite_code,
+        invitation_url: cred.invitation_url,
+        issued_mode: cred.issued_mode
+      });
+    }
+
+    for (const pos of positions) {
+      if (!pos.reports_to_title) {
+        continue;
       }
+      const childId = positionIdsByTitle.get(pos.title.toLowerCase());
+      const parentId = positionIdsByTitle.get(pos.reports_to_title.toLowerCase());
+      if (!childId || !parentId) {
+        continue;
+      }
+      await fastify.supabaseService
+        .from("positions")
+        .update({ reports_to_position_id: parentId, updated_at: new Date().toISOString() })
+        .eq("id", childId);
     }
 
     return reply.send({
+      import_source,
       created_positions: createdPositions.length,
       credentials
     });
@@ -353,6 +425,22 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ positions });
   });
 
+  fastify.get("/onboarding/org/:org_id/team-directory", async (request, reply) => {
+    const { org_id } = request.params as { org_id: string };
+
+    if (!request.user || request.userRole !== "ceo") {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can view the team directory access sheet");
+    }
+
+    const ownsOrg = await ensureOwnedOrg(org_id, request.user.id);
+    if (!ownsOrg) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found");
+    }
+
+    const positions = await exportOrgCredentials(fastify.supabaseService, org_id);
+    return reply.send({ items: positions });
+  });
+
   /**
    * POST /onboarding/org/:org_id/positions/:position_id/reset-password
    * CEO resets credentials for a position
@@ -369,12 +457,16 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found");
     }
 
-    const result = await resetPositionCredentials(fastify.supabaseService, org_id, position_id);
+    const result = await resetPositionCredentials(fastify.supabaseService, org_id, position_id, {
+      invitationBaseUrl: fastify.env.WEB_ORIGIN
+    });
 
     return reply.send({
       plaintext_password: result.plaintext_password,
       email: result.email,
-      message: "Password reset. Share the new password with the employee. They must change it on first login."
+      invite_code: result.invite_code,
+      invitation_url: result.invitation_url,
+      message: "Access reset. Share the invite link or temporary password with the employee."
     });
   });
 
@@ -405,8 +497,16 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Build CSV
     const csvLines = [
-      "Position Title,Email,Password Reset Required,Level",
-      ...positions.map((p) => `"${p.position_title}","${p.email}",${p.force_password_change ? "yes" : "no"},${p.level}`)
+      "Position Title,Login Email,Invite Code,Invite URL,Activation Status,Password Reset Required,Level",
+      ...positions.map((p) => [
+        `"${p.position_title}"`,
+        `"${p.email ?? ""}"`,
+        `"${p.invite_code ?? ""}"`,
+        `"${p.invitation_url ?? ""}"`,
+        `"${p.activation_status ?? p.activation_state}"`,
+        p.force_password_change ? "yes" : "no",
+        p.level
+      ].join(","))
     ];
     const csv = csvLines.join("\n");
 

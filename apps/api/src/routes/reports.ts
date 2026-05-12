@@ -7,6 +7,7 @@ import { requireRole } from "../plugins/rbac.js";
 import { getIngestQueue, getSynthesizeQueue } from "../queue/index.js";
 import { emitTaskReportSubmittedCascade } from "../services/notifier.js";
 import { getTaskWithScope } from "../services/taskAccess.js";
+import { recomputeGoalRollup } from "../services/goalEngine.js";
 
 const ReportCreateSchema = ReportSchema.omit({ id: true }).extend({
   id: z.string().uuid().optional(),
@@ -146,7 +147,11 @@ async function enqueueIfSiblingsDone(
 
   const allDone = (siblings ?? []).every((sibling) => sibling.status === "completed");
   if (allDone) {
-    await getSynthesizeQueue().add("report_synthesize", { parentTaskId: task.parent_id as string });
+    await getSynthesizeQueue().add(
+      "report_synthesize",
+      { parentTaskId: task.parent_id as string },
+      { jobId: `report_synthesize:${task.parent_id as string}` }
+    );
   }
 }
 
@@ -158,6 +163,18 @@ function buildReportIngestText(report: Report): string {
   ];
 
   return sections.filter((section) => section.length > 0).join("\n\n");
+}
+
+function deriveTaskStatusFromReportStatus(status: Report["status"]): "completed" | "in_progress" | "blocked" {
+  if (status === "completed") {
+    return "completed";
+  }
+
+  if (status === "blocked") {
+    return "blocked";
+  }
+
+  return "in_progress";
 }
 
 const reportsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -184,7 +201,21 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Not allowed to submit report for this task");
     }
 
+    const taskSnapshotResult = await fastify.supabaseService
+      .from("tasks")
+      .select("id, org_id, goal_id, parent_id, status, report_id")
+      .eq("id", payload.task_id)
+      .maybeSingle();
+
+    if (taskSnapshotResult.error || !taskSnapshotResult.data) {
+      if (isSchemaCacheUnavailable(taskSnapshotResult.error)) {
+        return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+      }
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Task not found");
+    }
+
     const reportId = payload.id ?? crypto.randomUUID();
+    const nextTaskStatus = deriveTaskStatusFromReportStatus(payload.status);
 
     const reportToInsert: Report = {
       id: reportId,
@@ -207,17 +238,11 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to insert report");
     }
 
-    const { data: taskForOrg } = await fastify.supabaseService
-      .from("tasks")
-      .select("org_id")
-      .eq("id", payload.task_id)
-      .maybeSingle();
-
     const reportIngestText = buildReportIngestText(reportToInsert);
 
-    if (taskForOrg?.org_id && reportIngestText.length > 0) {
+    if (taskSnapshotResult.data.org_id && reportIngestText.length > 0) {
       await getIngestQueue().add("report_ingest", {
-        orgId: taskForOrg.org_id as string,
+        orgId: taskSnapshotResult.data.org_id as string,
         sourceType: "report",
         sourceId: reportId,
         text: reportIngestText
@@ -226,23 +251,28 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { error: updateTaskError } = await fastify.supabaseService
       .from("tasks")
-      .update({ status: "completed", report_id: reportId, updated_at: new Date().toISOString() })
+      .update({ status: nextTaskStatus, report_id: reportId, updated_at: new Date().toISOString() })
       .eq("id", payload.task_id);
 
     if (updateTaskError) {
+      await fastify.supabaseService
+        .from("reports")
+        .delete()
+        .eq("id", reportId);
+
       if (isSchemaCacheUnavailable(updateTaskError)) {
         return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
       }
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update task status");
     }
 
-    await fastify.supabaseService
-      .from("users")
-      .update({ open_task_count: 0 })
-      .eq("id", userId)
-      .gt("open_task_count", 0);
+    if (nextTaskStatus === "completed") {
+      await enqueueIfSiblingsDone(fastify, payload.task_id);
+    }
 
-    await enqueueIfSiblingsDone(fastify, payload.task_id);
+    if (taskSnapshotResult.data.goal_id) {
+      await recomputeGoalRollup(fastify.supabaseService, String(taskSnapshotResult.data.goal_id));
+    }
 
     await emitTaskReportSubmittedCascade(payload.task_id, {
       reportId,
@@ -251,7 +281,7 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       escalate: payload.escalate
     });
 
-    return reply.status(201).send({ reportId });
+    return reply.status(201).send({ reportId, taskStatus: nextTaskStatus });
   });
 
   fastify.get("/reports/:taskId", async (request, reply) => {

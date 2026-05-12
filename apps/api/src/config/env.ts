@@ -4,6 +4,8 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
+  RELAX_SECURITY_FOR_LOCAL_TESTING: z.coerce.boolean().default(false),
+  AUTH_COOKIE_SIGNING_SECRET: z.string().min(32).optional(),
   SLA_MONITOR_ENABLED: z.coerce.boolean().default(true),
   SLA_CHECK_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   SLA_AT_RISK_WINDOW_MINUTES: z.coerce.number().int().positive().default(120),
@@ -36,4 +38,12 @@ export function isLocalDevelopmentEnv(env: Env): boolean {
   } catch {
     return false;
   }
+}
+
+export function shouldRelaxSecurityForLocalTesting(env: Env): boolean {
+  if (env.NODE_ENV === "production") {
+    return false;
+  }
+
+  return env.RELAX_SECURITY_FOR_LOCAL_TESTING || isLocalDevelopmentEnv(env);
 }

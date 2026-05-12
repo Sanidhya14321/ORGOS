@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
+import { createPositionCredentials, ensurePositionAssignment } from "../services/credentialService.js";
 
 const JobStatusSchema = z.enum(["open", "paused", "closed"]);
 const ApplicantStageSchema = z.enum(["applied", "screening", "interview", "offer", "hired", "rejected"]);
@@ -18,6 +19,9 @@ const ListJobsQuerySchema = z.object({
 });
 
 const CreateJobBodyShape = z.object({
+  positionId: z.string().uuid().optional(),
+  branchId: z.string().uuid().optional(),
+  hiringManagerPositionId: z.string().uuid().optional(),
   title: z.string().trim().min(1).max(200),
   department: z.string().trim().min(1).max(120),
   description: z.string().trim().min(1).max(12000),
@@ -28,6 +32,7 @@ const CreateJobBodyShape = z.object({
   salaryMin: z.number().int().min(0).optional(),
   salaryMax: z.number().int().min(0).optional(),
   status: JobStatusSchema.default("open"),
+  vacancyStatus: z.enum(["open", "backfill", "pipeline", "filled", "cancelled"]).default("open"),
   closesAt: z.string().datetime().optional()
 });
 
@@ -126,6 +131,15 @@ function buildInterviewQuestions(requiredSkills: string[], stage: z.infer<typeof
   return [...base, ...skillQuestions, stagePrompt];
 }
 
+function slugify(input: string): string {
+  const value = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return value || "candidate";
+}
+
 const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
   async function getRequesterOrgId(userId: string): Promise<string | null> {
     const requester = await fastify.supabaseService
@@ -205,6 +219,9 @@ const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
       .from("jobs")
       .insert({
         org_id: requesterOrgId,
+        position_id: body.data.positionId ?? null,
+        branch_id: body.data.branchId ?? null,
+        hiring_manager_position_id: body.data.hiringManagerPositionId ?? null,
         title: body.data.title,
         department: body.data.department,
         description: body.data.description,
@@ -215,6 +232,7 @@ const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
         salary_min: body.data.salaryMin ?? null,
         salary_max: body.data.salaryMax ?? null,
         status: body.data.status,
+        vacancy_status: body.data.vacancyStatus,
         posted_by: userId,
         closes_at: body.data.closesAt ?? null
       })
@@ -283,6 +301,9 @@ const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const patch = {
+      ...(body.data.positionId !== undefined ? { position_id: body.data.positionId ?? null } : {}),
+      ...(body.data.branchId !== undefined ? { branch_id: body.data.branchId ?? null } : {}),
+      ...(body.data.hiringManagerPositionId !== undefined ? { hiring_manager_position_id: body.data.hiringManagerPositionId ?? null } : {}),
       ...(body.data.title !== undefined ? { title: body.data.title } : {}),
       ...(body.data.department !== undefined ? { department: body.data.department } : {}),
       ...(body.data.description !== undefined ? { description: body.data.description } : {}),
@@ -293,6 +314,7 @@ const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
       ...(body.data.salaryMin !== undefined ? { salary_min: body.data.salaryMin } : {}),
       ...(body.data.salaryMax !== undefined ? { salary_max: body.data.salaryMax } : {}),
       ...(body.data.status !== undefined ? { status: body.data.status } : {}),
+      ...(body.data.vacancyStatus !== undefined ? { vacancy_status: body.data.vacancyStatus } : {}),
       ...(body.data.closesAt !== undefined ? { closes_at: body.data.closesAt } : {}),
       updated_at: new Date().toISOString()
     };
@@ -562,6 +584,66 @@ const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
         to_stage: body.data.stage,
         note: body.data.note ?? "Stage updated"
       });
+
+    if (body.data.stage === "hired") {
+      const jobResult = await fastify.supabaseService
+        .from("jobs")
+        .select("id, org_id, position_id, branch_id, title")
+        .eq("id", updateResult.data.job_id as string)
+        .eq("org_id", requesterOrgId)
+        .maybeSingle();
+
+      if (jobResult.data?.position_id) {
+        const assignmentId = await ensurePositionAssignment(fastify.supabaseService, {
+          orgId: requesterOrgId,
+          positionId: String(jobResult.data.position_id),
+          branchId: (jobResult.data.branch_id as string | null | undefined) ?? null,
+          inviteEmail: String(updateResult.data.email),
+          seatLabel: `${updateResult.data.full_name as string} seat`,
+          assignmentStatus: "invited",
+          activationState: "pending",
+          invitedBy: userId
+        });
+
+        const orgResult = await fastify.supabaseService
+          .from("orgs")
+          .select("name, domain")
+          .eq("id", requesterOrgId)
+          .maybeSingle();
+
+        const fallbackDomain = `${slugify(String(orgResult.data?.name ?? "orgos"))}.orgos.ai`;
+        const loginDomain = ((orgResult.data?.domain as string | null | undefined) ?? fallbackDomain).toLowerCase();
+        const emailPrefix = slugify(String(updateResult.data.full_name ?? updateResult.data.email)).slice(0, 24);
+
+        await createPositionCredentials(
+          fastify.supabaseService,
+          requesterOrgId,
+          String(jobResult.data.position_id),
+          `${emailPrefix}@${loginDomain}`,
+          {
+            inviteEmail: String(updateResult.data.email),
+            issueMode: "hybrid",
+            invitationBaseUrl: fastify.env.WEB_ORIGIN
+          }
+        );
+
+        await fastify.supabaseService
+          .from("jobs")
+          .update({ vacancy_status: "filled", updated_at: new Date().toISOString() })
+          .eq("id", updateResult.data.job_id as string);
+
+        await fastify.supabaseService
+          .from("applicants")
+          .update({ hired_position_assignment_id: assignmentId })
+          .eq("id", updateResult.data.id as string);
+
+        await fastify.supabaseService
+          .from("referrals")
+          .update({ status: "hired", updated_at: new Date().toISOString() })
+          .eq("applicant_id", updateResult.data.id as string)
+          .eq("org_id", requesterOrgId);
+      }
+    }
 
     return reply.send(updateResult.data);
   });

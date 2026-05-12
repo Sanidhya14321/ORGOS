@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OrgStructureKindSchema } from "./org-structure.schema.js";
+import { CredentialIssueModeSchema } from "./credential.schema.js";
 
 /**
  * Org Structure Suggestion
@@ -55,7 +56,40 @@ export const OrgStructureSuggestionRequestSchema = z.object({
   branch_count: z.number().int().min(1),
   department_count: z.number().int().min(1),
   departments: z.array(z.string()).optional(),
+  branches: z.array(z.string()).optional(),
   include_position_assignment_hints: z.boolean().default(true),
+});
+
+export const OnboardingBranchInputSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  code: z.string().trim().min(1).max(80),
+  city: z.string().trim().max(120).optional(),
+  country: z.string().trim().max(120).optional(),
+  timezone: z.string().trim().max(80).optional(),
+  is_headquarters: z.boolean().default(false)
+});
+
+export const OnboardingPositionInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  department: z.string().trim().max(120).optional(),
+  branch_code: z.string().trim().max(80).optional(),
+  level: z.number().int().min(0).max(999),
+  power_level: z.number().int().min(0).max(100).optional(),
+  reports_to_title: z.string().trim().max(200).optional(),
+  visibility_scope: z.enum(["org", "branch", "department", "subtree", "self"]).default("subtree"),
+  email_prefix: z.string().trim().min(1).max(120),
+  invite_email: z.string().email().optional(),
+  issue_mode: CredentialIssueModeSchema.default("hybrid"),
+  seat_label: z.string().trim().max(120).optional(),
+  compensation_band: z.record(z.any()).optional(),
+  max_concurrent_tasks: z.number().int().positive().max(1000).optional()
+});
+
+export const OnboardingPositionImportSchema = z.object({
+  org_id: z.string().uuid(),
+  import_source: z.enum(["manual", "file", "notion"]).default("manual"),
+  branches: z.array(OnboardingBranchInputSchema).default([]),
+  positions: z.array(OnboardingPositionInputSchema).min(1).max(500)
 });
 
 /**

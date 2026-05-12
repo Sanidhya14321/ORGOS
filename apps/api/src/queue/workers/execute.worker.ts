@@ -5,10 +5,23 @@ import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitAgentEscalated, emitAgentExecuting } from "../../services/notifier.js";
+import { recomputeGoalRollup } from "../../services/goalEngine.js";
 import { getExecuteQueue, getRedisConnection, getSynthesizeQueue } from "../index.js";
 
 interface ExecuteJobData {
   taskId: string;
+}
+
+function deriveTaskStatusFromReportStatus(status: string | null | undefined): "completed" | "in_progress" | "blocked" {
+  if (status === "blocked") {
+    return "blocked";
+  }
+
+  if (status === "partial") {
+    return "in_progress";
+  }
+
+  return "completed";
 }
 
 async function areAllSiblingsCompleted(taskId: string): Promise<{ allDone: boolean; parentTaskId: string | null }> {
@@ -82,7 +95,7 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
 
   const { data: task, error: taskError } = await supabase
     .from("tasks")
-    .select("id, org_id, goal_id, title, description, success_criteria, assigned_to, assigned_role, is_agent_task, status, deadline, parent_id, required_skills")
+    .select("id, org_id, goal_id, title, description, success_criteria, assigned_to, assigned_role, is_agent_task, status, deadline, parent_id, required_skills, report_id")
     .eq("id", job.data.taskId)
     .single();
 
@@ -91,6 +104,10 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
   }
 
   if (!task.is_agent_task) {
+    return;
+  }
+
+  if (task.report_id && task.status === "completed") {
     return;
   }
 
@@ -168,6 +185,8 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
     escalate: (agentOutput as any).action === "escalate" || (agentOutput as any).escalate === true
   } as any;
 
+  const nextTaskStatus = deriveTaskStatusFromReportStatus(report.status);
+
   const { data: insertedReport, error: reportError } = await supabase
     .from("reports")
     .insert({
@@ -191,11 +210,13 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
   await supabase
     .from("tasks")
     .update({
-      status: "completed",
+      status: nextTaskStatus,
       report_id: insertedReport.id,
       updated_at: new Date().toISOString()
     })
     .eq("id", task.id);
+
+  await recomputeGoalRollup(supabase, String(task.goal_id));
 
   await supabase.from("agent_logs").insert({
     agent_type: "worker_agent",
@@ -229,9 +250,15 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
     });
   }
 
-  const siblingState = await areAllSiblingsCompleted(task.id as string);
-  if (siblingState.allDone && siblingState.parentTaskId) {
-    await getSynthesizeQueue().add("sibling_synthesize", { parentTaskId: siblingState.parentTaskId });
+  if (nextTaskStatus === "completed") {
+    const siblingState = await areAllSiblingsCompleted(task.id as string);
+    if (siblingState.allDone && siblingState.parentTaskId) {
+      await getSynthesizeQueue().add(
+        "sibling_synthesize",
+        { parentTaskId: siblingState.parentTaskId },
+        { jobId: `sibling_synthesize:${siblingState.parentTaskId}` }
+      );
+    }
   }
 }
 

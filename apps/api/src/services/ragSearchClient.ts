@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import embeddingService from "./embeddingService.js";
+import { retrieveRelevantSections } from "./ragRetrieval.js";
 
 export interface RagSearchResult {
   id: string;
@@ -34,7 +35,23 @@ export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
   return {
     async search({ orgId, query, topK = 5 }: { orgId: string; query: string; topK?: number }): Promise<RagSearchResult[]> {
       const [queryEmbedding] = await embeddingService.embedTexts([query]);
-      if (!queryEmbedding || !Array.isArray(queryEmbedding)) return [];
+      if (!queryEmbedding || !Array.isArray(queryEmbedding)) {
+        const fallbackSections = await retrieveRelevantSections(supabase, { orgId, goalInput: query, topN: topK });
+        return fallbackSections.map((section) => ({
+          id: section.id,
+          sourceType: "document_section",
+          sourceId: section.document_id,
+          chunkIndex: section.section_index,
+          score: 1,
+          textSnippet: section.content.slice(0, 400),
+          metadata: {
+            heading: section.heading,
+            pageStart: section.page_start,
+            pageEnd: section.page_end,
+            department: section.department
+          }
+        }));
+      }
 
       const { data, error } = await supabase
         .from("embeddings")
@@ -42,8 +59,22 @@ export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
         .eq("org_id", orgId)
         .limit(1000);
 
-      if (error || !data) {
-        return [];
+      if (error || !data || data.length === 0) {
+        const fallbackSections = await retrieveRelevantSections(supabase, { orgId, goalInput: query, topN: topK });
+        return fallbackSections.map((section) => ({
+          id: section.id,
+          sourceType: "document_section",
+          sourceId: section.document_id,
+          chunkIndex: section.section_index,
+          score: 1,
+          textSnippet: section.content.slice(0, 400),
+          metadata: {
+            heading: section.heading,
+            pageStart: section.page_start,
+            pageEnd: section.page_end,
+            department: section.department
+          }
+        }));
       }
 
       const scored = (data as Array<Record<string, unknown>>)

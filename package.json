@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "npm --workspace @orgos/api run dev & npm --workspace @orgos/web run dev",
     "build": "turbo run build",
-    "test": "npm run build && npm run eval:agents",
+    "test": "npm run guard:schemas && npm --workspace @orgos/api run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "eval:agents": "node scripts/eval-agents.mjs",

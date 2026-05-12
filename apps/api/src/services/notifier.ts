@@ -50,9 +50,6 @@ async function resolveRealtimeContext(
   metadataRole: unknown,
   metadataOrgId: unknown
 ): Promise<{ role: Role | null; orgId: string | null }> {
-  const role = typeof metadataRole === "string" ? (metadataRole as Role) : null;
-  const metadataOrg = typeof metadataOrgId === "string" ? metadataOrgId : null;
-
   const profile = await fastify.supabaseService
     .from("users")
     .select("role, org_id")
@@ -61,13 +58,20 @@ async function resolveRealtimeContext(
 
   if (profile.error) {
     return {
-      role,
-      orgId: metadataOrg
+      role: null,
+      orgId: null
     };
   }
 
-  const profileRole = typeof profile.data?.role === "string" ? (profile.data.role as Role) : role;
-  const profileOrg = typeof profile.data?.org_id === "string" ? profile.data.org_id : metadataOrg;
+  const profileRole = typeof profile.data?.role === "string" && (
+    profile.data.role === "ceo" ||
+    profile.data.role === "cfo" ||
+    profile.data.role === "manager" ||
+    profile.data.role === "worker"
+  )
+    ? (profile.data.role as Role)
+    : null;
+  const profileOrg = typeof profile.data?.org_id === "string" ? profile.data.org_id : null;
 
   return {
     role: profileRole,

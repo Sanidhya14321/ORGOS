@@ -6,6 +6,7 @@ import { readEnv } from "../../config/env.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { getRedisConnection, getSynthesizeQueue } from "../index.js";
 import { emitTaskReportSubmittedCascade } from "../../services/notifier.js";
+import { recomputeGoalRollup } from "../../services/goalEngine.js";
 
 interface SynthesizeJobData {
   parentTaskId: string;
@@ -32,7 +33,11 @@ async function enqueueParentIfReady(parentTaskId: string): Promise<void> {
 
   const allDone = (siblings ?? []).every((sibling) => sibling.status === "completed");
   if (allDone) {
-    await getSynthesizeQueue().add("cascade_synthesize", { parentTaskId: parentTask.parent_id as string });
+    await getSynthesizeQueue().add(
+      "cascade_synthesize",
+      { parentTaskId: parentTask.parent_id as string },
+      { jobId: `cascade_synthesize:${parentTask.parent_id as string}` }
+    );
   }
 }
 
@@ -42,12 +47,16 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
 
   const { data: parentTask, error: parentError } = await supabase
     .from("tasks")
-    .select("id, org_id, goal_id, title, success_criteria")
+    .select("id, org_id, goal_id, title, success_criteria, report_id")
     .eq("id", job.data.parentTaskId)
     .single();
 
   if (parentError || !parentTask) {
     throw new Error(parentError?.message ?? "Parent task not found");
+  }
+
+  if (parentTask.report_id) {
+    return;
   }
 
   const { data: children, error: childrenError } = await supabase
@@ -136,6 +145,8 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
     .from("tasks")
     .update({ status: "completed", report_id: synthesisReportId, updated_at: new Date().toISOString() })
     .eq("id", parentTask.id);
+
+  await recomputeGoalRollup(supabase, String(parentTask.goal_id));
 
   await enqueueParentIfReady(parentTask.id as string);
 
