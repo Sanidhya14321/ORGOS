@@ -296,6 +296,16 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization id");
     }
 
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId || requesterOrgId !== parsed.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
+    }
+
     const { data, error } = await fastify.supabaseService
       .from("positions")
       .select("id, org_id, title, level, is_custom, confirmed, created_at")
@@ -311,7 +321,23 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load positions");
     }
 
-    return reply.send({ items: data ?? [] });
+    const usersResult = await fastify.supabaseService
+      .from("users")
+      .select("position_id")
+      .eq("org_id", parsed.data.id);
+
+    const filledPositionIds = new Set(
+      (usersResult.data ?? [])
+        .map((row) => row.position_id as string | null | undefined)
+        .filter((positionId): positionId is string => Boolean(positionId))
+    );
+
+    return reply.send({
+      items: (data ?? []).map((position) => ({
+        ...position,
+        filled: filledPositionIds.has(position.id as string)
+      }))
+    });
   });
 
   // Suggest an organization structure based on current positions and org size
@@ -591,10 +617,23 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
         })()
       : allNodes;
 
+    // mark positions as filled if any user in the org has that position_id assigned
+    const positionsWithFilled = (positionsResult.data ?? []).map((pos: any) => {
+      const filled = (allNodes ?? []).some((u) => (u.position_id ?? null) === pos.id);
+      return {
+        id: pos.id,
+        title: pos.title,
+        level: pos.level,
+        is_custom: pos.is_custom,
+        confirmed: pos.confirmed,
+        filled
+      };
+    });
+
     return reply.send({
       orgId: parsed.data.id,
       nodes,
-      positions: positionsResult.data ?? []
+      positions: positionsWithFilled
     });
   });
 

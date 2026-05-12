@@ -47,6 +47,7 @@ interface CircleNode {
   parentId?: string | null;
   children: string[];
   position_title?: string;
+  position_filled?: boolean;
 }
 
 interface CircleLayout {
@@ -54,7 +55,7 @@ interface CircleLayout {
   edges: Array<{ fromId: string; toId: string }>;
 }
 
-function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<string, string>): CircleLayout {
+function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<string, string>, positionsFilled?: Map<string, boolean>): CircleLayout {
   if (!treeData || treeData.length === 0) return { nodes: new Map(), edges: [] };
   const nodes = new Map<string, CircleNode>();
   const edges: Array<{ fromId: string; toId: string }> = [];
@@ -74,6 +75,7 @@ function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<stri
       parentId: node.reports_to,
       children: [],
       position_title: node.position_id ? positions.get(node.position_id) : node.role,
+      position_filled: node.position_id ? (positionsFilled?.get(node.position_id) ?? true) : true,
     });
     if (node.reports_to) {
       if (!childrenMap.has(node.reports_to)) childrenMap.set(node.reports_to, []);
@@ -147,7 +149,8 @@ export function OrgTree() {
 
   const layout = useMemo(() => {
     const positionsMap = new Map((treeQuery.data?.positions ?? []).map((p) => [p.id, p.title]));
-    return buildCircleLayout(treeQuery.data?.nodes, positionsMap);
+    const positionsFilledMap = new Map((treeQuery.data?.positions ?? []).map((p) => [p.id, Boolean((p as any).filled)]));
+    return buildCircleLayout(treeQuery.data?.nodes, positionsMap, positionsFilledMap);
   }, [treeQuery.data]);
 
   const selectedNode = selectedNodeId ? layout.nodes.get(selectedNodeId) : null;
@@ -267,8 +270,9 @@ export function OrgTree() {
                   {/* HTML Card inside SVG */}
                   <foreignObject width="160" height="90">
                     <div className={`
-                        h-full w-full p-3 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-between
-                        ${isSelected ? 'border-[var(--accent)] bg-[var(--surface)] ring-4 ring-[var(--accent)]/10' : 'border-[var(--border)] bg-[var(--surface)]'}
+                      h-full w-full p-3 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-between
+                      ${isSelected ? 'border-[var(--accent)] bg-[var(--surface)] ring-4 ring-[var(--accent)]/10' : 'border-[var(--border)] bg-[var(--surface)]'}
+                      ${node.position_filled === false ? 'ring-2 ring-red-200 border-red-400 bg-red-50' : ''}
                     `}>
                         <div className="flex items-start gap-2">
                             <div className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm
@@ -277,7 +281,7 @@ export function OrgTree() {
                             </div>
                             <div className="overflow-hidden">
                             <p className="truncate text-[11px] font-bold text-[var(--ink)]">{node.full_name}</p>
-                            <p className="truncate text-[9px] uppercase tracking-tighter text-[var(--muted)]">{node.position_title}</p>
+                            <p className={`truncate text-[9px] uppercase tracking-tighter ${node.position_filled === false ? 'text-red-700' : 'text-[var(--muted)]'}`}>{node.position_title}</p>
                             </div>
                         </div>
 

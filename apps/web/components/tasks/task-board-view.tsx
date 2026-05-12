@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { apiFetch } from "@/lib/api";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
+import { useSocket } from "@/lib/socket";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -26,54 +27,6 @@ type TaskBoardViewProps = {
   initialTaskId?: string;
 };
 
-function VirtualTaskColumn({ 
-  tasks, 
-  onOpen,
-  onDragStart,
-  onDragEnd
-}: { 
-  tasks: Task[]
-  onOpen: (task: Task) => void
-  onDragStart?: (task: Task) => void
-  onDragEnd?: () => void
-}) {
-  const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: tasks.length,
-    getScrollElement: () => container,
-    estimateSize: () => 172,
-    overscan: 6
-  });
-
-  return (
-    <div ref={setContainer} className="max-h-[65vh] overflow-auto">
-      <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
-        {rowVirtualizer.getVirtualItems().map((item) => {
-          const task = tasks[item.index];
-          return (
-            <div
-              key={task.id}
-              draggable
-              onDragStart={() => onDragStart?.(task)}
-              onDragEnd={() => onDragEnd?.()}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${item.start}px)`
-              }}
-              className="pb-3"
-            >
-              <TaskCard task={task} onOpen={onOpen} />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [query, setQuery] = useState("");
@@ -82,6 +35,30 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<Task["status"] | null>(null);
   const allGoalsValue = "__all_goals__";
+  const socket = useSocket();
+  const [suggestionCounts, setSuggestionCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const onRoutingReady = (payload: { taskId?: string; suggestions?: Array<unknown> }) => {
+      if (!payload?.taskId) return;
+      const count = Array.isArray(payload.suggestions) ? payload.suggestions.length : 0;
+      setSuggestionCounts((s) => ({ ...s, [payload.taskId as string]: count }));
+    };
+
+    const onRoutingConfirmed = (payload: { taskId?: string }) => {
+      if (!payload?.taskId) return;
+      // Clear suggestions once confirmed
+      setSuggestionCounts((s) => ({ ...s, [payload.taskId as string]: 0 }));
+    };
+
+    socket.on("task:routing_ready", onRoutingReady);
+    socket.on("task:routing_confirmed", onRoutingConfirmed);
+
+    return () => {
+      socket.off("task:routing_ready", onRoutingReady);
+      socket.off("task:routing_confirmed", onRoutingConfirmed);
+    };
+  }, [socket]);
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", "board"],
@@ -260,12 +237,13 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
                     <Skeleton className="h-36 w-full" />
                   </>
                 ) : (
-                  <VirtualTaskColumn 
-                    tasks={items} 
-                    onOpen={setSelectedTask}
-                    onDragStart={(task) => setDraggedTask(task)}
-                    onDragEnd={() => setDraggedTask(null)}
-                  />
+                    <VirtualTaskColumn 
+                      tasks={items} 
+                      onOpen={setSelectedTask}
+                      onDragStart={(task) => setDraggedTask(task)}
+                      onDragEnd={() => setDraggedTask(null)}
+                      suggestionCounts={suggestionCounts}
+                    />
                 )}
               </div>
             </div>
@@ -274,6 +252,57 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
       </div>
 
       <TaskDrawer task={selectedTask} open={Boolean(selectedTask)} onOpenChange={(open) => !open && setSelectedTask(null)} />
+    </div>
+  );
+}
+
+// Extend VirtualTaskColumn prop signature to accept suggestionCounts
+function VirtualTaskColumn({ 
+  tasks, 
+  onOpen,
+  onDragStart,
+  onDragEnd,
+  suggestionCounts
+}: { 
+  tasks: Task[]
+  onOpen: (task: Task) => void
+  onDragStart?: (task: Task) => void
+  onDragEnd?: () => void
+  suggestionCounts?: Record<string, number>
+}) {
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => container,
+    estimateSize: () => 172,
+    overscan: 6
+  });
+
+  return (
+    <div ref={setContainer} className="max-h-[65vh] overflow-auto">
+      <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
+        {rowVirtualizer.getVirtualItems().map((item) => {
+          const task = tasks[item.index];
+          return (
+            <div
+              key={task.id}
+              draggable
+              onDragStart={() => onDragStart?.(task)}
+              onDragEnd={() => onDragEnd?.()}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${item.start}px)`
+              }}
+              className="pb-3"
+            >
+              <TaskCard task={task} onOpen={onOpen} suggestionCount={suggestionCounts?.[task.id] ?? 0} />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

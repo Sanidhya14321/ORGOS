@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/lib/models";
 
-export function TaskCard({ task, onOpen }: { task: Task; onOpen: (task: Task) => void }) {
+export function TaskCard({ task, onOpen, suggestionCount }: { task: Task; onOpen: (task: Task) => void; suggestionCount?: number }) {
   const priorityTone = task.priority === "critical" ? "border-l-danger" : task.priority === "high" ? "border-l-warning" : task.priority === "medium" ? "border-l-info" : "border-l-border";
   const overdue = Boolean(task.is_overdue) || (task.deadline ? new Date(task.deadline).getTime() < Date.now() && task.status !== "completed" : false);
 
@@ -57,6 +57,12 @@ export function TaskCard({ task, onOpen }: { task: Task; onOpen: (task: Task) =>
         <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" /> comments</span>
         <span className={task.sla_status === "breached" ? "text-[var(--danger)]" : task.sla_status === "at_risk" ? "text-[var(--warning)]" : "text-[var(--success)]"}>SLA {task.sla_status ?? "on_track"}</span>
       </div>
+
+      {suggestionCount ? (
+        <div className="absolute right-3 top-3">
+          <Badge className="bg-amber-50 text-amber-800">AI {suggestionCount}</Badge>
+        </div>
+      ) : null}
     </motion.button>
   );
 }
