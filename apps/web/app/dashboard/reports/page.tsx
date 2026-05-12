@@ -121,7 +121,7 @@ export default function ReportsPage() {
           </Card>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[280px_1fr]">
+        <section className="grid gap-4 xl:grid-cols-[280px_1fr]">
           <Card className="p-4">
             <div className="mb-3 flex items-center gap-2">
               <FileText className="h-4 w-4 text-text-secondary" />

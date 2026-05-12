@@ -17,7 +17,7 @@ export async function ensureSlaSchedule(): Promise<void> {
     { trigger: "repeat" },
     {
       repeat: { every: 15 * 60 * 1000 },
-      jobId: "sla:repeat"
+      jobId: "sla-repeat"
     }
   );
 

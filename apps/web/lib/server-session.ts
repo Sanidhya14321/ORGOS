@@ -17,13 +17,20 @@ function isExecutiveRole(role: Role): boolean {
 }
 
 async function fetchServerSessionApi<T>(path: string, accessToken: string): Promise<T | null> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    },
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      cache: "no-store"
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[server-session] Failed to reach session API at ${API_BASE}${path}: ${message}`);
+    return null;
+  }
 
   if (response.status === 401) {
     return null;

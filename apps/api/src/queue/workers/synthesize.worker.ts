@@ -36,7 +36,7 @@ async function enqueueParentIfReady(parentTaskId: string): Promise<void> {
     await getSynthesizeQueue().add(
       "cascade_synthesize",
       { parentTaskId: parentTask.parent_id as string },
-      { jobId: `cascade_synthesize:${parentTask.parent_id as string}` }
+      { jobId: `cascade_synthesize-${parentTask.parent_id as string}` }
     );
   }
 }

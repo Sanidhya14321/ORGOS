@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
+import { AuthPageShell } from "@/components/auth/auth-page-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
 
 type ActivationResponse = {
@@ -65,7 +68,7 @@ export default function ActivateSeatPage() {
   }
 
   return (
-    <AppShell
+    <AuthPageShell
       eyebrow="ORGOS activation"
       title="Activate your company seat"
       description="Use the invite link or the temporary access details shared by your company owner to activate your account."
@@ -73,9 +76,8 @@ export default function ActivateSeatPage() {
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Invite token</span>
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Label>Invite token</Label>
+            <Input
               value={token}
               onChange={(event) => setToken(event.target.value)}
               placeholder="Paste invite token or use the link you received"
@@ -83,9 +85,8 @@ export default function ActivateSeatPage() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Invite code</span>
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Label>Invite code</Label>
+            <Input
               value={inviteCode}
               onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
               placeholder="Optional if you already have a link"
@@ -95,9 +96,8 @@ export default function ActivateSeatPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Work email</span>
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Label>Work email</Label>
+            <Input
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -106,9 +106,8 @@ export default function ActivateSeatPage() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Temporary password</span>
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Label>Temporary password</Label>
+            <Input
               type="password"
               value={temporaryPassword}
               onChange={(event) => setTemporaryPassword(event.target.value)}
@@ -119,9 +118,8 @@ export default function ActivateSeatPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Your full name</span>
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Label>Your full name</Label>
+            <Input
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               required
@@ -129,9 +127,8 @@ export default function ActivateSeatPage() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Department</span>
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Label>Department</Label>
+            <Input
               value={department}
               onChange={(event) => setDepartment(event.target.value)}
               placeholder="Optional"
@@ -140,9 +137,8 @@ export default function ActivateSeatPage() {
         </div>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Skills</span>
-          <input
-            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+          <Label>Skills</Label>
+          <Input
             value={skills}
             onChange={(event) => setSkills(event.target.value)}
             placeholder="Comma separated, optional"
@@ -150,9 +146,8 @@ export default function ActivateSeatPage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Set your password</span>
-          <input
-            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+          <Label>Set your password</Label>
+          <Input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -162,17 +157,13 @@ export default function ActivateSeatPage() {
         </label>
 
         {error ? (
-          <div className="rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
+          <div className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</div>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-2xl bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-[#0f1115] disabled:opacity-60"
-        >
+        <Button type="submit" disabled={pending}>
           {pending ? "Activating..." : "Activate seat"}
-        </button>
+        </Button>
       </form>
-    </AppShell>
+    </AuthPageShell>
   );
 }

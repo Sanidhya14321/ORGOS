@@ -197,7 +197,7 @@ export function OrgTree() {
   return (
     <div className="flex h-[calc(100vh-120px)] flex-col gap-4 select-none rounded-[32px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_24px_80px_rgba(23,21,19,0.08)]">
       {/* Top Toolbar */}
-      <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[rgba(252,251,248,0.82)] p-2 shadow-sm backdrop-blur-md">
+      <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface-glass)] p-2 shadow-sm backdrop-blur-md">
         <div className="flex items-center gap-3 flex-1">
           <div className="relative max-w-sm w-full">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
@@ -220,13 +220,13 @@ export function OrgTree() {
             <Button variant="ghost" size="icon" onClick={() => setZoom(z => z + 0.1)}><ZoomIn className="h-4 w-4"/></Button>
             <Button variant="ghost" size="icon" onClick={() => setZoom(z => z - 0.1)}><ZoomOut className="h-4 w-4"/></Button>
             <Button variant="ghost" size="icon" onClick={resetView}><Maximize className="h-4 w-4"/></Button>
-            <Button variant="default" size="sm" className="ml-2 shadow-lg shadow-primary/20">
+            <Button size="sm" className="ml-2">
                 <Download className="h-4 w-4 mr-2" /> Export
             </Button>
         </div>
       </div>
 
-      <div className="relative flex-1 overflow-hidden rounded-[28px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.78),rgba(247,242,234,0.92))] shadow-inner">
+      <div className="relative flex-1 overflow-hidden rounded-[28px] border border-[var(--border)] bg-bg-elevated shadow-inner">
         {/* SVG Canvas */}
         <svg
           ref={svgRef}
@@ -266,9 +266,9 @@ export function OrgTree() {
               const isSelected = selectedNodeId === node.id;
               
               const statusColors = {
-                on_track: "border-green-500 bg-green-50",
-                at_risk: "border-yellow-500 bg-yellow-50",
-                breached: "border-red-500 bg-red-50",
+                on_track: "border-success bg-success-subtle",
+                at_risk: "border-warning bg-warning-subtle",
+                breached: "border-danger bg-danger-subtle",
               };
 
               return (
@@ -287,7 +287,7 @@ export function OrgTree() {
                     <div className={`
                       h-full w-full p-3 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-between
                       ${isSelected ? 'border-[var(--accent)] bg-[var(--surface)] ring-4 ring-[var(--accent)]/10' : 'border-[var(--border)] bg-[var(--surface)]'}
-                      ${node.position_filled === false ? 'ring-2 ring-red-200 border-red-400 bg-red-50' : ''}
+                      ${node.position_filled === false ? 'ring-2 ring-danger/20 border-danger bg-danger-subtle' : ''}
                     `}>
                         <div className="flex items-start gap-2">
                             <div className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm
@@ -320,7 +320,7 @@ export function OrgTree() {
 
         {/* Floating Detail Panel */}
         {selectedNode && (
-            <div className="absolute top-4 right-4 bottom-4 w-80 rounded-3xl border border-[var(--border)] bg-[rgba(252,251,248,0.9)] backdrop-blur-xl shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="absolute top-4 right-4 bottom-4 w-80 rounded-3xl border border-[var(--border)] bg-[var(--surface-glass)] backdrop-blur-xl shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
             <div className="flex items-center justify-between border-b border-[var(--border)] p-5">
                 <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-subtle)] text-[var(--accent)]">

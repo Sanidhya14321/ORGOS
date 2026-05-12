@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
+import { DashboardPageFrame } from '@/components/dashboard/dashboard-surface';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { apiFetch } from '@/lib/api';
@@ -67,34 +68,31 @@ export default function RecruitmentPage() {
   const filledCount = (positionsQuery.data ?? []).length - openPositions.length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary">Recruitment</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Open positions are highlighted here and marked red in the org tree.
-          </p>
-        </div>
-      </div>
+    <DashboardPageFrame
+      eyebrow="Recruitment"
+      title="Open positions"
+      description="Review unfilled seats, see hiring pressure, and create roles directly from the staffing map."
+    >
+      <div className="space-y-6">
 
       {!canViewRecruitment ? (
-        <Card className="border-border bg-bg-surface p-4 text-sm text-text-secondary">
+        <Card className="p-4 text-sm text-text-secondary">
           Recruitment workflows are available to CEO, CFO, and manager roles.
         </Card>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
-        <Card className="border-border bg-bg-surface p-6">
+        <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-text-secondary">Open Positions</p>
               <p className="mt-2 text-3xl font-bold text-text-primary">{openPositions.length}</p>
             </div>
-            <AlertCircle className="h-8 w-8 text-red-500" />
+            <AlertCircle className="h-8 w-8 text-danger" />
           </div>
         </Card>
 
-        <Card className="border-border bg-bg-surface p-6">
+        <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-text-secondary">Filled Positions</p>
@@ -104,7 +102,7 @@ export default function RecruitmentPage() {
           </div>
         </Card>
 
-        <Card className="border-border bg-bg-surface p-6">
+        <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-text-secondary">Total Positions</p>
@@ -127,17 +125,17 @@ export default function RecruitmentPage() {
         ) : openPositions.length > 0 ? (
           <div className="space-y-3">
             {openPositions.map((position) => (
-              <Card key={position.id} className="border border-red-300 bg-red-50 p-4">
+              <Card key={position.id} className="border-danger/20 bg-danger-subtle p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-red-900">{position.title}</p>
-                      <Badge className="bg-red-100 text-red-800">Unfilled</Badge>
+                      <p className="text-sm font-semibold text-text-primary">{position.title}</p>
+                      <Badge className="bg-danger text-white">Unfilled</Badge>
                     </div>
-                    <p className="mt-1 text-xs text-red-700">Position level {position.level}</p>
+                    <p className="mt-1 text-xs text-danger">Position level {position.level}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-700">Needs hiring</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-danger">Needs hiring</p>
                     <Button
                       size="sm"
                       onClick={() =>
@@ -157,12 +155,13 @@ export default function RecruitmentPage() {
             ))}
           </div>
         ) : (
-          <Card className="border-border bg-bg-surface p-10 text-center">
+          <Card className="p-10 text-center">
             <Users className="mx-auto mb-3 h-8 w-8 text-text-secondary" />
             <p className="text-text-secondary">All positions are filled.</p>
           </Card>
         )}
       </div>
-    </div>
+      </div>
+    </DashboardPageFrame>
   );
 }

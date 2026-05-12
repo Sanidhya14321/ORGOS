@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
+import { AuthPageShell } from "@/components/auth/auth-page-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type OrgItem = { id: string; name: string; domain?: string | null };
 type PositionItem = { id: string; title: string; level: number };
@@ -218,52 +221,50 @@ export default function CompleteProfilePage() {
 
   if (loadingProfile) {
     return (
-      <AppShell
+      <AuthPageShell
         eyebrow="ORGOS onboarding"
         title="Setting things up"
         description="Loading your workspace context..."
       >
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">Please wait...</div>
-      </AppShell>
+        <div className="rounded-2xl border border-border bg-bg-elevated p-4 text-sm text-text-secondary">Please wait...</div>
+      </AuthPageShell>
     );
   }
 
   return (
-    <AppShell
+    <AuthPageShell
       eyebrow="ORGOS onboarding"
       title="Join your organization"
       description="Pick your company, confirm role details, and continue. CEO organization setup now happens in the CEO dashboard."
     >
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--muted)]">
+        <div className="rounded-2xl border border-border bg-bg-elevated p-4 text-sm text-text-secondary">
           This step links your account to an organization. If you are a CEO/CFO, you can manage organization setup from your CEO dashboard.
         </div>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Find organization</span>
+          <Label>Find organization</Label>
           <div className="flex gap-2">
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Input
               type="text"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search by organization name"
             />
-            <button
+            <Button
               type="button"
               onClick={searchOrganizations}
               disabled={searching}
-              className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[#0f1115] disabled:opacity-60"
             >
               {searching ? "Searching..." : "Search"}
-            </button>
+            </Button>
           </div>
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Organization</span>
+          <Label>Organization</Label>
           <select
-            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            className="flex h-12 w-full rounded-2xl border border-border bg-bg-subtle/75 px-4 py-3 text-sm text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/25"
             value={orgId}
             onChange={(event) => setOrgId(event.target.value)}
             required
@@ -278,9 +279,9 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Position (optional)</span>
+          <Label>Position (optional)</Label>
           <select
-            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            className="flex h-12 w-full rounded-2xl border border-border bg-bg-subtle/75 px-4 py-3 text-sm text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/25"
             value={positionId}
             onChange={(event) => setPositionId(event.target.value)}
           >
@@ -294,9 +295,8 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Reports to (optional user ID)</span>
-          <input
-            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+          <Label>Reports to (optional user ID)</Label>
+          <Input
             type="text"
             value={reportsTo}
             onChange={(event) => setReportsTo(event.target.value)}
@@ -305,9 +305,8 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Department</span>
-          <input
-            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+          <Label>Department</Label>
+          <Input
             type="text"
             value={department}
             onChange={(event) => setDepartment(event.target.value)}
@@ -316,9 +315,8 @@ export default function CompleteProfilePage() {
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Skills (comma separated)</span>
-          <input
-            className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+          <Label>Skills (comma separated)</Label>
+          <Input
             type="text"
             value={skills}
             onChange={(event) => setSkills(event.target.value)}
@@ -326,17 +324,13 @@ export default function CompleteProfilePage() {
           />
         </label>
 
-        {error ? <p className="rounded-2xl border border-[var(--warn)]/30 bg-[var(--warn)]/10 px-4 py-3 text-sm text-[var(--warn)]">{error}</p> : null}
-        {message ? <p className="rounded-2xl border border-[#3fa37a]/30 bg-[#3fa37a]/10 px-4 py-3 text-sm text-[#8de2bc]">{message}</p> : null}
+        {error ? <p className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</p> : null}
+        {message ? <p className="rounded-2xl border border-success/20 bg-success-subtle px-4 py-3 text-sm text-success">{message}</p> : null}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="inline-flex w-full items-center justify-center rounded-2xl bg-[var(--accent)] px-4 py-3 font-semibold text-[#0f1115] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-        >
+        <Button type="submit" disabled={pending} className="w-full">
           {pending ? "Submitting..." : "Continue"}
-        </button>
+        </Button>
       </form>
-    </AppShell>
+    </AuthPageShell>
   );
 }

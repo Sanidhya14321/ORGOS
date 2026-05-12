@@ -11,6 +11,16 @@ interface CsuiteDecomposeJobData {
   goalId: string;
 }
 
+type CsuiteWorkerDependencies = {
+  enqueueManagerDecompose?: (job: {
+    mode: "decompose";
+    goalId: string;
+    directive: string;
+    department: string;
+    deadline: string | null;
+  }) => Promise<void>;
+};
+
 function flattenRoleDirectives(goalStructure: any): Array<{ role: string; directive: string; deadline: string }> {
   return (goalStructure?.sub_directives ?? []).map((item: any) => ({
     role: item.assigned_role,
@@ -62,10 +72,17 @@ async function buildCeoAgentContext(supabase: ReturnType<typeof createSupabaseSe
   };
 }
 
-export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>, agentFn = hierarchicalAgent): Promise<void> {
+export async function processCsuiteDecomposeJob(
+  job: Job<CsuiteDecomposeJobData>,
+  agentFn = hierarchicalAgent,
+  dependencies: CsuiteWorkerDependencies = {}
+): Promise<void> {
   const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
   const goalId = job.data.goalId;
+  const enqueueManagerDecompose = dependencies.enqueueManagerDecompose ?? (async (payload) => {
+    await getManagerQueue().add("manager_decompose", payload);
+  });
 
   const { data: goal, error: goalError } = await supabase
     .from("goals")
@@ -147,7 +164,7 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
   if (ceoResult.action === "decompose" && Array.isArray((ceoResult as any).subtasks)) {
     const directives = (ceoResult as any).subtasks as any[];
     for (const directive of directives) {
-      await getManagerQueue().add("manager_decompose", {
+      await enqueueManagerDecompose({
         mode: "decompose",
         goalId,
         directive: directive.title ?? directive.directive ?? directive.name ?? "",
@@ -166,7 +183,7 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
   } else if (Array.isArray((ceoResult as any).sub_directives)) {
     const directives = flattenRoleDirectives(ceoResult);
     for (const directive of directives) {
-      await getManagerQueue().add("manager_decompose", {
+      await enqueueManagerDecompose({
         mode: "decompose",
         goalId,
         directive: directive.directive,

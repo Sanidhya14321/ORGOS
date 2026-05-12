@@ -17,6 +17,9 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { Goal, Task } from "@/lib/models";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
@@ -34,10 +37,10 @@ const ITEMS_PER_PAGE = 10;
 
 function statusClass(status: Goal["status"]) {
   const base = "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-colors";
-  if (status === "completed") return `${base} bg-green-500/10 text-green-600 border-green-500/20`;
-  if (status === "paused") return `${base} bg-amber-500/10 text-amber-600 border-amber-500/20`;
-  if (status === "cancelled") return `${base} bg-red-500/10 text-red-600 border-red-500/20`;
-  return `${base} bg-blue-500/10 text-blue-600 border-blue-500/20`;
+  if (status === "completed") return `${base} bg-success-subtle text-success border-success/20`;
+  if (status === "paused") return `${base} bg-warning-subtle text-warning border-warning/20`;
+  if (status === "cancelled") return `${base} bg-danger-subtle text-danger border-danger/20`;
+  return `${base} bg-info-subtle text-info border-info/20`;
 }
 
 export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Task[]; loading: boolean }) {
@@ -76,11 +79,11 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
   }
 
   const PaginationControls = () => (
-    <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-4 bg-[var(--surface)]">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-4">
       <p className="text-xs font-medium text-[var(--muted)]">
         Showing <span className="text-[var(--ink)]">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to <span className="text-[var(--ink)]">{Math.min(currentPage * ITEMS_PER_PAGE, goals.length)}</span> of <span className="text-[var(--ink)]">{goals.length}</span> goals
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -96,7 +99,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
               key={i}
               variant={currentPage === i + 1 ? "default" : "ghost"}
               size="sm"
-              className={`h-8 w-8 p-0 text-xs ${currentPage === i + 1 ? 'bg-[var(--accent)] text-white' : 'text-[var(--muted)]'}`}
+              className={`h-8 w-8 p-0 text-xs ${currentPage === i + 1 ? "bg-[var(--accent)] text-[#0f1115]" : "text-[var(--muted)]"}`}
               onClick={() => setCurrentPage(i + 1)}
             >
               {i + 1}
@@ -173,7 +176,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
   return (
     <div className="flex flex-col gap-4">
       {/* Mobile View */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 xl:hidden">
         {paginatedGoals.map((goal) => {
           const goalTasks = tasks.filter((task) => task.goal_id === goal.id);
           const complete = goalTasks.filter((task) => task.status === "completed").length;
@@ -244,7 +247,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
       </div>
 
       {/* Desktop View */}
-      <div className="hidden overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)] md:block shadow-sm">
+      <div className="hidden overflow-x-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] shadow-sm xl:block">
         <Table>
           <TableHeader>
             <TableRow className="border-[var(--border)] bg-[var(--bg-subtle)]/35 hover:bg-transparent">
@@ -281,7 +284,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                         </div>
                         <div>
                           <p className="text-sm font-bold tracking-tight text-[var(--ink)] transition-colors group-hover/btn:text-[var(--accent)]">{goal.title}</p>
-                          <p className="line-clamp-1 max-w-[240px] text-[11px] font-medium text-[var(--muted)]">{goal.description ?? "No description"}</p>
+                          <p className="line-clamp-1 max-w-[320px] text-[11px] font-medium text-[var(--muted)]">{goal.description ?? "No description"}</p>
                         </div>
                       </button>
                     </TableCell>
@@ -289,7 +292,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                       <Badge className={statusClass(goal.status)} variant="outline">{goal.status}</Badge>
                     </TableCell>
                     <TableCell>
-                        <div className="min-w-[140px] space-y-1.5">
+                        <div className="min-w-[120px] space-y-1.5">
                           <div className="flex justify-between text-[10px] font-bold text-[var(--muted)]">
                           <span>{pct}%</span>
                         </div>
@@ -329,20 +332,22 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40 bg-[var(--surface)] shadow-md">
+                        <DropdownMenuContent align="end" className="w-40 border-border bg-bg-surface shadow-[0_24px_60px_rgba(23,21,19,0.12)]">
                           {canEdit ? (
-                            <DropdownMenuItem onClick={() => openEdit(goal)} className="text-xs font-medium cursor-pointer hover:bg-[var(--bg-subtle)]">Edit Goal</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(goal)} className="cursor-pointer text-xs font-medium">
+                              Edit Goal
+                            </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem className="text-xs font-medium text-[var(--muted)] cursor-not-allowed" disabled title="Requires CEO or CFO role to edit goals">
                               Edit (insufficient role)
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem className="text-xs font-medium cursor-pointer hover:bg-[var(--bg-subtle)]" onClick={() => window.open(`/dashboard/goals/${goal.id}/analytics`, '_blank')}>
+                          <DropdownMenuItem className="cursor-pointer text-xs font-medium" onClick={() => window.open(`/dashboard/goals/${goal.id}/analytics`, "_blank")}>
                             View Analytics
                           </DropdownMenuItem>
                           {canEdit && (
                             <DropdownMenuItem 
-                              className="text-xs font-medium cursor-pointer text-red-500 hover:bg-red-500/10"
+                              className="cursor-pointer text-xs font-medium text-danger focus:bg-danger-subtle focus:text-danger"
                               onClick={() => deleteGoal(goal.id, goal.title)}
                             >
                               Delete Goal
@@ -394,7 +399,7 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
       </div>
       
       {/* Mobile Pagination (Syncing with desktop logic) */}
-      <div className="md:hidden">
+      <div className="xl:hidden">
         <PaginationControls />
       </div>
       {editingGoal && (
@@ -406,22 +411,30 @@ export function GoalsTable({ goals, tasks, loading }: { goals: Goal[]; tasks: Ta
             </DialogHeader>
 
             <div className="space-y-3 p-4">
-              <label className="text-xs font-medium text-[var(--muted)]">Title</label>
-              <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]" />
+              <div className="space-y-2">
+                <Label>Title</Label>
+                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+              </div>
 
-              <label className="text-xs font-medium text-[var(--muted)]">Description</label>
-              <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="w-full min-h-[100px] border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]" />
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+              </div>
 
-              <label className="text-xs font-medium text-[var(--muted)]">Priority</label>
-              <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as any)} className="w-full border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]">
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as any)} className="flex h-12 w-full rounded-2xl border border-border bg-bg-subtle/75 px-4 py-3 text-sm text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/25">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
 
-              <label className="text-xs font-medium text-[var(--muted)]">Deadline</label>
-              <input type="date" value={editDeadline ?? ""} onChange={(e) => setEditDeadline(e.target.value || undefined)} className="w-full border border-[var(--border)] rounded-md p-2 bg-[var(--bg-subtle)]" />
+              <div className="space-y-2">
+                <Label>Deadline</Label>
+                <Input type="date" value={editDeadline ?? ""} onChange={(e) => setEditDeadline(e.target.value || undefined)} />
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 p-4">

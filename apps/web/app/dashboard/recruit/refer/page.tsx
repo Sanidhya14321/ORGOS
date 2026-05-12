@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { DashboardPageFrame } from "@/components/dashboard/dashboard-surface";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Job, Role } from "@/lib/models";
@@ -69,13 +72,17 @@ export default function ReferralPage() {
   });
 
   return (
-    <div className="space-y-8 p-8">
+    <DashboardPageFrame
+      eyebrow="Referrals"
+      title="Refer candidates"
+      description="Share strong candidates into open roles and track your submitted referrals in one place."
+    >
+      <div className="space-y-8">
       {!canViewRecruitment ? (
-        <div className="rounded-xl border border-border bg-bg-surface p-4 text-sm text-text-secondary">
+        <Card className="p-4 text-sm text-text-secondary">
           Candidate referrals are available to CEO, CFO, and manager roles.
-        </div>
+        </Card>
       ) : null}
-      <h2 className="text-xl font-bold tracking-tight text-text-primary">Refer candidates</h2>
 
       <Tabs defaultValue="open-jobs">
         <TabsList className="gap-4 p-1 rounded-xl">
@@ -91,44 +98,47 @@ export default function ReferralPage() {
             </>
           ) : (
             (jobsQuery.data ?? []).map((job) => (
-              <div key={job.id} className="rounded-xl border border-border bg-bg-surface p-6 shadow-sm">
+              <Card key={job.id} className="p-6">
                 <p className="text-lg font-bold tracking-tight text-text-primary">{job.title}</p>
                 <p className="mt-2 text-xs font-medium uppercase tracking-widest text-text-secondary">{job.department}</p>
                 <Dialog open={open && jobId === job.id} onOpenChange={(next) => { setOpen(next); setJobId(job.id); }}>
                   <DialogTrigger asChild>
-                    <Button className="mt-4 h-10 px-4 rounded-xl bg-accent hover:bg-accent-hover hover:scale-[1.02] transition-all duration-200">Refer</Button>
+                    <Button className="mt-4">Refer</Button>
                   </DialogTrigger>
-                  <DialogContent className="backdrop-blur-md bg-white/90 shadow-2xl rounded-2xl p-6">
+                  <DialogContent className="backdrop-blur-md">
                     <DialogHeader>
                       <DialogTitle className="text-lg font-bold tracking-tight">Refer for {job.title}</DialogTitle>
                       <DialogDescription className="text-sm text-text-secondary">Send a referral for this role.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                      <Input placeholder="Applicant name" value={applicantName} onChange={(e) => setApplicantName(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
-                      <Input placeholder="Applicant email" value={applicantEmail} onChange={(e) => setApplicantEmail(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
-                      <Input placeholder="Relationship" value={relationship} onChange={(e) => setRelationship(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
-                      <Textarea placeholder="Personal note" value={note} onChange={(e) => setNote(e.target.value)} className="border border-border bg-bg-subtle py-2 px-4 rounded-lg" />
-                      <Button className="w-full h-10 px-4 rounded-xl bg-accent hover:bg-accent-hover hover:scale-[1.02] transition-all duration-200" disabled={referMutation.isPending || !applicantName || !applicantEmail} onClick={() => referMutation.mutate()}>
+                      <Input placeholder="Applicant name" value={applicantName} onChange={(e) => setApplicantName(e.target.value)} />
+                      <Input placeholder="Applicant email" value={applicantEmail} onChange={(e) => setApplicantEmail(e.target.value)} />
+                      <Input placeholder="Relationship" value={relationship} onChange={(e) => setRelationship(e.target.value)} />
+                      <Textarea placeholder="Personal note" value={note} onChange={(e) => setNote(e.target.value)} />
+                      <Button className="w-full" disabled={referMutation.isPending || !applicantName || !applicantEmail} onClick={() => referMutation.mutate()}>
                         Submit referral
                       </Button>
                     </div>
                   </DialogContent>
                 </Dialog>
-              </div>
+              </Card>
             ))
           )}
         </TabsContent>
 
         <TabsContent value="my-referrals" className="mt-6 space-y-4">
           {(referralsQuery.data ?? []).map((item) => (
-            <div key={item.id} className="rounded-xl border border-border bg-bg-surface p-4 shadow-sm">
+            <Card key={item.id} className="p-4">
               <p className="text-sm text-text-primary font-medium">{item.applicant_name} · {item.applicant_email}</p>
-              <p className="mt-1 text-xs font-medium text-text-secondary">Status {item.status}</p>
-            </div>
+              <div className="mt-2">
+                <Badge variant="outline">Status {item.status}</Badge>
+              </div>
+            </Card>
           ))}
-          {(referralsQuery.data ?? []).length === 0 ? <p className="text-sm text-text-secondary">No referrals yet.</p> : null}
+          {(referralsQuery.data ?? []).length === 0 ? <Card className="p-6 text-sm text-text-secondary">No referrals yet.</Card> : null}
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </DashboardPageFrame>
   );
 }

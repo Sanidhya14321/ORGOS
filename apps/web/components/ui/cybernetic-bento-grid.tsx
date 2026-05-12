@@ -16,7 +16,7 @@ const items: BentoItem[] = [
   {
     title: "Org Graph Intelligence",
     description: "Map CEO to contributor reporting lines and instantly surface bottlenecks in team layers.",
-    icon: <Building2 className="h-4 w-4 text-[#ff6b35]" />,
+    icon: <Building2 className="h-4 w-4 text-accent" />,
     status: "Live Topology",
     tags: ["Hierarchy", "Realtime", "Visibility"],
     image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80"
@@ -24,7 +24,7 @@ const items: BentoItem[] = [
   {
     title: "Decision Routing",
     description: "Automatically route escalations and approvals upward while delegating execution downward.",
-    icon: <Workflow className="h-4 w-4 text-[#ff6b35]" />,
+    icon: <Workflow className="h-4 w-4 text-accent" />,
     status: "Flow Active",
     tags: ["Rules", "Delegation", "Approvals"],
     image: "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80"
@@ -32,7 +32,7 @@ const items: BentoItem[] = [
   {
     title: "Executive Controls",
     description: "CEO and CFO checkpoints enforce strategic and financial governance with full audit trails.",
-    icon: <ShieldCheck className="h-4 w-4 text-[#ff6b35]" />,
+    icon: <ShieldCheck className="h-4 w-4 text-accent" />,
     status: "Policy Guarded",
     tags: ["Governance", "Audit", "Risk"],
     image: "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80"
@@ -68,7 +68,7 @@ export function CyberneticBentoGrid() {
               />
             ) : null}
 
-            <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/20 to-transparent" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(var(--accent-rgb),0.18),transparent_55%)]" />
 
             <div className="relative z-10 flex h-full flex-col justify-between">
               <div>
@@ -80,7 +80,7 @@ export function CyberneticBentoGrid() {
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{item.description}</p>
               </div>
 
-              <div className="mt-4 flex items-center justify-between">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
                   {item.tags.map((tag) => (
                     <span key={tag} className="rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1 text-[11px] text-[var(--text-secondary)]">

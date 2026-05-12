@@ -270,13 +270,13 @@ export default function TeamPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_340px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,340px)]">
         <Card className="border border-border bg-bg-surface p-0">
           <div className="border-b border-border px-4 py-3">
             <p className="text-sm font-semibold text-text-primary">Channels</p>
             <p className="text-xs text-text-secondary">Live task threads linked to goals and execution.</p>
           </div>
-          <ScrollArea className="h-[720px]">
+          <ScrollArea className="h-[56vh] xl:h-[720px]">
             <div className="space-y-2 p-3">
               {tasksQuery.isLoading ? (
                 Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-16 w-full" />)
@@ -315,12 +315,12 @@ export default function TeamPage() {
           </ScrollArea>
         </Card>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <Card className="border border-border bg-bg-surface p-5">
             {selectedTask ? (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">Focused thread</p>
                     <h2 className="mt-1 text-2xl font-semibold text-text-primary">{selectedTask.title}</h2>
                     <p className="mt-2 text-sm text-text-secondary">
@@ -329,8 +329,10 @@ export default function TeamPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge className={statusTone(selectedTask.status)}>{selectedTask.status}</Badge>
-                    <Badge className="bg-slate-50 text-slate-700 border border-slate-200">{selectedTask.priority ?? "medium"}</Badge>
-                    <Badge className="bg-slate-50 text-slate-700 border border-slate-200">
+                    <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
+                      {selectedTask.priority ?? "medium"}
+                    </Badge>
+                    <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
                       Goal {selectedTask.goal_id.slice(0, 8)}
                     </Badge>
                   </div>
@@ -369,7 +371,7 @@ export default function TeamPage() {
               <p className="text-xs text-text-secondary">Use task comments as the shared thread for execution updates and goal alignment.</p>
             </div>
 
-            <ScrollArea className="h-[420px]">
+            <ScrollArea className="h-[34vh] xl:h-[420px]">
               <div className="space-y-3 px-5 py-4">
                 {commentsQuery.isLoading && selectedTask ? (
                   Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-20 w-full" />)
@@ -426,7 +428,7 @@ export default function TeamPage() {
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 xl:col-span-2 2xl:col-span-1">
           <Card className="border border-border bg-bg-surface p-4">
             <div className="flex items-center justify-between gap-3">
               <div>

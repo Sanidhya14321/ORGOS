@@ -523,7 +523,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         isAgentTask: false
       });
     } else if (updateTask.data.is_agent_task === true) {
-      await getExecuteQueue().add("task_execute", { taskId: params.data.id }, { jobId: `task_execute:${params.data.id}` });
+      await getExecuteQueue().add("task_execute", { taskId: params.data.id }, { jobId: `task_execute-${params.data.id}` });
     }
 
     return reply.send(updateTask.data);

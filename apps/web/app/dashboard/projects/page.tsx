@@ -147,7 +147,7 @@ export default function ProjectsDashboardPage() {
           <MetricCard label="Blocked tasks" value={metrics.blockedTasks} icon={<AlertCircle className="h-5 w-5" />} caption="Items needing attention" />
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
+        <section className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
           <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
               <div>
@@ -166,7 +166,7 @@ export default function ProjectsDashboardPage() {
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as Goal["status"] | "all")}>
-                  <SelectTrigger className="w-[170px] bg-bg-surface">
+                  <SelectTrigger className="w-full bg-bg-surface sm:w-[170px]">
                     <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
                   <SelectContent>
@@ -208,7 +208,7 @@ export default function ProjectsDashboardPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 rounded-2xl border border-border bg-bg-subtle p-3 text-center text-xs text-text-secondary sm:min-w-[240px] sm:grid-cols-4">
+                      <div className="grid w-full grid-cols-2 gap-3 rounded-2xl border border-border bg-bg-subtle p-3 text-center text-xs text-text-secondary sm:w-auto sm:min-w-[240px] sm:grid-cols-4">
                         <div>
                           <p className="text-lg font-semibold text-text-primary">{row.totalTasks}</p>
                           <p>Tasks</p>

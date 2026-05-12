@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm --workspace @orgos/api run dev & npm --workspace @orgos/web run dev",
+    "dev": "bash -lc 'npm run dev:redis-local & sleep 1; npm --workspace @orgos/api run dev & npm --workspace @orgos/web run dev'",
     "build": "turbo run build",
     "test": "npm run guard:schemas && npm --workspace @orgos/api run test",
     "lint": "turbo run lint",

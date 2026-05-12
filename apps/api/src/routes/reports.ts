@@ -131,7 +131,7 @@ async function enqueueIfSiblingsDone(
     await getSynthesizeQueue().add(
       "report_synthesize",
       { parentTaskId: task.parent_id as string },
-      { jobId: `report_synthesize:${task.parent_id as string}` }
+      { jobId: `report_synthesize-${task.parent_id as string}` }
     );
   }
 }

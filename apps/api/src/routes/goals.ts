@@ -2,10 +2,10 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { GoalPrioritySchema, GoalStatusSchema } from "@orgos/shared-types";
 import { sanitizeGoalInput, SanitizationError } from "@orgos/agent-core";
-import { getCsuiteQueue } from "../queue/index.js";
 import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { canAccessTaskWithHierarchy, getHierarchyScope } from "../services/hierarchyScope.js";
+import { triggerGoalDecomposition } from "../services/goalDecomposition.js";
 import { buildSimulationPreview, recomputeGoalRollup, updateGoalStatus } from "../services/goalEngine.js";
 
 const CreateGoalSchema = z.object({
@@ -135,7 +135,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create goal");
     }
 
-    await getCsuiteQueue().add("goal_decompose", { goalId: data.id });
+    await triggerGoalDecomposition(fastify, data.id);
 
     return reply.status(202).send({ goalId: data.id });
   });
@@ -353,7 +353,11 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       ? (taskRowsResult.data ?? [])
       : (taskRowsResult.data ?? []).filter((task) => canAccessTaskWithHierarchy(task, scope));
 
-    if (!scope.executive && visibleTasks.length === 0) {
+    if ((taskRowsResult.data ?? []).length === 0) {
+      await triggerGoalDecomposition(fastify, goalId);
+    }
+
+    if (!scope.executive && (taskRowsResult.data ?? []).length > 0 && visibleTasks.length === 0) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Goal is outside your scope");
     }
 

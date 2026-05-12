@@ -256,7 +256,7 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
       await getSynthesizeQueue().add(
         "sibling_synthesize",
         { parentTaskId: siblingState.parentTaskId },
-        { jobId: `sibling_synthesize:${siblingState.parentTaskId}` }
+        { jobId: `sibling_synthesize-${siblingState.parentTaskId}` }
       );
     }
   }

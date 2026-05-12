@@ -46,7 +46,7 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-border bg-bg-surface/80 px-5 py-4 shadow-[0_20px_50px_rgba(23,21,19,0.08)] backdrop-blur-xl lg:min-w-[250px]">
+          <div className="w-full rounded-[24px] border border-border bg-bg-surface/80 px-5 py-4 shadow-[0_20px_50px_rgba(23,21,19,0.08)] backdrop-blur-xl lg:w-auto xl:min-w-[250px]">
             <p className="dashboard-label">Mode</p>
             <p className="mt-2 text-base font-semibold text-text-primary">Focused execution</p>
             <p className="mt-2 text-sm leading-6 text-text-secondary">

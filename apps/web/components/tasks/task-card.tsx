@@ -21,7 +21,7 @@ export function TaskCard({ task, onOpen, suggestionCount }: { task: Task; onOpen
       whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.1 }}
       onClick={() => onOpen(task)}
-      className={cn("dashboard-dense-row w-full border border-border bg-[var(--surface)] p-4 text-left border-l-4 shadow-sm transition-all", priorityTone)}
+      className={cn("dashboard-dense-row relative w-full border border-border bg-[var(--surface)] p-4 text-left border-l-4 shadow-sm transition-all", priorityTone)}
     >
       <p className="dashboard-label">Goal {task.goal_id.slice(0, 8)}</p>
       <p className="mt-2 text-sm font-semibold tracking-tight text-[var(--ink)]">{task.title}</p>
@@ -30,13 +30,13 @@ export function TaskCard({ task, onOpen, suggestionCount }: { task: Task; onOpen
       {(assignedPosition || assignedToName) && (
         <div className="mt-2 flex flex-wrap gap-1">
           {assignedPosition && (
-            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-              📍 {assignedPosition}
+            <Badge variant="outline" className="border-info/20 bg-info-subtle text-info">
+              Position {assignedPosition}
             </Badge>
           )}
           {assignedToName && (
-            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-              👤 {assignedToName}
+            <Badge variant="outline" className="border-accent/20 bg-accent-subtle text-accent">
+              Owner {assignedToName}
             </Badge>
           )}
         </div>
@@ -60,7 +60,7 @@ export function TaskCard({ task, onOpen, suggestionCount }: { task: Task; onOpen
 
       {suggestionCount ? (
         <div className="absolute right-3 top-3">
-          <Badge className="bg-amber-50 text-amber-800">AI {suggestionCount}</Badge>
+          <Badge className="border-warning/20 bg-warning-subtle text-warning">AI {suggestionCount}</Badge>
         </div>
       ) : null}
     </motion.button>

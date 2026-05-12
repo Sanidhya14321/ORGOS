@@ -121,7 +121,7 @@ export default function RecruitDashboardPage() {
           <MetricCard label="Referrals This Month" value={applicants.filter((a) => a.source === "referral").length} loading={applicantsQuery.isLoading} />
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[300px_1fr]">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
           <Card className="p-4">
             <div className="mb-4 space-y-1">
               <p className="dashboard-label">Open roles</p>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { DashboardPageFrame } from '@/components/dashboard/dashboard-surface';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,10 +64,10 @@ type MeResponse = {
 };
 
 const priorityColors: Record<string, string> = {
-  low: 'bg-blue-50 text-blue-700 border-blue-200',
-  medium: 'bg-amber-50 text-amber-700 border-amber-200',
-  high: 'bg-orange-50 text-orange-700 border-orange-200',
-  critical: 'bg-red-50 text-red-700 border-red-200'
+  low: 'bg-info-subtle text-info border border-info/20',
+  medium: 'bg-warning-subtle text-warning border border-warning/20',
+  high: 'bg-warning-subtle text-warning border border-warning/20',
+  critical: 'bg-danger-subtle text-danger border border-danger/20'
 };
 
 const statusIcons: Record<string, React.ReactNode> = {
@@ -78,11 +79,11 @@ const statusIcons: Record<string, React.ReactNode> = {
 };
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-slate-50 text-slate-700',
-  in_progress: 'bg-blue-50 text-blue-700',
-  blocked: 'bg-red-50 text-red-700',
-  completed: 'bg-green-50 text-green-700',
-  cancelled: 'bg-gray-50 text-gray-500'
+  pending: 'bg-bg-elevated text-text-secondary',
+  in_progress: 'bg-info-subtle text-info',
+  blocked: 'bg-danger-subtle text-danger',
+  completed: 'bg-success-subtle text-success',
+  cancelled: 'bg-bg-elevated text-text-muted'
 };
 
 function TaskTree({ tasks }: { tasks: Task[] }) {
@@ -130,7 +131,7 @@ function TaskTree({ tasks }: { tasks: Task[] }) {
               </span>
               <span className="text-sm font-medium text-text-primary">{task.title}</span>
               {task.is_agent_task && (
-                <Badge className="bg-purple-50 text-purple-700 border border-purple-200 text-xs">AI</Badge>
+                <Badge className="bg-accent-subtle text-accent border border-accent/20 text-xs">AI</Badge>
               )}
             </div>
 
@@ -294,16 +295,14 @@ export default function GoalsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary">Goals</h1>
-          <p className="mt-1 text-sm text-text-secondary">Strategic objectives with AI-decomposed tasks</p>
-        </div>
+    <DashboardPageFrame
+      eyebrow="Goals"
+      title="Strategic objectives"
+      description="Create, monitor, and inspect goals with AI-decomposed task trees and execution progress."
+      actions={
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-accent hover:bg-accent-hover" disabled={!canEditGoals}>
+            <Button disabled={!canEditGoals}>
               <Plus className="mr-2 h-4 w-4" />
               New Goal
             </Button>
@@ -380,7 +379,9 @@ export default function GoalsPage() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+      }
+    >
+      <div className="space-y-6">
 
       {/* Filters */}
       <div className="flex gap-2">
@@ -445,7 +446,7 @@ export default function GoalsPage() {
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className="text-red-600 hover:bg-red-50 cursor-pointer"
+                            className="cursor-pointer text-danger focus:bg-danger-subtle"
                             onClick={() => deleteGoalMutation.mutate(goal.id)}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
@@ -546,6 +547,7 @@ export default function GoalsPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </DashboardPageFrame>
   );
 }

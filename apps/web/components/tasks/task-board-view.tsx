@@ -10,6 +10,7 @@ import { useSocket } from "@/lib/socket";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { DashboardPageFrame } from "@/components/dashboard/dashboard-surface";
 import { 
   Select, 
   SelectContent, 
@@ -142,6 +143,17 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
   ];
 
   return (
+    <DashboardPageFrame
+      eyebrow="Task board"
+      title="Execution focus board"
+      description="Move work across execution states, narrow the board to a specific goal, and open individual task context when you need detail."
+      actions={
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{filtered.length} visible tasks</Badge>
+          {focusedGoalId ? <Badge variant="outline">Goal filtered</Badge> : null}
+        </div>
+      }
+    >
     <div className="space-y-4">
       <div className="space-y-3 rounded-2xl border border-border bg-bg-surface px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -160,14 +172,14 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
         {/* CEO CONTROLS: Goal & Task Focus */}
         <div className="border-t border-border pt-3">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">CEO Controls</p>
-          <div className="flex flex-wrap gap-3">
-            <div className="flex-1 min-w-xs">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <div className="min-w-0">
               <label className="mb-1 block text-xs font-medium text-text-secondary">Focus on Goal</label>
               <Select
                 value={focusedGoalId || allGoalsValue}
                 onValueChange={(value) => setFocusedGoalId(value === allGoalsValue ? null : value)}
               >
-                <SelectTrigger className="w-full border-border bg-bg-subtle">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a goal to focus..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -186,7 +198,6 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
                   size="sm"
                   variant="outline"
                   onClick={() => setFocusedGoalId(null)}
-                  className="border-border"
                 >
                   <X className="mr-1 h-4 w-4" />
                   Clear Focus
@@ -201,18 +212,18 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search tasks"
-        className="max-w-sm border-border bg-bg-subtle"
+        className="w-full sm:max-w-sm"
       />
 
-      <div className="grid gap-4 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         {groups.map((group) => {
           const items = filtered.filter((task) => task.status === group.key);
           return (
             <div 
               key={group.key} 
-              className={`rounded-md border p-3 transition-colors ${
+              className={`min-w-0 rounded-[24px] border p-3 transition-colors ${
                 dragOverStatus === group.key 
-                  ? "border-accent bg-accent/5" 
+                  ? "border-accent bg-accent-subtle" 
                   : "border-border bg-bg-surface"
               }`}
               onDragOver={(e) => {
@@ -263,6 +274,7 @@ export function TaskBoardView({ initialGoalId, initialTaskId }: TaskBoardViewPro
 
       <TaskDrawer task={selectedTask} open={Boolean(selectedTask)} onOpenChange={(open) => !open && setSelectedTask(null)} />
     </div>
+    </DashboardPageFrame>
   );
 }
 
@@ -291,7 +303,7 @@ function VirtualTaskColumn({
   });
 
   return (
-    <div ref={setContainer} className="max-h-[65vh] overflow-auto">
+    <div ref={setContainer} className="max-h-[52vh] overflow-auto sm:max-h-[58vh] xl:max-h-[65vh]">
       <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
         {rowVirtualizer.getVirtualItems().map((item) => {
           const task = tasks[item.index];

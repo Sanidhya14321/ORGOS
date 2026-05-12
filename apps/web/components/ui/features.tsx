@@ -1,6 +1,7 @@
 "use client";
 
 import { Activity, ArrowUpRight, BarChart3, BriefcaseBusiness, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const records = [
@@ -23,6 +24,16 @@ const records = [
     status: "Approved"
   }
 ];
+
+function recordTone(status: string) {
+  if (status === "Approved") {
+    return "bg-success-subtle text-success";
+  }
+  if (status === "In Review") {
+    return "bg-warning-subtle text-warning";
+  }
+  return "bg-bg-elevated text-text-secondary";
+}
 
 export function CustomersTableCard() {
   return (
@@ -49,7 +60,7 @@ export function CustomersTableCard() {
                   <td className="px-3 py-2">{entry.employee}</td>
                   <td className="px-3 py-2 text-[var(--text-muted)]">{entry.role}</td>
                   <td className="px-3 py-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--success-subtle)] px-2 py-0.5 text-xs text-[var(--success)]">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${recordTone(entry.status)}`}>
                       <CheckCircle2 className="h-3 w-3" />
                       {entry.status}
                     </span>
@@ -104,7 +115,7 @@ export default function OrgosFeatures() {
         </CardHeader>
         <CardContent className="grid gap-2">
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--muted)]">
-            <span className="mr-2 inline-flex items-center gap-1 text-[#9de7b8]"><Activity className="h-3.5 w-3.5" />Live</span>
+            <span className="mr-2 inline-flex items-center gap-1 text-success"><Activity className="h-3.5 w-3.5" />Live</span>
             Manager approved task bundle for Product Ops.
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--muted)]">
@@ -119,10 +130,10 @@ export default function OrgosFeatures() {
           <CardDescription className="text-[var(--muted)]">Inspect structure, goals, and reports in realtime.</CardDescription>
         </CardHeader>
         <CardContent>
-          <button className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)]">
+          <Button variant="outline" className="gap-2">
             Open demo environment
             <ArrowUpRight className="h-4 w-4" />
-          </button>
+          </Button>
         </CardContent>
       </Card>
     </section>

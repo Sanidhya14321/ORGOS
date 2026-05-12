@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AppShell } from "@/components/app-shell";
+import { AuthPageShell } from "@/components/auth/auth-page-shell";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -71,27 +71,28 @@ function VerifyPageContent() {
   }, [initialEmail, router, tokenHash, verificationType]);
 
   return (
-    <AppShell
+    <AuthPageShell
       eyebrow="ORGOS onboarding"
       title="Verify your account"
       description="Confirm your email to continue onboarding and request organization approval."
+      footer={
+        <div className="text-center">
+          Need another try?{" "}
+          <Link href="/login" className="font-semibold text-[var(--accent)] underline-offset-4 hover:underline">
+            Return to sign in
+          </Link>
+        </div>
+      }
     >
       <div className="space-y-4">
-        <div className="rounded-2xl border border-[#2c3240] bg-[#0f1115] px-4 py-3 text-sm text-[#cfd6e6]">
+        <div className="rounded-2xl border border-border bg-bg-elevated px-4 py-3 text-sm text-text-secondary">
           {pending ? "Validating your secure verification link..." : "Verification links can only be completed from the email that ORGOS sent you."}
         </div>
 
-        {error ? <p className="rounded-2xl border border-[#3a2f1f] bg-[#25170f] px-4 py-3 text-sm text-[#fdba74]">{error}</p> : null}
-        {message ? <p className="rounded-2xl border border-[#1b3d2a] bg-[#102017] px-4 py-3 text-sm text-[#86efac]">{message}</p> : null}
-
-        <p className="text-center text-sm text-[#5f6470]">
-          Need another try?{" "}
-          <Link href="/login" className="font-semibold text-[#eef2ff] underline-offset-4 hover:underline">
-            Return to sign in
-          </Link>
-        </p>
+        {error ? <p className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</p> : null}
+        {message ? <p className="rounded-2xl border border-success/20 bg-success-subtle px-4 py-3 text-sm text-success">{message}</p> : null}
       </div>
-    </AppShell>
+    </AuthPageShell>
   );
 }
 

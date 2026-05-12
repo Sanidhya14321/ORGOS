@@ -142,7 +142,7 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
     await getIndividualQueue().add("individual_ack", { taskId });
   });
   const enqueueExecute = dependencies.enqueueExecute ?? (async (taskId: string) => {
-    await getExecuteQueue().add("task_execute", { taskId }, { jobId: `task_execute:${taskId}` });
+    await getExecuteQueue().add("task_execute", { taskId }, { jobId: `task_execute-${taskId}` });
   });
   const emitTaskAssignedFn = dependencies.emitTaskAssignedFn ?? emitTaskAssigned;
   const emitToUserFn = dependencies.emitToUserFn ?? emitToUser;

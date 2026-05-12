@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { connectSocket, disconnectSocket, useSocket } from "@/lib/socket";
 import { useOrgosStore } from "@/store";
 import type { Goal, PendingMember, Report, Role, Task, User } from "@/lib/models";
@@ -49,6 +50,29 @@ function roleDescription(role: Role): string {
     default:
       return "Execute your assigned tasks and submit reports as work moves forward.";
   }
+}
+
+function statusTone(status?: string | null): string {
+  if (status === "completed" || status === "active" || status === "approved") {
+    return "border border-success/20 bg-success-subtle text-success";
+  }
+  if (status === "blocked" || status === "rejected" || status === "cancelled") {
+    return "border border-danger/20 bg-danger-subtle text-danger";
+  }
+  if (status === "pending" || status === "routing" || status === "in_progress") {
+    return "border border-warning/20 bg-warning-subtle text-warning";
+  }
+  return "border border-border bg-bg-elevated text-text-secondary";
+}
+
+function activityDotTone(tone: ActivityItem["tone"]): string {
+  if (tone === "positive") {
+    return "bg-success";
+  }
+  if (tone === "warning") {
+    return "bg-warning";
+  }
+  return "bg-info";
 }
 
 export function DashboardClient({ role }: DashboardClientProps) {
@@ -310,8 +334,8 @@ export function DashboardClient({ role }: DashboardClientProps) {
               {roleDescription(role)}
             </p>
           </div>
-          <div className={`inline-flex items-center gap-2 self-start rounded-full px-4 py-2 text-sm font-semibold ${wsConnected ? "bg-[#102017] text-[#86efac]" : "bg-[#25170f] text-[#fdba74]"}`}>
-            <span className={`h-2.5 w-2.5 rounded-full ${wsConnected ? "bg-[#22c55e]" : "bg-[#f59e0b]"}`} />
+          <div className={`inline-flex items-center gap-2 self-start rounded-full border px-4 py-2 text-sm font-semibold ${wsConnected ? "border-success/20 bg-success-subtle text-success" : "border-warning/20 bg-warning-subtle text-warning"}`}>
+            <span className={`h-2.5 w-2.5 rounded-full ${wsConnected ? "bg-success" : "bg-warning"}`} />
             {wsConnected ? "Realtime connected" : "Connecting realtime"}
           </div>
         </div>
@@ -345,23 +369,25 @@ export function DashboardClient({ role }: DashboardClientProps) {
                   <article key={member.id} className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
                     <p className="font-semibold text-[var(--ink)]">{member.full_name}</p>
                     <p className="break-all text-sm text-[var(--muted)]">{member.email}</p>
-                    <div className="mt-3 flex gap-2">
-                      <button
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
                         type="button"
+                        size="sm"
                         onClick={() => decideMember(member.id, "approve")}
                         disabled={memberActionId === member.id}
-                        className="rounded-xl bg-[#2a9d8f] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                        className="bg-success text-white hover:bg-success/90"
                       >
                         Approve
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        size="sm"
+                        variant="destructive"
                         onClick={() => decideMember(member.id, "reject")}
                         disabled={memberActionId === member.id}
-                        className="rounded-xl bg-[#ff6b35] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
                       >
                         Reject
-                      </button>
+                      </Button>
                     </div>
                   </article>
                 ))}
@@ -383,7 +409,7 @@ export function DashboardClient({ role }: DashboardClientProps) {
               <article key={task.id} className="min-w-0 rounded-3xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="min-w-0 break-words text-lg font-semibold text-[var(--ink)]">{task.title}</h3>
-                  <span className="shrink-0 rounded-full bg-[var(--warn)]/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--warn)] sm:tracking-[0.2em]">
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] sm:tracking-[0.2em] ${statusTone(task.status)}`}>
                     {task.status}
                   </span>
                 </div>
@@ -399,7 +425,7 @@ export function DashboardClient({ role }: DashboardClientProps) {
             {activity.map((item) => (
               <article key={item.id} className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
                 <div className="flex items-start gap-3">
-                  <span className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === "positive" ? "bg-[#2a9d8f]" : item.tone === "warning" ? "bg-[#ff6b35]" : "bg-[#e9c46a]"}`} />
+                  <span className={`mt-1 h-2.5 w-2.5 rounded-full ${activityDotTone(item.tone)}`} />
                   <div className="min-w-0">
                       <p className="font-semibold text-[var(--ink)]">{item.label}</p>
                       <p className="mt-1 break-words text-sm leading-6 text-[var(--muted)]">{item.detail}</p>

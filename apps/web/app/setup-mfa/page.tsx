@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import Link from "next/link";
-import { AppShell } from "@/components/app-shell";
+import { AuthPageShell } from "@/components/auth/auth-page-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
 import type { Role } from "@/lib/models";
 
@@ -114,17 +117,25 @@ export default function SetupMfaPage() {
   }
 
   return (
-    <AppShell
+    <AuthPageShell
       eyebrow="ORGOS security"
       title={title}
       description="Complete MFA before entering the dashboard."
+      footer={
+        <div className="text-center">
+          Need help?{" "}
+          <Link href="/login" className="font-semibold text-[var(--accent)] underline-offset-4 hover:underline">
+            Return to login
+          </Link>
+        </div>
+      }
     >
       {loading ? <p className="text-sm text-[var(--muted)]">Loading MFA setup...</p> : null}
 
       {!loading && status ? (
         <form onSubmit={onSubmit} className="space-y-5">
           {!status.enabled ? (
-            <div className="space-y-4 rounded-3xl border border-[var(--border)] bg-[#0f1115] p-4">
+            <div className="space-y-4 rounded-3xl border border-[var(--border)] bg-bg-elevated p-4">
               <div className="space-y-2">
                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Scan QR code</p>
                 <p className="text-sm text-[var(--muted)]">Use Google Authenticator, Authy, or 1Password to scan this code.</p>
@@ -139,7 +150,7 @@ export default function SetupMfaPage() {
               ) : null}
 
               {status.secret ? (
-                <div className="rounded-2xl border border-[var(--border)] bg-[#151922] px-4 py-3 text-sm text-[var(--muted)]">
+                <div className="rounded-2xl border border-[var(--border)] bg-bg-surface px-4 py-3 text-sm text-[var(--muted)]">
                   Manual secret: <span className="font-mono text-[var(--ink)]">{status.secret}</span>
                 </div>
               ) : null}
@@ -149,15 +160,14 @@ export default function SetupMfaPage() {
               ) : null}
             </div>
           ) : (
-            <div className="rounded-3xl border border-[var(--border)] bg-[#0f1115] p-4 text-sm text-[var(--muted)]">
+            <div className="rounded-3xl border border-[var(--border)] bg-bg-elevated p-4 text-sm text-[var(--muted)]">
               Enter the current 6-digit code from your authenticator app to continue.
             </div>
           )}
 
           <label className="block space-y-2">
-            <span className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">Verification code</span>
-            <input
-              className="w-full rounded-2xl border border-[var(--border)] bg-[#0f1115] px-4 py-3 text-[var(--ink)] outline-none transition focus:border-[var(--accent)]"
+            <Label>Verification code</Label>
+            <Input
               type="text"
               value={code}
               onChange={(event) => setCode(event.target.value)}
@@ -168,22 +178,14 @@ export default function SetupMfaPage() {
             />
           </label>
 
-          {error ? <p className="rounded-2xl border border-[#3a2f1f] bg-[#25170f] px-4 py-3 text-sm text-[#fdba74]">{error}</p> : null}
-          {message ? <p className="rounded-2xl border border-[#1b3d2a] bg-[#102017] px-4 py-3 text-sm text-[#86efac]">{message}</p> : null}
+          {error ? <p className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</p> : null}
+          {message ? <p className="rounded-2xl border border-success/20 bg-success-subtle px-4 py-3 text-sm text-success">{message}</p> : null}
 
-          <button
-            type="submit"
-            disabled={pending}
-            className="inline-flex w-full items-center justify-center rounded-2xl bg-[var(--accent)] px-4 py-3 font-semibold text-[#0f1115] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <Button type="submit" disabled={pending} className="w-full">
             {pending ? "Processing..." : status.enabled ? "Verify code" : "Enroll MFA"}
-          </button>
-
-          <p className="text-center text-sm text-[var(--muted)]">
-            Need help? <Link href="/login" className="font-semibold text-[var(--ink)] underline-offset-4 hover:underline">Return to login</Link>
-          </p>
+          </Button>
         </form>
       ) : null}
-    </AppShell>
+    </AuthPageShell>
   );
 }

@@ -1,5 +1,5 @@
 import { Worker, type Job } from "bullmq";
-import { hierarchicalAgent } from "@orgos/agent-core";
+import { individualAgent, type IndividualAgentOutput } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
@@ -10,7 +10,10 @@ interface IndividualAckJobData {
   taskId: string;
 }
 
-export async function processIndividualAckJob(job: Job<IndividualAckJobData>, agentFn = hierarchicalAgent): Promise<void> {
+export async function processIndividualAckJob(
+  job: Job<IndividualAckJobData>,
+  agentFn: typeof individualAgent = individualAgent
+): Promise<void> {
   const env = readEnv();
   const supabase = createSupabaseServiceClient(env);
 
@@ -38,29 +41,26 @@ export async function processIndividualAckJob(job: Job<IndividualAckJobData>, ag
   const parentTaskResult = task.parent_id
     ? await supabase.from("tasks").select("title").eq("id", task.parent_id).maybeSingle()
     : { data: null, error: null };
-  const parentContext = typeof parentTaskResult.data?.title === "string" ? parentTaskResult.data.title : null;
+  const parentContext = typeof parentTaskResult.data?.title === "string" ? parentTaskResult.data.title : undefined;
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
+  const assigneeSkills = Array.isArray(assigneeResult.data?.skills)
+    ? assigneeResult.data.skills.filter((skill): skill is string => typeof skill === "string" && skill.trim().length > 0)
+    : [];
 
-  const agentInput = {
-    task: {
-      id: task.id,
-      goal_id: task.goal_id,
-      title: task.title,
-      description: typeof task.description === "string" ? task.description : null,
-      success_criteria: task.success_criteria,
-      assigned_to: task.assigned_to
-    },
-    current_position: {
-      id: `user:${task.assigned_to}`,
-      name: "assignee",
-      level: 1,
-      max_task_depth: 10,
-      can_create_goals: false
-    },
-    parent_task: parentContext ? { title: parentContext } : undefined,
-    team_capacity: {},
-    org_chart: []
-  } as any;
+  const agentInput: Parameters<typeof individualAgent>[0] = {
+    taskId: String(task.id),
+    title: String(task.title),
+    description: typeof task.description === "string" ? task.description : null,
+    successCriteria: String(task.success_criteria),
+    assigneeSkills
+  };
+
+  if (typeof task.deadline === "string") {
+    agentInput.deadline = task.deadline;
+  }
+  if (parentContext) {
+    agentInput.parentContext = parentContext;
+  }
 
   if (task.org_id) {
     agentInput.rag = {
@@ -71,7 +71,7 @@ export async function processIndividualAckJob(job: Job<IndividualAckJobData>, ag
     };
   }
 
-  const output = await agentFn(agentInput as any);
+  const output: IndividualAgentOutput = await agentFn(agentInput);
 
   const questions = (output as any).questions ?? [];
   if (questions.length > 0) {
