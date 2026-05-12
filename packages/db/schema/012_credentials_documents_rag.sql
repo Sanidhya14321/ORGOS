@@ -4,7 +4,7 @@ BEGIN;
 -- Stores auto-generated email/password pairs for each position
 CREATE TABLE IF NOT EXISTS public.position_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.orgs(id) ON DELETE CASCADE,
   position_id UUID NOT NULL REFERENCES public.positions(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   password_hash TEXT NOT NULL,
@@ -25,7 +25,7 @@ CREATE INDEX IF NOT EXISTS idx_position_credentials_position_id ON public.positi
 -- Stores documents (PDFs, word docs, etc.) for RAG context injection
 CREATE TABLE IF NOT EXISTS public.org_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.orgs(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL,
   file_content TEXT NOT NULL, -- Raw plaintext (post-OCR/extraction)
   doc_type TEXT NOT NULL DEFAULT 'other' CHECK (doc_type IN (
@@ -58,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_org_documents_doc_type ON public.org_documents(do
 -- Tracks AI-generated org structure suggestions and CEO approvals
 CREATE TABLE IF NOT EXISTS public.org_structure_suggestions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.orgs(id) ON DELETE CASCADE,
   company_size TEXT NOT NULL, -- '1-10', '11-50', '51-200', '201-1000', '1000+'
   position_count INT NOT NULL,
   branch_count INT NOT NULL,
@@ -96,7 +96,7 @@ CREATE POLICY position_credentials_org_policy
   FOR SELECT
   USING (
     org_id IN (
-      SELECT org_id FROM public.user_profiles WHERE id = auth.uid()
+      SELECT org_id FROM public.users WHERE id = auth.uid()
     )
   );
 
@@ -105,7 +105,7 @@ CREATE POLICY org_documents_org_policy
   FOR SELECT
   USING (
     org_id IN (
-      SELECT org_id FROM public.user_profiles WHERE id = auth.uid()
+      SELECT org_id FROM public.users WHERE id = auth.uid()
     )
   );
 
@@ -114,7 +114,7 @@ CREATE POLICY org_structure_suggestions_org_policy
   FOR SELECT
   USING (
     org_id IN (
-      SELECT org_id FROM public.user_profiles WHERE id = auth.uid()
+      SELECT org_id FROM public.users WHERE id = auth.uid()
     )
   );
 
@@ -124,7 +124,7 @@ CREATE POLICY position_credentials_ceo_write
   FOR INSERT
   WITH CHECK (
     org_id IN (
-      SELECT org_id FROM public.user_profiles 
+      SELECT org_id FROM public.users 
       WHERE id = auth.uid() AND role = 'ceo'
     )
   );
@@ -134,7 +134,7 @@ CREATE POLICY position_credentials_ceo_update
   FOR UPDATE
   USING (
     org_id IN (
-      SELECT org_id FROM public.user_profiles 
+      SELECT org_id FROM public.users 
       WHERE id = auth.uid() AND role = 'ceo'
     )
   );
@@ -145,7 +145,7 @@ CREATE POLICY org_documents_write
   FOR INSERT
   WITH CHECK (
     org_id IN (
-      SELECT org_id FROM public.user_profiles 
+      SELECT org_id FROM public.users 
       WHERE id = auth.uid() AND role IN ('ceo', 'cfo', 'manager')
     )
   );
@@ -156,7 +156,7 @@ CREATE POLICY org_structure_suggestions_ceo_write
   FOR INSERT
   WITH CHECK (
     org_id IN (
-      SELECT org_id FROM public.user_profiles 
+      SELECT org_id FROM public.users 
       WHERE id = auth.uid() AND role = 'ceo'
     )
   );
@@ -166,7 +166,7 @@ CREATE POLICY org_structure_suggestions_ceo_update
   FOR UPDATE
   USING (
     org_id IN (
-      SELECT org_id FROM public.user_profiles 
+      SELECT org_id FROM public.users 
       WHERE id = auth.uid() AND role = 'ceo'
     )
   );

@@ -4,12 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo \"DB package build placeholder\"",
-    "test": "echo \"No tests yet\"",
-    "lint": "echo \"No lint config yet\"",
-    "typecheck": "echo \"No TypeScript files yet\"",
+    "build": "npm run lint",
+    "lint": "node ../../scripts/check-legacy-schema-refs.mjs",
+    "typecheck": "node ../../scripts/check-legacy-schema-refs.mjs",
     "seed:demo": "tsx seeds/demo_org.ts",
-    "seed:test": "tsx seeds/test_org_comprehensive.ts"
+    "verify:schema": "node ../../scripts/check-legacy-schema-refs.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

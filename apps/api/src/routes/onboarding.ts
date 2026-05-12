@@ -129,6 +129,17 @@ function suggestOrgStructure(
 }
 
 const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
+  async function ensureOwnedOrg(orgId: string, ownerId: string): Promise<boolean> {
+    const { data: org, error } = await fastify.supabaseService
+      .from("orgs")
+      .select("id")
+      .eq("id", orgId)
+      .eq("created_by", ownerId)
+      .maybeSingle();
+
+    return !error && Boolean(org?.id);
+  }
+
   /**
    * POST /onboarding/structure-suggestion
    * Suggest org structure based on company size/position count
@@ -148,14 +159,8 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can request structure suggestions");
     }
 
-    const { data: org, error: orgError } = await fastify.supabaseService
-      .from("orgs")
-      .select("id")
-      .eq("id", org_id)
-      .eq("created_by", request.user.id)
-      .maybeSingle();
-
-    if (orgError || !org) {
+    const ownsOrg = await ensureOwnedOrg(org_id, request.user.id);
+    if (!ownsOrg) {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found or not owned by you");
     }
 
@@ -210,7 +215,12 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can apply suggestions");
     }
 
-    const { org_id, suggestion_id, approved_assignments } = parsed.data;
+    const { org_id, suggestion_id } = parsed.data;
+
+    const ownsOrg = await ensureOwnedOrg(org_id, request.user.id);
+    if (!ownsOrg) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found");
+    }
 
     // Update suggestion status
     const { error: updateError } = await fastify.supabaseService
@@ -333,14 +343,8 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Verify ownership
-    const { data: org, error: orgError } = await fastify.supabaseService
-      .from("orgs")
-      .select("id")
-      .eq("id", org_id)
-      .eq("created_by", request.user.id)
-      .maybeSingle();
-
-    if (orgError || !org) {
+    const ownsOrg = await ensureOwnedOrg(org_id, request.user.id);
+    if (!ownsOrg) {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found");
     }
 
@@ -358,6 +362,11 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!request.user || request.userRole !== "ceo") {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can reset passwords");
+    }
+
+    const ownsOrg = await ensureOwnedOrg(org_id, request.user.id);
+    if (!ownsOrg) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found");
     }
 
     const result = await resetPositionCredentials(fastify.supabaseService, org_id, position_id);
@@ -396,8 +405,8 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Build CSV
     const csvLines = [
-      "Position Title,Department,Email,Password,Level",
-      ...positions.map((p) => `"${p.position_title}","","${p.email}","${p.plaintext_password}",${p.level}`)
+      "Position Title,Email,Password Reset Required,Level",
+      ...positions.map((p) => `"${p.position_title}","${p.email}",${p.force_password_change ? "yes" : "no"},${p.level}`)
     ];
     const csv = csvLines.join("\n");
 

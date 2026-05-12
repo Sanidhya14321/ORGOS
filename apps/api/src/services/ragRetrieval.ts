@@ -6,6 +6,7 @@
 
 import { SupabaseClient } from "@supabase/supabase-js";
 import { OrgDocument, RAGContextSchema } from "@orgos/shared-types";
+import { decryptText } from "../lib/encryption.js";
 
 /**
  * Extract keywords from a goal/task input
@@ -70,11 +71,16 @@ export async function retrieveRelevantDocuments(
     return [];
   }
 
+  const hydratedDocuments = documents.map((doc) => ({
+    ...doc,
+    file_content: decryptText(doc.file_content) ?? ""
+  })) as OrgDocument[];
+
   // Extract keywords from goal input
   const inputKeywords = extractKeywords(goalInput);
 
   // Score all documents
-  const scored = documents.map((doc) => {
+  const scored = hydratedDocuments.map((doc) => {
     const docTopics = (doc.key_topics as string[]) || [];
     const docKeywords = new Set(
       docTopics.flatMap((t: string) => Array.from(extractKeywords(t)))
@@ -175,7 +181,10 @@ export async function getOrgDocuments(
     throw new Error(`Failed to fetch documents: ${error.message}`);
   }
 
-  return (data || []) as OrgDocument[];
+  return ((data || []) as OrgDocument[]).map((doc) => ({
+    ...doc,
+    file_content: decryptText(doc.file_content) ?? ""
+  }));
 }
 
 /**

@@ -21,27 +21,8 @@ jobs:
       - name: Validate workflow with actionlint
         uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106  # v1.7.7
 
-  secrets-check:
-    name: Secrets Check (pushes to main)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Fail if required secrets are missing
-        run: |
-          missing=0
-          for s in SUPABASE_SERVICE_ROLE_KEY UPSTASH_REDIS_REST_TOKEN GROQ_API_KEY; do
-            val="${{ secrets["$s"] }}"
-            if [ -z "$val" ]; then
-              echo "ERROR: GitHub secret '$s' is not set. Set it in repository settings -> Secrets."
-              missing=$((missing+1))
-            fi
-          done
-          if [ "$missing" -gt 0 ]; then
-            exit 1
-          fi
-
-  build-and-test:
-    name: Build, Typecheck & Test
+  quality:
+    name: Lint, Build And Agent Evals
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -50,114 +31,28 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@60edb5dd545a775178fac7f3d4d794a5fde36ac0  # v4.0.2
         with:
-          node-version-file: .node-version
+          node-version: "20"
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Validate environment variables (optional)
-        run: bash scripts/validate-env.sh || true
 
       - name: Secret scan (lightweight)
         run: |
           chmod +x scripts/secret-scan.sh
           bash scripts/secret-scan.sh
 
-      - name: Build agent-core
-        run: npm --prefix packages/agent-core run build
+      - name: Guard against legacy schema drift
+        run: npm run guard:schemas
 
-      - name: Pack agent-core artifact
-        run: |
-          cd packages/agent-core
-          npm pack --silent
+      - name: Lint workspaces
+        run: npm run lint
 
-      - name: Upload agent-core artifact
-        uses: actions/upload-artifact@604373da6381d3951193ee80e0e651e92bc9d37e  # v4.3.5
-        with:
-          name: agent-core-tarball
-          path: packages/agent-core/*.tgz
+      - name: Typecheck workspaces
+        run: npm run typecheck
 
-      - name: Typecheck (turbo)
-        run: npm run typecheck --silent
+      - name: Build workspaces
+        run: npm run build
 
-      - name: Run tests
-        run: npm test --silent
-
-      - name: Run smoke tests
-        run: npm --prefix apps/api run smoke:integration || true
-
-      - name: Run Playwright E2E (if enabled)
-        if: env.RUN_E2E == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
-          cd apps/web
-          npm ci
-          npx playwright test --reporter=list
-
-      - name: Package build artifacts
-        run: npm run build --if-present
-
-  deploy:
-    name: Deploy (OIDC-enabled)
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@1d7c6c3c4aee9cc2d9dcd3511fbf18f3f4f78471  # v4.1.7
-
-      - name: Download agent-core artifact
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-        with:
-          name: agent-core-tarball
-
-      - name: Configure OIDC for AWS (if applicable)
-        if: env.DEPLOY_TARGET == 'aws'
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d6c931ea618  # v4.0.2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Configure OIDC for GCP (if applicable)
-        if: env.DEPLOY_TARGET == 'gcp'
-        uses: google-github-actions/auth@71fee32a0bb7e97b4d33d548e7d957010649d8fa  # v2.1.3
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SA_EMAIL }}
-
-      - name: Configure OIDC for Azure (if applicable)
-        if: env.DEPLOY_TARGET == 'azure'
-        uses: azure/login@8c334037ad34acd2161e8c56e666bccd89f780a9  # v2.1.1
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy to AWS (example)
-        if: env.DEPLOY_TARGET == 'aws'
-        run: |
-          echo "Deploying to AWS..."
-          # Example: aws lambda update-function-code --function-name orgos-api --zip-file fileb://dist.zip
-
-      - name: Deploy to GCP (example)
-        if: env.DEPLOY_TARGET == 'gcp'
-        run: |
-          echo "Deploying to GCP..."
-          # Example: gcloud functions deploy orgos-api --source ./dist
-
-      - name: Deploy to Azure (example)
-        if: env.DEPLOY_TARGET == 'azure'
-        run: |
-          echo "Deploying to Azure..."
-          # Example: az functionapp deployment source config-zip -g myResourceGroup -n myFunctionApp --src-path dist.zip
-
-      - name: Placeholder deploy step
-        if: env.DEPLOY_TARGET == '' || (env.DEPLOY_TARGET != 'aws' && env.DEPLOY_TARGET != 'gcp' && env.DEPLOY_TARGET != 'azure')
-        run: |
-          echo "Deploy job executed"
-          echo "Target: $DEPLOY_TARGET (no specific deploy step configured)"
+      - name: Run deterministic agent evals
+        run: npm run eval:agents

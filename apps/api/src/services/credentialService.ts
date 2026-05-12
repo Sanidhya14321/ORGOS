@@ -59,7 +59,8 @@ export async function createPositionCredentials(
       email,
       password_hash: hash,
       force_password_change: true,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     })
     .select("id")
     .single();
@@ -121,7 +122,10 @@ export async function resetPositionCredentials(
     .update({
       password_hash: hash,
       reset_at: new Date().toISOString(),
-      force_password_change: true
+      first_login_at: null,
+      force_password_change: true,
+      plaintext_password: null,
+      updated_at: new Date().toISOString()
     })
     .eq("org_id", orgId)
     .eq("position_id", positionId);
@@ -147,8 +151,8 @@ export async function exportOrgCredentials(
   position_id: string;
   position_title: string;
   email: string;
-  plaintext_password: string;
   level: number;
+  force_password_change: boolean;
 }>> {
   // Fetch all positions with their credentials
   const { data: positions, error: posError } = await supabase
@@ -165,8 +169,8 @@ export async function exportOrgCredentials(
     position_id: string;
     position_title: string;
     email: string;
-    plaintext_password: string;
     level: number;
+    force_password_change: boolean;
   }> = [];
 
   for (const position of positions || []) {
@@ -176,8 +180,8 @@ export async function exportOrgCredentials(
         position_id: position.id,
         position_title: position.name,
         email: cred.email,
-        plaintext_password: cred.plaintext_password || "(Already viewed - password expired)",
-        level: position.level
+        level: position.level,
+        force_password_change: cred.force_password_change
       });
     }
   }

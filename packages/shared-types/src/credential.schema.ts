@@ -35,7 +35,8 @@ export const CredentialDisplaySchema = z.object({
   position_id: z.string().uuid(),
   position_title: z.string(),
   email: z.string().email(),
-  plaintext_password: z.string(), // Only shown once
+  plaintext_password: z.string().nullable().optional(), // Only returned on create/reset flows
+  force_password_change: z.boolean().default(true),
   created_at: z.string().datetime(),
 });
 
@@ -52,8 +53,8 @@ export const BulkCredentialExportSchema = z.object({
       position_title: z.string(),
       department: z.string().optional(),
       email: z.string().email(),
-      plaintext_password: z.string(),
       level: z.number().int(),
+      force_password_change: z.boolean().default(true),
     })
   ),
   exported_at: z.string().datetime(),

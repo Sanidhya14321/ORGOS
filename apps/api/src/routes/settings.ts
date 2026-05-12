@@ -214,6 +214,19 @@ const settingsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
+      if (!request.user.email) {
+        return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Missing authenticated email");
+      }
+
+      const credentialCheck = await fastify.supabaseAnon.auth.signInWithPassword({
+        email: request.user.email,
+        password: parsed.data.current_password
+      });
+
+      if (credentialCheck.error || !credentialCheck.data.user) {
+        return sendApiError(reply, request, 401, "UNAUTHORIZED", "Current password is incorrect");
+      }
+
       // Use Supabase Auth Admin API to update password
       const { error } = await fastify.supabaseService.auth.admin.updateUserById(
         request.user.id,

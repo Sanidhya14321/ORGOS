@@ -29,8 +29,8 @@ function userRoom(userId: string): string {
   return `user:${userId}`;
 }
 
-function roleRoom(role: Role): string {
-  return `role:${role}`;
+function roleRoom(role: Role, orgId: string): string {
+  return `org:${orgId}:role:${role}`;
 }
 
 function orgRoom(orgId: string): string {
@@ -111,11 +111,11 @@ export function initializeNotifier(fastify: FastifyInstance): void {
     );
 
     socket.join(userRoom(userId));
-    if (role) {
-      socket.join(roleRoom(role));
-    }
     if (orgId) {
       socket.join(orgRoom(orgId));
+      if (role) {
+        socket.join(roleRoom(role, orgId));
+      }
     }
 
     socket.on("disconnect", () => {
@@ -132,12 +132,12 @@ export function emitToUser(userId: string, event: string, payload: unknown): voi
   server.to(userRoom(userId)).emit(event, payload);
 }
 
-export function emitToRole(role: Role, event: string, payload: unknown): void {
+export function emitToRole(role: Role, event: string, payload: unknown, orgId: string | null): void {
   const server = requireIo();
-  if (!server) {
+  if (!server || !orgId) {
     return;
   }
-  server.to(roleRoom(role)).emit(event, payload);
+  server.to(roleRoom(role, orgId)).emit(event, payload);
 }
 
 export function emitToOrg(orgId: string, event: string, payload: unknown): void {
@@ -205,13 +205,13 @@ export async function emitTaskReportSubmittedCascade(taskId: string, payload: un
     cursor = (taskRow.parent_id as string | null) ?? null;
   }
 
-  emitToRole("ceo", "task:report_submitted", payload);
-  emitToRole("cfo", "task:report_submitted", payload);
+  emitToRole("ceo", "task:report_submitted", payload, orgId);
+  emitToRole("cfo", "task:report_submitted", payload, orgId);
 }
 
-export function emitGoalDecomposed(payload: unknown): void {
-  emitToRole("ceo", "goal:decomposed", payload);
-  emitToRole("cfo", "goal:decomposed", payload);
+export function emitGoalDecomposed(orgId: string | null, payload: unknown): void {
+  emitToRole("ceo", "goal:decomposed", payload, orgId);
+  emitToRole("cfo", "goal:decomposed", payload, orgId);
 }
 
 export function emitAgentExecuting(taskManagerId: string | null, payload: unknown): void {
@@ -220,9 +220,9 @@ export function emitAgentExecuting(taskManagerId: string | null, payload: unknow
   }
 }
 
-export function emitAgentEscalated(taskManagerId: string | null, payload: unknown): void {
+export function emitAgentEscalated(taskManagerId: string | null, orgId: string | null, payload: unknown): void {
   if (taskManagerId) {
     emitToUser(taskManagerId, "agent:escalated", payload);
   }
-  emitToRole("ceo", "agent:escalated", payload);
+  emitToRole("ceo", "agent:escalated", payload, orgId);
 }

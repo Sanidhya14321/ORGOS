@@ -6,6 +6,7 @@ import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { getIngestQueue, getSynthesizeQueue } from "../queue/index.js";
 import { emitTaskReportSubmittedCascade } from "../services/notifier.js";
+import { getTaskWithScope } from "../services/taskAccess.js";
 
 const ReportCreateSchema = ReportSchema.omit({ id: true }).extend({
   id: z.string().uuid().optional(),
@@ -84,11 +85,12 @@ async function canSubmitReport(
 
 async function collectSubtreeTaskIds(
   fastify: Parameters<FastifyPluginAsync>[0],
-  rootTaskId: string
+  rootTaskId: string,
+  rootOrgId: string | null
 ): Promise<string[]> {
   const { data: allTasks, error } = await fastify.supabaseService
     .from("tasks")
-    .select("id, parent_id");
+    .select("id, parent_id, org_id");
 
   if (error) {
     if (isSchemaCacheUnavailable(error)) {
@@ -99,6 +101,9 @@ async function collectSubtreeTaskIds(
 
   const byParent = new Map<string, string[]>();
   for (const task of allTasks ?? []) {
+    if (rootOrgId && task.org_id !== rootOrgId) {
+      continue;
+    }
     const parentId = (task.parent_id as string | null) ?? "ROOT";
     const list = byParent.get(parentId) ?? [];
     list.push(task.id as string);
@@ -255,9 +260,29 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid task id", { field: "taskId" });
     }
 
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scopedTask = await getTaskWithScope(fastify, params.data.taskId, userId, request.userRole);
+    if (scopedTask.reason === "unavailable") {
+      return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+    }
+    if (scopedTask.reason === "not_found" || !scopedTask.task) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Task not found");
+    }
+    if (scopedTask.reason !== "ok") {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Not allowed to access reports for this task");
+    }
+
     let subtreeIds: string[];
     try {
-      subtreeIds = await collectSubtreeTaskIds(fastify, params.data.taskId);
+      subtreeIds = await collectSubtreeTaskIds(
+        fastify,
+        params.data.taskId,
+        (scopedTask.task.org_id as string | null | undefined) ?? null
+      );
     } catch {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to fetch reports");
     }
@@ -285,6 +310,21 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const taskId = params.data.taskId;
+    const userId = request.user?.id;
+    if (!userId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scopedTask = await getTaskWithScope(fastify, taskId, userId, request.userRole);
+    if (scopedTask.reason === "unavailable") {
+      return sendApiError(reply, request, 503, "SERVICE_UNAVAILABLE", "Task/report tables are not available yet; apply DB migrations first");
+    }
+    if (scopedTask.reason === "not_found" || !scopedTask.task) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Task not found");
+    }
+    if (scopedTask.reason !== "ok") {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Not allowed to access reports for this task");
+    }
 
     const taskResult = await fastify.supabaseService
       .from("tasks")

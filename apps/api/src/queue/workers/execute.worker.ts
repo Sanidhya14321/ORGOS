@@ -221,7 +221,7 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
     });
 
     console.warn("agent escalation required", { taskId: task.id, confidence: report.confidence });
-    emitAgentEscalated(managerId, {
+    emitAgentEscalated(managerId, (task.org_id as string | null | undefined) ?? null, {
       taskId: task.id,
       goalId: task.goal_id,
       confidence: report.confidence,

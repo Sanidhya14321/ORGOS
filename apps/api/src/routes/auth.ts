@@ -58,7 +58,8 @@ const SignupCeoBodySchema = z.object({
 });
 
 const VerifyBodySchema = z.object({
-  email: z.string().trim().email()
+  tokenHash: z.string().trim().min(1),
+  type: z.enum(["signup", "invite", "magiclink", "recovery", "email_change", "email"])
 });
 
 const CompleteProfileBodySchema = z.object({
@@ -284,14 +285,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     
     // 2. Create organization record
     const orgResult = await fastify.supabaseService
-      .from("organizations")
+      .from("orgs")
       .insert({
         name: companyName,
-        industry,
-        company_size: companySize,
-        branch_count: branchCount,
-        created_by: createdUser.id,
-        metadata: { signup_source: "web", signup_date: new Date().toISOString() }
+        domain: null,
+        created_by: createdUser.id
       })
       .select("id")
       .single();
@@ -320,8 +318,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     // 4. Update user profile with org_id
     const updateProfileResult = await fastify.supabaseService
-      .from("user_profiles")
-      .update({ org_id: orgId })
+      .from("users")
+      .update({
+        org_id: orgId,
+        department: "Executive",
+        role: "ceo",
+        status: "pending"
+      })
       .eq("id", createdUser.id);
 
     if (updateProfileResult.error) {
@@ -345,46 +348,44 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const authUser = request.user;
-    const requestedEmail = parsed.data.email.toLowerCase();
-    let resolvedRole = authUser?.user_metadata?.role as string | undefined;
-    if (authUser?.email && authUser.email.toLowerCase() !== requestedEmail) {
-      return sendApiError(reply, request, 403, "FORBIDDEN", "Email does not match authenticated user");
+    const verifyResult = await fastify.supabaseAnon.auth.verifyOtp({
+      token_hash: parsed.data.tokenHash,
+      type: parsed.data.type
+    });
+
+    if (verifyResult.error || !verifyResult.data.user) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Invalid or expired verification link");
     }
 
-    let userId = authUser?.id ?? null;
-    if (!userId) {
-      const existingUser = await fastify.supabaseService
-        .from("users")
-        .select("id, role")
-        .ilike("email", requestedEmail)
-        .maybeSingle();
+    const authUser = verifyResult.data.user;
+    const resolvedProfile = await fastify.supabaseService
+      .from("users")
+      .select("role")
+      .eq("id", authUser.id)
+      .maybeSingle();
 
-      if (existingUser.error) {
-        request.log.warn({ err: existingUser.error }, "Unable to resolve user during verify");
-      }
-
-      if (!existingUser.data?.id) {
-        return sendApiError(reply, request, 404, "NOT_FOUND", "No account found for this email");
-      }
-
-      userId = existingUser.data.id;
-      resolvedRole = existingUser.data.role as string | undefined;
-    }
+    const resolvedRole = typeof resolvedProfile.data?.role === "string"
+      ? resolvedProfile.data.role
+      : typeof authUser.user_metadata?.role === "string"
+        ? authUser.user_metadata.role
+        : undefined;
 
     const nextStatus = resolvedRole === "ceo" || resolvedRole === "cfo" ? "active" : "pending";
 
     const { error } = await fastify.supabaseService
       .from("users")
       .update({ email_verified: true, status: nextStatus })
-      .eq("id", userId);
+      .eq("id", authUser.id);
 
     // Keep this endpoint best-effort for compatibility if migration is not applied yet.
     if (error) {
       request.log.warn({ err: error }, "Unable to persist verify state");
     }
 
-    return reply.status(204).send();
+    return reply.send({
+      verified: true,
+      email: authUser.email ?? null
+    });
   });
 
   fastify.post("/auth/complete-profile", async (request, reply) => {
@@ -562,7 +563,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const secureCookie = fastify.env.NODE_ENV === "production";
-    reply.header("Set-Cookie", buildMfaCookie(secureCookie));
+    const currentToken = getCurrentAccessToken(request as { headers: Record<string, unknown> });
+    if (!currentToken) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing session token");
+    }
+    reply.header("Set-Cookie", buildMfaCookie(currentToken, fastify.env.SUPABASE_SERVICE_ROLE_KEY, secureCookie));
 
     return reply.send({ enrolled: true });
   });
@@ -603,7 +608,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const secureCookie = fastify.env.NODE_ENV === "production";
-    reply.header("Set-Cookie", buildMfaCookie(secureCookie));
+    const currentToken = getCurrentAccessToken(request as { headers: Record<string, unknown> });
+    if (!currentToken) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing session token");
+    }
+    reply.header("Set-Cookie", buildMfaCookie(currentToken, fastify.env.SUPABASE_SERVICE_ROLE_KEY, secureCookie));
 
     return reply.send({ verified: true, role: profile.data.role });
   });

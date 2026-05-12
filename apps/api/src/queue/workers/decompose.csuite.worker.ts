@@ -85,7 +85,7 @@ export async function processCsuiteDecomposeJob(job: Job<CsuiteDecomposeJobData>
       });
     }
 
-    emitGoalDecomposed({ goalId, taskCount: directives.length, tier: "csuite" });
+    emitGoalDecomposed((goal.org_id as string | null | undefined) ?? null, { goalId, taskCount: directives.length, tier: "csuite" });
     await supabase
       .from("goals")
       .update({

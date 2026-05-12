@@ -4,10 +4,10 @@
  */
 
 import type { FastifyPluginAsync } from "fastify";
-import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
-import { DocumentUploadRequestSchema, DocumentListResponseSchema } from "@orgos/shared-types";
+import { DocumentUploadRequestSchema } from "@orgos/shared-types";
 import { indexDocument, getOrgDocuments, archiveDocument } from "../services/ragRetrieval.js";
+import { decryptText, encryptText } from "../lib/encryption.js";
 
 /**
  * Simple plaintext extraction from common formats
@@ -17,6 +17,15 @@ function extractTextFromFile(buffer: Buffer, mimeType: string): string {
   // For now, assume pre-extracted text passed in request
   // Production: parse PDF/Word/etc. and extract text
   return buffer.toString("utf-8");
+}
+
+const MAX_DOCUMENT_CHARS = 200_000;
+const MAX_FILENAME_LENGTH = 255;
+
+function sanitizeFileName(input: string): string {
+  const trimmed = input.trim();
+  const normalized = trimmed.replace(/[^\w.\- ()]/g, "_");
+  return normalized.slice(0, MAX_FILENAME_LENGTH);
 }
 
 const documentsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -32,23 +41,33 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can upload documents");
     }
 
-    // Get org_id and doc_type from body
-    const bodyData = request.body as { org_id?: string; doc_type?: string };
-    const orgId = bodyData?.org_id;
-    const docType = bodyData?.doc_type || "other";
-
-    if (!orgId) {
-      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "org_id required in body");
+    const parsed = DocumentUploadRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid document upload payload", {
+        details: parsed.error.flatten()
+      });
     }
 
-    const validTypes = ["handbook", "policy", "structure", "financial", "process", "other"];
-    if (!validTypes.includes(docType)) {
-      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid doc_type");
+    const orgId = parsed.data.org_id;
+    const docType = parsed.data.doc_type;
+    const fileName = sanitizeFileName(parsed.data.file_name);
+    const extractedText = extractTextFromFile(Buffer.from(parsed.data.file_content, "utf8"), "text/plain").trim();
+
+    if (!fileName) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "A valid file name is required");
+    }
+
+    if (extractedText.length === 0) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Document content cannot be empty");
+    }
+
+    if (extractedText.length > MAX_DOCUMENT_CHARS) {
+      return sendApiError(reply, request, 413, "VALIDATION_ERROR", "Document content exceeds the supported size limit");
     }
 
     // Verify ownership
     const { data: org, error: orgError } = await fastify.supabaseService
-      .from("organizations")
+      .from("orgs")
       .select("id")
       .eq("id", orgId)
       .eq("created_by", request.user.id)
@@ -58,28 +77,16 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found");
     }
 
-    // For multipart file handling, we'll assume the file content is passed as a string in the body
-    // In production, integrate with @fastify/multipart for true file uploads
-    const { fileContent, fileName, mimeType } = bodyData as {
-      fileContent?: string;
-      fileName?: string;
-      mimeType?: string;
-    };
-
-    if (!fileContent || !fileName) {
-      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "fileContent and fileName required");
-    }
-
     // Store document
     const { data: doc, error: docError } = await fastify.supabaseService
       .from("org_documents")
       .insert({
         org_id: orgId,
         file_name: fileName,
-        file_content: fileContent,
+        file_content: encryptText(extractedText),
         doc_type: docType,
-        file_size: fileContent.length,
-        mime_type: mimeType || "text/plain",
+        file_size: extractedText.length,
+        mime_type: "text/plain",
         is_indexed: false,
         uploaded_by: request.user.id,
         uploaded_at: new Date().toISOString(),
@@ -94,7 +101,7 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Queue indexing job (async)
     try {
-      await indexDocument(fastify.supabaseService, doc.id, fileContent);
+      await indexDocument(fastify.supabaseService, doc.id, extractedText);
     } catch (e) {
       request.log.warn({ err: e }, "Failed to index document");
     }
@@ -166,7 +173,7 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
 
     // Verify ownership
     const { data: org, error: orgError } = await fastify.supabaseService
-      .from("organizations")
+      .from("orgs")
       .select("id")
       .eq("id", orgId)
       .eq("created_by", request.user.id)
@@ -220,7 +227,7 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       id: doc.id,
       file_name: doc.file_name,
       doc_type: doc.doc_type,
-      file_content: doc.file_content,
+      file_content: decryptText(doc.file_content) ?? "",
       key_topics: doc.key_topics,
       page_count: doc.page_count,
       uploaded_at: doc.uploaded_at

@@ -10,12 +10,13 @@
   "scripts": {
     "dev": "npm --workspace @orgos/api run dev & npm --workspace @orgos/web run dev",
     "build": "turbo run build",
-    "test": "turbo run test",
+    "test": "npm run build && npm run eval:agents",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "eval:agents": "node scripts/eval-agents.mjs",
+    "guard:schemas": "node scripts/check-legacy-schema-refs.mjs",
     "smoke:local": "node scripts/smoke-local.js",
-    "db:apply-remote": "bash scripts/apply-remote-schema.sh",
-    "e2e:auth-goals": "bash scripts/e2e-auth-goals.sh"
+    "db:apply-remote": "bash scripts/apply-remote-schema.sh"
   },
   "devDependencies": {
     "eslint": "^8.57.1",

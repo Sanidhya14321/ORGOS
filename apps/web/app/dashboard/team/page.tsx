@@ -30,8 +30,8 @@ interface PositionCredential {
   position_id: string;
   position_title: string;
   email: string;
-  plaintext_password: string;
   level: number;
+  force_password_change: boolean;
 }
 
 export default function TeamPage() {
@@ -61,6 +61,7 @@ export default function TeamPage() {
     enabled: !!meQuery.data?.org_id && !isCEO
   });
 
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetPositionId, setResetPositionId] = useState<string | null>(null);
@@ -75,8 +76,16 @@ export default function TeamPage() {
         method: 'POST',
         body: JSON.stringify({})
       }),
-    onSuccess: () => {
-      toast.success('Password reset. New password is displayed below.');
+    onSuccess: (data, positionId) => {
+      setRevealedPasswords((previous) => ({
+        ...previous,
+        [positionId]: data.plaintext_password
+      }));
+      setShowPassword((previous) => ({
+        ...previous,
+        [positionId]: true
+      }));
+      toast.success('Password reset. The new password is shown once below.');
       void queryClient.invalidateQueries({ queryKey: ['positions-credentials'] });
       setResetDialogOpen(false);
       setResetPositionId(null);
@@ -121,7 +130,7 @@ export default function TeamPage() {
             }}
           >
             <Download className="mr-2 h-4 w-4" />
-            Export CSV
+            Export Access Sheet
           </Button>
         </div>
 
@@ -162,11 +171,11 @@ export default function TeamPage() {
                         </Button>
                       </div>
 
-                      {cred.plaintext_password && cred.plaintext_password !== "(Already viewed - password expired)" ? (
+                      {revealedPasswords[cred.position_id] ? (
                         <div className="flex items-center gap-2">
                           <Lock className="h-4 w-4 text-warning" />
                           <code className="text-sm bg-warning-subtle px-2 py-1 rounded font-mono text-text-primary">
-                            {showPassword[cred.position_id] ? cred.plaintext_password : '••••••••••••'}
+                            {showPassword[cred.position_id] ? revealedPasswords[cred.position_id] : '••••••••••••'}
                           </code>
                           <Button
                             size="sm"
@@ -179,19 +188,24 @@ export default function TeamPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => copyToClipboard(cred.plaintext_password, cred.email)}
+                            onClick={() => copyToClipboard(revealedPasswords[cred.position_id]!, cred.email)}
                             className="h-6 w-6 p-0"
                           >
                             {copiedEmail === cred.email ? '✓' : '📋'}
                           </Button>
-                          <span className="text-xs text-warning ml-2">⚠️ Shown once - share immediately</span>
+                          <span className="text-xs text-warning ml-2">Shown once for immediate handoff</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
                           <Lock className="h-4 w-4 text-text-secondary" />
-                          <span className="text-sm text-text-secondary italic">Password already viewed - request reset to share again</span>
+                          <span className="text-sm text-text-secondary italic">
+                            Passwords are never re-exported. Use reset when you need to issue a new one.
+                          </span>
                         </div>
                       )}
+                      <p className="text-xs text-text-secondary">
+                        Password reset required: {cred.force_password_change ? 'Yes' : 'No'}
+                      </p>
                     </div>
                   </div>
 

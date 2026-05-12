@@ -17,7 +17,7 @@ export function middleware(request: NextRequest) {
 
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const role = request.cookies.get(ROLE_COOKIE)?.value;
-  const mfaVerified = request.cookies.get(MFA_VERIFIED_COOKIE)?.value === "1";
+  const mfaVerified = Boolean(request.cookies.get(MFA_VERIFIED_COOKIE)?.value);
   const authEntryPages = new Set(["/login", "/register", "/verify"]);
 
   if (authEntryPages.has(pathname) && accessToken) {

@@ -1,7 +1,7 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync } from "fastify";
 import { sendApiError } from "../lib/errors.js";
-import { hashSessionToken, MFA_VERIFIED_COOKIE, getRoleSessionTimeoutMs } from "../lib/session-security.js";
+import { hashSessionToken, isMfaCookieValid, MFA_VERIFIED_COOKIE, getRoleSessionTimeoutMs } from "../lib/session-security.js";
 import { isLocalDevelopmentEnv } from "../config/env.js";
 
 const PUBLIC_ROUTES = new Set([
@@ -140,7 +140,8 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
     const mfaEnabled = profile.data?.mfa_enabled === true;
     if (!localDevelopment && (request.userRole === "ceo" || request.userRole === "cfo") && mfaEnabled && !isMfaBypassPath(path)) {
-      const mfaVerified = extractCookieValue(cookieHeader, MFA_VERIFIED_COOKIE) === "1";
+      const mfaCookieValue = extractCookieValue(cookieHeader, MFA_VERIFIED_COOKIE);
+      const mfaVerified = isMfaCookieValid(mfaCookieValue, token, fastify.env.SUPABASE_SERVICE_ROLE_KEY);
       if (!mfaVerified) {
         return sendApiError(reply, request, 403, "MFA_REQUIRED", "MFA verification required", {
           setupPath: "/setup-mfa"

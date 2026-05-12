@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: light;
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
   --bg-base: #f4f0e8;
   --bg-surface: #fcfbf8;
   --bg-elevated: #f7f2ea;

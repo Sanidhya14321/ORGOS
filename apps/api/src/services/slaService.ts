@@ -3,6 +3,7 @@ import { emitToRole, emitToUser } from "./notifier.js";
 
 type SlaTaskRow = {
   id: string;
+  org_id: string | null;
   assigned_to: string | null;
   assigned_role: "ceo" | "cfo" | "manager" | "worker";
   sla_deadline: string | null;
@@ -54,11 +55,12 @@ async function persistSlaStatus(
 
 async function appendAuditLog(
   fastify: FastifyInstance,
+  orgId: string | null,
   taskId: string,
   action: "sla_at_risk" | "sla_breached"
 ): Promise<void> {
   const { error } = await fastify.supabaseService.from("audit_log").insert({
-    org_id: null,
+    org_id: orgId,
     actor_id: null,
     action,
     entity: "task",
@@ -77,7 +79,7 @@ async function evaluateSlaOnce(
 ): Promise<void> {
   const { data, error } = await fastify.supabaseService
     .from("tasks")
-    .select("id, assigned_to, assigned_role, sla_deadline, sla_status, status")
+    .select("id, org_id, assigned_to, assigned_role, sla_deadline, sla_status, status")
     .in("status", ACTIVE_STATUSES)
     .not("sla_deadline", "is", null);
 
@@ -113,7 +115,7 @@ async function evaluateSlaOnce(
           status: nextStatus
         });
       }
-      await appendAuditLog(fastify, task.id, "sla_at_risk");
+      await appendAuditLog(fastify, task.org_id, task.id, "sla_at_risk");
     }
 
     if (nextStatus === "breached") {
@@ -123,9 +125,9 @@ async function evaluateSlaOnce(
           status: nextStatus
         });
       }
-      emitToRole("ceo", "task:sla_breached", { taskId: task.id, status: nextStatus });
-      emitToRole("cfo", "task:sla_breached", { taskId: task.id, status: nextStatus });
-      await appendAuditLog(fastify, task.id, "sla_breached");
+      emitToRole("ceo", "task:sla_breached", { taskId: task.id, status: nextStatus }, task.org_id);
+      emitToRole("cfo", "task:sla_breached", { taskId: task.id, status: nextStatus }, task.org_id);
+      await appendAuditLog(fastify, task.org_id, task.id, "sla_breached");
     }
   }
 }
