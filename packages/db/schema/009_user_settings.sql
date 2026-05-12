@@ -40,13 +40,20 @@ CREATE INDEX IF NOT EXISTS idx_user_api_keys_key_hash ON public.user_api_keys(ke
 ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_api_keys ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS user_preferences_select ON public.user_preferences;
 CREATE POLICY user_preferences_select ON public.user_preferences FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS user_preferences_insert ON public.user_preferences;
 CREATE POLICY user_preferences_insert ON public.user_preferences FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS user_preferences_update ON public.user_preferences;
 CREATE POLICY user_preferences_update ON public.user_preferences FOR UPDATE USING (user_id = auth.uid());
+DROP POLICY IF EXISTS user_preferences_delete ON public.user_preferences;
 CREATE POLICY user_preferences_delete ON public.user_preferences FOR DELETE USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS user_api_keys_select ON public.user_api_keys;
 CREATE POLICY user_api_keys_select ON public.user_api_keys FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS user_api_keys_insert ON public.user_api_keys;
 CREATE POLICY user_api_keys_insert ON public.user_api_keys FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS user_api_keys_delete ON public.user_api_keys;
 CREATE POLICY user_api_keys_delete ON public.user_api_keys FOR DELETE USING (user_id = auth.uid());
 
 COMMIT;

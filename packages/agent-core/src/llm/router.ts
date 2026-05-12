@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { GeminiProvider } from "./gemini.js";
 import { AllProvidersExhaustedError } from "./errors.js";
@@ -33,20 +34,71 @@ type RoutingPayload = {
 };
 
 function buildNonAssignFallbackContent(context?: LLMLogContext): string {
+  const fallbackDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   if (context?.action === "decompose") {
     if (context.agentType === "ceo_agent") {
       return JSON.stringify({
         kpi: "Fallback planning path activated",
         feasibility: "medium",
         confidence: 0.4,
-        summary: "LLM providers unavailable; returning a safe executive fallback.",
-        sub_directives: [],
-        escalate: true
+        summary: "LLM providers unavailable; returning a safe executive fallback plan.",
+        sub_directives: [
+          {
+            assigned_role: "cfo",
+            directive: "Validate budget, risk exposure, and financial readiness for the requested goal.",
+            deadline: fallbackDeadline
+          },
+          {
+            assigned_role: "manager",
+            directive: "Coordinate operations and delivery planning for the requested goal.",
+            deadline: fallbackDeadline
+          },
+          {
+            assigned_role: "manager",
+            directive: "Prepare engineering and systems readiness work for the requested goal.",
+            deadline: fallbackDeadline
+          },
+          {
+            assigned_role: "worker",
+            directive: "Assemble frontline execution checklists, evidence capture, and status reporting for the requested goal.",
+            deadline: fallbackDeadline
+          }
+        ],
+        escalate: false
       });
     }
 
     if (context.agentType === "manager_agent") {
-      return JSON.stringify([]);
+      return JSON.stringify([
+        {
+          id: crypto.randomUUID(),
+          goal_id: context.goalId ?? crypto.randomUUID(),
+          parent_id: null,
+          depth: 1,
+          title: "Create execution checklist",
+          description: "Document the concrete steps, owners, and handoffs required to execute the directive.",
+          success_criteria: "A complete execution checklist is documented and ready for use by the team.",
+          assigned_to: null,
+          assigned_role: "worker",
+          is_agent_task: false,
+          status: "pending",
+          deadline: fallbackDeadline
+        },
+        {
+          id: crypto.randomUUID(),
+          goal_id: context.goalId ?? crypto.randomUUID(),
+          parent_id: null,
+          depth: 1,
+          title: "Collect readiness evidence",
+          description: "Gather the status inputs, blockers, and supporting evidence needed to report progress on the directive.",
+          success_criteria: "Status evidence and blockers are collected and attached for manager review.",
+          assigned_to: null,
+          assigned_role: "worker",
+          is_agent_task: false,
+          status: "pending",
+          deadline: fallbackDeadline
+        }
+      ]);
     }
   }
 

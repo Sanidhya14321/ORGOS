@@ -38,6 +38,7 @@ const DELETION_ORDER = [
   "task_attachments",
   "task_comments",
   "routing_suggestions",
+  "embeddings",
   "org_document_sections",
   "org_documents",
   "position_credentials",
@@ -87,6 +88,29 @@ function getProjectRef(supabaseUrl) {
   return match[1];
 }
 
+async function sleep(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry(label, fn, attempts = 5) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        break;
+      }
+      console.warn(`${label} failed on attempt ${attempt}/${attempts}; retrying...`);
+      await sleep(1000 * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
 async function verifySchemaMarkers(supabase) {
   for (const probe of SCHEMA_PROBES) {
     const result = await supabase.from(probe.table).select(probe.columns).limit(1);
@@ -110,10 +134,16 @@ async function purgeAuthUsers(supabase) {
   let deletedCount = 0;
 
   while (true) {
-    const page = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (page.error) {
-      throw new Error(`Failed to list auth users: ${page.error.message}`);
-    }
+    const page = await withRetry(
+      "list auth users",
+      async () => {
+        const result = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (result.error) {
+          throw new Error(`Failed to list auth users: ${result.error.message}`);
+        }
+        return result;
+      }
+    );
 
     const users = page.data.users ?? [];
     if (users.length === 0) {
@@ -121,10 +151,12 @@ async function purgeAuthUsers(supabase) {
     }
 
     for (const user of users) {
-      const deletion = await supabase.auth.admin.deleteUser(user.id);
-      if (deletion.error) {
-        throw new Error(`Failed to delete auth user ${user.id}: ${deletion.error.message}`);
-      }
+      await withRetry(`delete auth user ${user.id}`, async () => {
+        const deletion = await supabase.auth.admin.deleteUser(user.id);
+        if (deletion.error) {
+          throw new Error(`Failed to delete auth user ${user.id}: ${deletion.error.message}`);
+        }
+      });
       deletedCount += 1;
     }
   }
@@ -169,10 +201,16 @@ async function main() {
     assertTableEmpty(supabase, "users")
   ]);
 
-  const authPage = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
-  if (authPage.error) {
-    throw new Error(`Failed to verify auth users: ${authPage.error.message}`);
-  }
+  const authPage = await withRetry(
+    "verify auth users",
+    async () => {
+      const result = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
+      if (result.error) {
+        throw new Error(`Failed to verify auth users: ${result.error.message}`);
+      }
+      return result;
+    }
+  );
 
   console.log(`- remaining org rows: ${orgCount}`);
   console.log(`- remaining user rows: ${userCount}`);

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Worker, type Job } from "bullmq";
 import { managerAgent } from "@orgos/agent-core";
 import type { Task } from "@orgos/shared-types";
@@ -35,6 +36,46 @@ type ManagerWorkerDependencies = {
   emitTaskAssignedFn?: typeof emitTaskAssigned;
   emitToUserFn?: typeof emitToUser;
 };
+
+function buildFallbackManagerTasks(job: Extract<ManagerJobData, { mode: "decompose" }>): Task[] {
+  const normalizedDeadline = job.deadline && !Number.isNaN(Date.parse(job.deadline))
+    ? new Date(job.deadline).toISOString()
+    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const normalizedDepartment = job.department?.trim() || "operations";
+  const financeLike = /finance|financial|budget|cfo/i.test(`${normalizedDepartment} ${job.directive}`);
+  const assignedRole = financeLike ? "cfo" : "worker";
+
+  return [
+    {
+      id: crypto.randomUUID(),
+      goal_id: job.goalId,
+      parent_id: null,
+      depth: 1,
+      title: `Prepare ${normalizedDepartment} execution plan`,
+      description: job.directive,
+      success_criteria: `A clear ${normalizedDepartment} execution plan is documented with accountable owners and checkpoints.`,
+      assigned_to: null,
+      assigned_role: assignedRole,
+      is_agent_task: false,
+      status: "pending",
+      deadline: normalizedDeadline
+    },
+    {
+      id: crypto.randomUUID(),
+      goal_id: job.goalId,
+      parent_id: null,
+      depth: 1,
+      title: `Collect ${normalizedDepartment} readiness evidence`,
+      description: `Gather the evidence, blockers, and status updates needed to complete: ${job.directive}`,
+      success_criteria: `Completion evidence and blockers for ${normalizedDepartment} are captured and ready for review.`,
+      assigned_to: null,
+      assigned_role: assignedRole,
+      is_agent_task: false,
+      status: "pending",
+      deadline: normalizedDeadline
+    }
+  ];
+}
 
 async function insertTasksWithRollback(params: {
   supabase: SupabaseClient;
@@ -177,7 +218,16 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
     };
   }
 
-  const managerTasks = await managerAgentFn(managerInput);
+  let managerTasks: Task[] = [];
+  try {
+    managerTasks = await managerAgentFn(managerInput);
+  } catch {
+    managerTasks = buildFallbackManagerTasks(job.data);
+  }
+
+  if (managerTasks.length === 0) {
+    managerTasks = buildFallbackManagerTasks(job.data);
+  }
 
   const assignedTasks: Task[] = [];
   for (const task of managerTasks) {

@@ -34,7 +34,12 @@ function cosineSimilarity(a: number[] | undefined, b: number[] | undefined): num
 export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
   return {
     async search({ orgId, query, topK = 5 }: { orgId: string; query: string; topK?: number }): Promise<RagSearchResult[]> {
-      const [queryEmbedding] = await embeddingService.embedTexts([query]);
+      let queryEmbedding: number[] | undefined;
+      try {
+        [queryEmbedding] = await embeddingService.embedTexts([query]);
+      } catch {
+        queryEmbedding = undefined;
+      }
       if (!queryEmbedding || !Array.isArray(queryEmbedding)) {
         const fallbackSections = await retrieveRelevantSections(supabase, { orgId, goalInput: query, topN: topK });
         return fallbackSections.map((section) => ({

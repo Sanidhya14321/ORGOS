@@ -17,14 +17,17 @@
     "guard:schemas": "node scripts/check-legacy-schema-refs.mjs",
     "smoke:local": "node scripts/smoke-local.js",
     "db:apply-remote": "bash scripts/apply-remote-schema.sh",
-    "db:reset-nonprod": "node scripts/reset-nonprod-supabase.mjs"
+    "db:apply-remote-direct": "node scripts/apply-remote-schema-direct.mjs",
+    "db:reset-nonprod": "node scripts/reset-nonprod-supabase.mjs",
+    "dev:redis-local": "node scripts/start-local-redis.mjs"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
-    "turbo": "^2.0.12",
-    "typescript": "^5.6.3",
+    "ioredis": "^5.3.2",
     "pg": "^8.11.0",
-    "ioredis": "^5.3.2"
+    "redis-memory-server": "^0.16.1",
+    "turbo": "^2.0.12",
+    "typescript": "^5.6.3"
   },
   "dependencies": {
     "dotenv": "^17.4.1"

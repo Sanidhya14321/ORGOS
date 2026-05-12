@@ -91,6 +91,7 @@ ALTER TABLE public.org_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.org_structure_suggestions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: Users can only see credentials/documents/suggestions for their org
+DROP POLICY IF EXISTS position_credentials_org_policy ON public.position_credentials;
 CREATE POLICY position_credentials_org_policy
   ON public.position_credentials
   FOR SELECT
@@ -100,6 +101,7 @@ CREATE POLICY position_credentials_org_policy
     )
   );
 
+DROP POLICY IF EXISTS org_documents_org_policy ON public.org_documents;
 CREATE POLICY org_documents_org_policy
   ON public.org_documents
   FOR SELECT
@@ -109,6 +111,7 @@ CREATE POLICY org_documents_org_policy
     )
   );
 
+DROP POLICY IF EXISTS org_structure_suggestions_org_policy ON public.org_structure_suggestions;
 CREATE POLICY org_structure_suggestions_org_policy
   ON public.org_structure_suggestions
   FOR SELECT
@@ -119,6 +122,7 @@ CREATE POLICY org_structure_suggestions_org_policy
   );
 
 -- CEO-only write permissions for credentials
+DROP POLICY IF EXISTS position_credentials_ceo_write ON public.position_credentials;
 CREATE POLICY position_credentials_ceo_write
   ON public.position_credentials
   FOR INSERT
@@ -129,6 +133,7 @@ CREATE POLICY position_credentials_ceo_write
     )
   );
 
+DROP POLICY IF EXISTS position_credentials_ceo_update ON public.position_credentials;
 CREATE POLICY position_credentials_ceo_update
   ON public.position_credentials
   FOR UPDATE
@@ -140,6 +145,7 @@ CREATE POLICY position_credentials_ceo_update
   );
 
 -- Manager/Executive can upload documents
+DROP POLICY IF EXISTS org_documents_write ON public.org_documents;
 CREATE POLICY org_documents_write
   ON public.org_documents
   FOR INSERT
@@ -151,6 +157,7 @@ CREATE POLICY org_documents_write
   );
 
 -- CEO-only org structure suggestions
+DROP POLICY IF EXISTS org_structure_suggestions_ceo_write ON public.org_structure_suggestions;
 CREATE POLICY org_structure_suggestions_ceo_write
   ON public.org_structure_suggestions
   FOR INSERT
@@ -161,6 +168,7 @@ CREATE POLICY org_structure_suggestions_ceo_write
     )
   );
 
+DROP POLICY IF EXISTS org_structure_suggestions_ceo_update ON public.org_structure_suggestions;
 CREATE POLICY org_structure_suggestions_ceo_update
   ON public.org_structure_suggestions
   FOR UPDATE

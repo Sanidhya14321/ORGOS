@@ -323,6 +323,24 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const createdUser = createAuthResult.data.user;
+
+    const bootstrapProfile = {
+      ...buildUserProfileFromAuthUser({
+        id: createdUser.id,
+        email: createdUser.email ?? null,
+        user_metadata: {
+          full_name: companyName,
+          role: "ceo",
+          department: "Executive",
+          agent_enabled: true
+        }
+      }),
+      role: "ceo" as const,
+      status: "pending" as const,
+      department: "Executive"
+    };
+
+    await persistUserProfile(fastify, bootstrapProfile);
     
     // 2. Create organization record
     const orgResult = await fastify.supabaseService
