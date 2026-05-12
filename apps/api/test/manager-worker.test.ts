@@ -5,6 +5,8 @@ import { processManagerDecomposeJob } from "../src/queue/workers/decompose.manag
 import { createSupabaseMock, type QueryOperation } from "./helpers/mockBackend.js";
 
 const goalId = "00000000-0000-0000-0000-000000000999";
+const orgId = "00000000-0000-0000-0000-000000000998";
+const goalCreatorId = "00000000-0000-0000-0000-000000000997";
 const userA = "00000000-0000-0000-0000-000000000010";
 const userB = "00000000-0000-0000-0000-000000000011";
 
@@ -27,12 +29,12 @@ function buildTask(overrides: Partial<Task> = {}): Task {
 test("manager decomposition increments workload only after successful inserts", async () => {
   const supabase = createSupabaseMock({
     resolve: async (operation: QueryOperation) => {
-      if (operation.table === "tasks" && operation.action === "select") {
+      if (operation.table === "tasks" && operation.action === "select" && operation.select === "*") {
         return { data: [] };
       }
 
       if (operation.table === "goals" && operation.action === "select") {
-        return { data: { id: goalId, org_id: null } };
+        return { data: { id: goalId, org_id: orgId, created_by: goalCreatorId } };
       }
 
       if (operation.table === "tasks" && operation.action === "insert") {
@@ -43,10 +45,11 @@ test("manager decomposition increments workload only after successful inserts", 
         };
       }
 
-      if (operation.table === "users" && operation.action === "select") {
+      if (operation.table === "tasks" && operation.action === "select" && operation.select === "assigned_to, status") {
         return {
           data: [
-            { id: userA, open_task_count: 2 }
+            { assigned_to: userA, status: "pending" },
+            { assigned_to: userA, status: "pending" }
           ]
         };
       }
@@ -102,12 +105,16 @@ test("manager decomposition increments workload only after successful inserts", 
 
   const taskInserts = supabase.operations.filter((operation) => operation.table === "tasks" && operation.action === "insert");
   assert.equal(taskInserts.length, 2);
+  assert.equal((taskInserts[0]?.values as { org_id: string }).org_id, orgId);
+  assert.equal((taskInserts[0]?.values as { created_by: string }).created_by, goalCreatorId);
+  assert.equal((taskInserts[0]?.values as { owner_id: string }).owner_id, goalCreatorId);
 
   const workloadUpdate = supabase.operations.find(
     (operation) => operation.table === "users" && operation.action === "update"
   );
   assert.ok(workloadUpdate);
-  assert.equal((workloadUpdate.values as { open_task_count: number }).open_task_count, 4);
+  assert.equal((workloadUpdate.values as { open_task_count: number }).open_task_count, 2);
+  assert.equal((workloadUpdate.values as { current_load: number }).current_load, 2);
 
   assert.deepEqual(acknowledged, [
     "00000000-0000-0000-0000-000000000101",
@@ -120,15 +127,16 @@ test("manager decomposition increments workload only after successful inserts", 
 
 test("manager decomposition rolls back inserted tasks if workload update fails", async () => {
   let userUpdateCount = 0;
+  let workloadPass = 0;
 
   const supabase = createSupabaseMock({
     resolve: async (operation: QueryOperation) => {
-      if (operation.table === "tasks" && operation.action === "select") {
+      if (operation.table === "tasks" && operation.action === "select" && operation.select === "*") {
         return { data: [] };
       }
 
       if (operation.table === "goals" && operation.action === "select") {
-        return { data: { id: goalId, org_id: null } };
+        return { data: { id: goalId, org_id: orgId, created_by: goalCreatorId } };
       }
 
       if (operation.table === "tasks" && operation.action === "insert") {
@@ -139,12 +147,15 @@ test("manager decomposition rolls back inserted tasks if workload update fails",
         };
       }
 
-      if (operation.table === "users" && operation.action === "select") {
+      if (operation.table === "tasks" && operation.action === "select" && operation.select === "assigned_to, status") {
+        workloadPass += 1;
         return {
-          data: [
-            { id: userA, open_task_count: 1 },
-            { id: userB, open_task_count: 5 }
-          ]
+          data: workloadPass === 1
+            ? [
+                { assigned_to: userA, status: "pending" },
+                { assigned_to: userB, status: "pending" }
+              ]
+            : []
         };
       }
 
@@ -224,6 +235,79 @@ test("manager decomposition rolls back inserted tasks if workload update fails",
   const rollbackUpdate = supabase.operations.filter(
     (operation) => operation.table === "users" && operation.action === "update"
   );
-  assert.equal(rollbackUpdate.length, 3);
-  assert.equal((rollbackUpdate[2]?.values as { open_task_count: number }).open_task_count, 1);
+  assert.equal(rollbackUpdate.length, 4);
+  assert.equal((rollbackUpdate[2]?.values as { open_task_count: number }).open_task_count, 0);
+  assert.equal((rollbackUpdate[3]?.values as { open_task_count: number }).open_task_count, 0);
+});
+
+test("manager decomposition hands agent-owned tasks to the execute queue", async () => {
+  const supabase = createSupabaseMock({
+    resolve: async (operation: QueryOperation) => {
+      if (operation.table === "tasks" && operation.action === "select" && operation.select === "*") {
+        return { data: [] };
+      }
+
+      if (operation.table === "goals" && operation.action === "select") {
+        return { data: { id: goalId, org_id: orgId, created_by: goalCreatorId } };
+      }
+
+      if (operation.table === "tasks" && operation.action === "insert") {
+        return {
+          data: {
+            id: (operation.values as { id: string }).id
+          }
+        };
+      }
+
+      if (operation.table === "tasks" && operation.action === "select" && operation.select === "assigned_to, status") {
+        return { data: [] };
+      }
+
+      if (operation.table === "users" && operation.action === "update") {
+        return { data: null };
+      }
+
+      return { data: null };
+    }
+  });
+
+  const executeQueued: string[] = [];
+  const acknowledged: string[] = [];
+
+  await processManagerDecomposeJob(
+    {
+      data: {
+        mode: "decompose",
+        goalId,
+        directive: "Run the autonomous task",
+        department: "ops",
+        deadline: "2026-06-01T00:00:00.000Z"
+      }
+    } as never,
+    {
+      supabase: supabase.client as never,
+      managerAgentFn: async () => [
+        buildTask({
+          id: "00000000-0000-0000-0000-000000000301",
+          title: "Agent Task"
+        })
+      ],
+      assignTaskFn: async (task) =>
+        ({
+          ...task,
+          assigned_to: null,
+          assigned_role: "worker",
+          is_agent_task: true
+        }) as Task,
+      enqueueIndividualAck: async (taskId) => {
+        acknowledged.push(taskId);
+      },
+      enqueueExecute: async (taskId) => {
+        executeQueued.push(taskId);
+      }
+    }
+  );
+
+  assert.deepEqual(executeQueued, ["00000000-0000-0000-0000-000000000301"]);
+  assert.deepEqual(acknowledged, []);
 });

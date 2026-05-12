@@ -64,6 +64,64 @@ async function buildSecureApp(options: {
   return { app, operations: supabase.operations };
 }
 
+test("public CEO signup route stays reachable without an access token", async () => {
+  const supabase = createSupabaseMock({
+    resolve: () => ({ data: null })
+  });
+
+  const publicRoutes: FastifyPluginAsync = async (app) => {
+    app.post("/api/auth/signup-ceo", async () => ({ ok: true }));
+  };
+
+  const app = await buildRouteTestApp({
+    routes: [authPlugin, publicRoutes],
+    supabaseService: supabase.client,
+    supabaseAnon: supabase.client
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/auth/signup-ceo",
+    payload: {
+      email: "ceo@orgos.test"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { ok: true });
+
+  await app.close();
+});
+
+test("public seat activation route stays reachable without an access token", async () => {
+  const supabase = createSupabaseMock({
+    resolve: () => ({ data: null })
+  });
+
+  const publicRoutes: FastifyPluginAsync = async (app) => {
+    app.post("/api/auth/activate-seat", async () => ({ ok: true }));
+  };
+
+  const app = await buildRouteTestApp({
+    routes: [authPlugin, publicRoutes],
+    supabaseService: supabase.client,
+    supabaseAnon: supabase.client
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/auth/activate-seat",
+    payload: {
+      inviteToken: "invite-token-123456"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { ok: true });
+
+  await app.close();
+});
+
 test("protected routes reject metadata-only executive roles", async () => {
   const { app } = await buildSecureApp({
     profileRole: null,

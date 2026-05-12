@@ -8,7 +8,8 @@ import { assignTask } from "../../services/assignmentEngine.js";
 import { suggestRoutingForTask } from "../../services/agentService.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitTaskAssigned, emitToUser } from "../../services/notifier.js";
-import { getIndividualQueue, getManagerQueue, getRedisConnection } from "../index.js";
+import { syncUserOpenTaskCounts } from "../../services/workloadService.js";
+import { getExecuteQueue, getIndividualQueue, getManagerQueue, getRedisConnection } from "../index.js";
 
 interface ManagerDecomposeJobData {
   goalId: string;
@@ -30,71 +31,21 @@ type ManagerWorkerDependencies = {
   assignTaskFn?: typeof assignTask;
   managerAgentFn?: typeof managerAgent;
   enqueueIndividualAck?: (taskId: string) => Promise<void>;
+  enqueueExecute?: (taskId: string) => Promise<void>;
   emitTaskAssignedFn?: typeof emitTaskAssigned;
   emitToUserFn?: typeof emitToUser;
 };
 
-async function applyOpenTaskCountIncrements(
-  supabase: SupabaseClient,
-  increments: Map<string, number>
-): Promise<void> {
-  if (increments.size === 0) {
-    return;
-  }
-
-  const assigneeIds = [...increments.keys()];
-  const usersResult = await supabase
-    .from("users")
-    .select("id, open_task_count")
-    .in("id", assigneeIds);
-
-  if (usersResult.error) {
-    throw new Error(`Failed to load assignee workloads: ${usersResult.error.message}`);
-  }
-
-  const previousCounts = new Map<string, number>();
-  for (const row of usersResult.data ?? []) {
-    previousCounts.set(row.id as string, Number(row.open_task_count ?? 0));
-  }
-
-  for (const assigneeId of assigneeIds) {
-    if (!previousCounts.has(assigneeId)) {
-      throw new Error(`Missing assignee workload row for ${assigneeId}`);
-    }
-  }
-
-  const updatedIds: string[] = [];
-
-  try {
-    for (const assigneeId of assigneeIds) {
-      const previousCount = previousCounts.get(assigneeId) ?? 0;
-      const nextCount = previousCount + (increments.get(assigneeId) ?? 0);
-      const updateResult = await supabase
-        .from("users")
-        .update({ open_task_count: nextCount })
-        .eq("id", assigneeId);
-
-      if (updateResult.error) {
-        throw new Error(`Failed to update assignee workload: ${updateResult.error.message}`);
-      }
-
-      updatedIds.push(assigneeId);
-    }
-  } catch (error) {
-    for (const assigneeId of updatedIds) {
-      await supabase
-        .from("users")
-        .update({ open_task_count: previousCounts.get(assigneeId) ?? 0 })
-        .eq("id", assigneeId);
-    }
-
-    throw error;
-  }
-}
-
-async function insertTasksWithRollback(supabase: SupabaseClient, goalId: string, tasks: Task[]): Promise<void> {
+async function insertTasksWithRollback(params: {
+  supabase: SupabaseClient;
+  goalId: string;
+  goalOrgId: string | null;
+  goalCreatorId: string | null;
+  tasks: Task[];
+}): Promise<void> {
+  const { supabase, goalId, goalOrgId, goalCreatorId, tasks } = params;
   const insertedIds: string[] = [];
-  const workloadIncrements = new Map<string, number>();
+  const affectedAssigneeIds = new Set<string>();
 
   try {
     for (const task of tasks) {
@@ -102,6 +53,9 @@ async function insertTasksWithRollback(supabase: SupabaseClient, goalId: string,
         .from("tasks")
         .insert({
           id: task.id,
+          org_id: goalOrgId,
+          created_by: goalCreatorId,
+          owner_id: goalCreatorId,
           goal_id: goalId,
           parent_id: task.parent_id ?? null,
           depth: task.depth,
@@ -125,15 +79,16 @@ async function insertTasksWithRollback(supabase: SupabaseClient, goalId: string,
       insertedIds.push(data.id as string);
 
       if (task.assigned_to) {
-        workloadIncrements.set(task.assigned_to, (workloadIncrements.get(task.assigned_to) ?? 0) + 1);
+        affectedAssigneeIds.add(task.assigned_to);
       }
     }
 
-    await applyOpenTaskCountIncrements(supabase, workloadIncrements);
+    await syncUserOpenTaskCounts(supabase, [...affectedAssigneeIds]);
   } catch (error) {
     if (insertedIds.length > 0) {
       await supabase.from("tasks").delete().in("id", insertedIds);
     }
+    await syncUserOpenTaskCounts(supabase, [...affectedAssigneeIds]);
     throw error;
   }
 }
@@ -144,6 +99,9 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
   const managerAgentFn = dependencies.managerAgentFn ?? managerAgent;
   const enqueueIndividualAck = dependencies.enqueueIndividualAck ?? (async (taskId: string) => {
     await getIndividualQueue().add("individual_ack", { taskId });
+  });
+  const enqueueExecute = dependencies.enqueueExecute ?? (async (taskId: string) => {
+    await getExecuteQueue().add("task_execute", { taskId }, { jobId: `task_execute:${taskId}` });
   });
   const emitTaskAssignedFn = dependencies.emitTaskAssignedFn ?? emitTaskAssigned;
   const emitToUserFn = dependencies.emitToUserFn ?? emitToUser;
@@ -196,7 +154,7 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
 
   const goalResult = await supabase
     .from("goals")
-    .select("id, org_id")
+    .select("id, org_id, created_by")
     .eq("id", job.data.goalId)
     .maybeSingle();
 
@@ -231,7 +189,13 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
     assignedTasks.push(assignedTask);
   }
 
-  await insertTasksWithRollback(supabase, job.data.goalId, assignedTasks);
+  await insertTasksWithRollback({
+    supabase,
+    goalId: job.data.goalId,
+    goalOrgId: (goalResult.data?.org_id as string | null | undefined) ?? null,
+    goalCreatorId: (goalResult.data?.created_by as string | null | undefined) ?? null,
+    tasks: assignedTasks
+  });
 
   for (const task of assignedTasks) {
     if (task.assigned_to) {
@@ -241,6 +205,8 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
         isAgentTask: task.is_agent_task
       });
       await enqueueIndividualAck(task.id);
+    } else if (task.is_agent_task) {
+      await enqueueExecute(task.id);
     }
   }
 }

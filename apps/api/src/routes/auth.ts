@@ -14,6 +14,7 @@ import {
 } from "../lib/session-security.js";
 import { shouldRelaxSecurityForLocalTesting } from "../config/env.js";
 import { activatePositionCredential } from "../services/credentialService.js";
+import { IndustryValues, setupOrgForIndustry } from "../services/orgIndustrySetup.js";
 
 const ACCESS_TOKEN_COOKIE = "orgos_access_token";
 
@@ -143,6 +144,23 @@ function getCurrentAccessToken(request: { headers: Record<string, unknown> }): s
   const cookieHeader = readFirstHeaderValue(request.headers.cookie);
   const cookieToken = extractCookieValue(cookieHeader, ACCESS_TOKEN_COOKIE);
   return bearerToken || cookieToken;
+}
+
+function mapSignupCompanySize(value: z.infer<typeof SignupCeoBodySchema>["companySize"]): "startup" | "mid" | "enterprise" {
+  if (value === "1-10" || value === "11-50") {
+    return "startup";
+  }
+  if (value === "51-200") {
+    return "mid";
+  }
+  return "enterprise";
+}
+
+function normalizeIndustryValue(value: string | undefined): (typeof IndustryValues)[number] {
+  const lowered = value?.trim().toLowerCase();
+  return IndustryValues.includes(lowered as (typeof IndustryValues)[number])
+    ? (lowered as (typeof IndustryValues)[number])
+    : "tech";
 }
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
@@ -276,6 +294,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { email, password, companyName, industry, companySize, branchCount } = parsed.data;
+    const normalizedIndustry = normalizeIndustryValue(industry);
+    const normalizedCompanySize = mapSignupCompanySize(companySize);
 
     // 1. Create CEO user via Supabase Auth
     const createAuthResult = await fastify.supabaseAnon.auth.signUp({
@@ -322,6 +342,39 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const orgId = orgResult.data.id;
 
+    try {
+      await setupOrgForIndustry(fastify, {
+        orgId,
+        industry: normalizedIndustry,
+        companySize: normalizedCompanySize
+      });
+
+      const bootstrapBranches = Array.from({ length: branchCount }).map((_, index) => ({
+        org_id: orgId,
+        name: index === 0 ? "Headquarters" : `Branch ${index + 1}`,
+        code: index === 0 ? "hq" : `branch-${index + 1}`,
+        timezone: "UTC",
+        is_headquarters: index === 0
+      }));
+
+      const branchesResult = await fastify.supabaseService
+        .from("org_branches")
+        .upsert(bootstrapBranches, { onConflict: "org_id,code" });
+
+      if (branchesResult.error) {
+        throw new Error(branchesResult.error.message);
+      }
+    } catch (setupError) {
+      request.log.error({ err: setupError, orgId }, "Failed to persist CEO signup organization settings");
+      return sendApiError(
+        reply,
+        request,
+        503,
+        "SERVICE_UNAVAILABLE",
+        "Organization bootstrap requires the latest org settings and branch schema"
+      );
+    }
+
     // 3. Create CEO user profile
     const profile = buildUserProfileFromAuthUser({
       id: createdUser.id,
@@ -355,6 +408,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({
       org_id: orgId,
       company_name: companyName,
+      settings: {
+        industry: normalizedIndustry,
+        company_size: normalizedCompanySize,
+        branch_count: branchCount
+      },
       next_step: "/onboarding/company-setup",
       requiresVerification: true,
       message: "Verification email sent. Complete email verification before proceeding with onboarding."

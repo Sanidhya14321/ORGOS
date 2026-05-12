@@ -7,8 +7,10 @@ import { shouldRelaxSecurityForLocalTesting } from "../config/env.js";
 const PUBLIC_ROUTES = new Set([
   "/api/auth/login",
   "/api/auth/register",
+  "/api/auth/signup-ceo",
   "/api/auth/verify",
   "/api/auth/refresh",
+  "/api/auth/activate-seat",
   "/api/auth/mfa-status",
   "/api/auth/mfa-enroll",
   "/api/auth/mfa-verify",

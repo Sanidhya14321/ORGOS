@@ -119,7 +119,13 @@ export async function buildServer() {
 
     if (request.method === "POST") {
       const path = request.url.split("?")[0];
-      if (path === "/api/auth/login" || path === "/api/auth/register" || path === "/api/auth/refresh") {
+      if (
+        path === "/api/auth/login" ||
+        path === "/api/auth/register" ||
+        path === "/api/auth/signup-ceo" ||
+        path === "/api/auth/activate-seat" ||
+        path === "/api/auth/refresh"
+      ) {
         const key = `auth-post:${request.ip}:${path}`;
         const count = await fastify.redis.incr(key);
         if (count === 1) {

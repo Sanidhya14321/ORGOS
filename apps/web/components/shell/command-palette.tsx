@@ -49,7 +49,7 @@ export function CommandPalette({
     () => [
       { id: "create-goal", label: "Create Goal", description: "Open goals dashboard", href: "/dashboard/goals", icon: Sparkles },
       { id: "create-task", label: "Create Task", description: "Open task board", href: "/dashboard/task-board", icon: CheckSquare },
-      { id: "invite-member", label: "Invite Member", description: "Open approvals page", href: "/dashboard/approvals", icon: UserRound }
+      { id: "open-collaboration", label: "Open Collaboration Hub", description: "Manage team threads and seat access", href: "/dashboard/team", icon: UserRound }
     ],
     []
   );

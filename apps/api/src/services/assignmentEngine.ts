@@ -2,6 +2,7 @@ import type { Task } from "@orgos/shared-types";
 import { createSupabaseServiceClient } from "../lib/clients.js";
 import { readEnv } from "../config/env.js";
 import { emitTaskAssigned } from "./notifier.js";
+import { syncUserOpenTaskCounts } from "./workloadService.js";
 
 interface CandidateUser {
   id: string;
@@ -99,7 +100,7 @@ export async function assignTask(task: Task, options: AssignTaskOptions = {}): P
     };
 
     if (task.id && persistTaskUpdate) {
-      const { data: existingTask } = await supabase.from("tasks").select("id").eq("id", task.id).maybeSingle();
+      const { data: existingTask } = await supabase.from("tasks").select("id, assigned_to").eq("id", task.id).maybeSingle();
       if (existingTask) {
         const { error: taskUpdateError } = await supabase
           .from("tasks")
@@ -109,6 +110,8 @@ export async function assignTask(task: Task, options: AssignTaskOptions = {}): P
         if (taskUpdateError) {
           throw new Error(`Failed to persist fallback assignment: ${taskUpdateError.message}`);
         }
+
+        await syncUserOpenTaskCounts(supabase, [existingTask.assigned_to as string | null | undefined]);
       }
     }
 
@@ -129,9 +132,11 @@ export async function assignTask(task: Task, options: AssignTaskOptions = {}): P
   }
 
   try {
+    let previousAssigneeId: string | null = null;
     if (task.id && persistTaskUpdate) {
-      const { data: existingTask } = await supabase.from("tasks").select("id").eq("id", task.id).maybeSingle();
+      const { data: existingTask } = await supabase.from("tasks").select("id, assigned_to").eq("id", task.id).maybeSingle();
       if (existingTask) {
+        previousAssigneeId = (existingTask.assigned_to as string | null | undefined) ?? null;
         const { error: taskUpdateError } = await supabase
           .from("tasks")
           .update({ assigned_to: selected.id, is_agent_task: false })
@@ -140,6 +145,8 @@ export async function assignTask(task: Task, options: AssignTaskOptions = {}): P
         if (taskUpdateError) {
           throw new Error(taskUpdateError.message);
         }
+
+        await syncUserOpenTaskCounts(supabase, [selected.id, previousAssigneeId]);
       }
     }
 
@@ -164,6 +171,8 @@ export async function assignTask(task: Task, options: AssignTaskOptions = {}): P
         .update({ open_task_count: selected.open_task_count })
         .eq("id", selected.id);
     }
+
+    await syncUserOpenTaskCounts(supabase, [selected.id]);
 
     throw new Error(`Failed to assign task: ${error instanceof Error ? error.message : "unknown error"}`);
   }

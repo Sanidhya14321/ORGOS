@@ -39,6 +39,16 @@ function isSchemaCacheUnavailable(error: { code?: string } | null | undefined): 
 }
 
 const goalsRoutes: FastifyPluginAsync = async (fastify) => {
+  async function getRequesterOrgId(userId: string): Promise<string | null> {
+    const requester = await fastify.supabaseService
+      .from("users")
+      .select("org_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    return (requester.data?.org_id as string | null | undefined) ?? null;
+  }
+
   fastify.post("/goals", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
     const parsed = CreateGoalSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -50,6 +60,15 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const payload = parsed.data;
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
 
     let sanitizedRawInput: string;
     try {
@@ -88,7 +107,8 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     const { data, error } = await fastify.supabaseService
       .from("goals")
       .insert({
-        created_by: request.user?.id,
+        org_id: requesterOrgId,
+        created_by: requesterId,
         title: payload.title,
         description: payload.description ?? null,
         raw_input: sanitizedRawInput,
@@ -127,6 +147,16 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { status, priority, page, limit } = parsed.data;
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return reply.send({ page, limit, total: 0, items: [] });
+    }
+
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -135,6 +165,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       .select("id, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at, created_by", {
         count: "exact"
       })
+      .eq("org_id", requesterOrgId)
       .order("created_at", { ascending: false })
       .range(from, to);
 
@@ -164,14 +195,6 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     const creatorUserIds = Array.from(
       new Set((data ?? []).map((goal) => goal.created_by).filter((id) => id))
     );
-    const positionIds = Array.from(
-      new Set(
-        (data ?? [])
-          .map((goal) => goal.created_by)
-          .filter((id) => id)
-      )
-    );
-
     // Batch fetch creators and positions
     if (creatorUserIds.length > 0) {
       const { data: users, error: usersError } = await fastify.supabaseService
@@ -189,6 +212,14 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
     }
+
+    const positionIds = Array.from(
+      new Set(
+        [...creatorsByUserId.values()]
+          .map((creator) => creator.position_id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
+      )
+    );
 
     if (positionIds.length > 0) {
       const { data: positions, error: posError } = await fastify.supabaseService
@@ -262,11 +293,21 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const goalId = params.data.id;
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
 
     const { data: goal, error } = await fastify.supabaseService
       .from("goals")
       .select("id, created_by, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at")
       .eq("id", goalId)
+      .eq("org_id", requesterOrgId)
       .maybeSingle();
 
     if (error) {
@@ -303,6 +344,16 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", payload.error.issues[0]?.message ?? "Invalid patch payload");
     }
 
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
+
     const patch = {
       ...payload.data,
       updated_at: new Date().toISOString()
@@ -328,6 +379,7 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       .from("goals")
       .update(patch)
       .eq("id", params.data.id)
+      .eq("org_id", requesterOrgId)
       .select("id, created_by, title, description, raw_input, status, priority, kpi, deadline, simulation, created_at, updated_at")
       .single();
 
@@ -356,12 +408,22 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const goalId = params.data.id;
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const requesterOrgId = await getRequesterOrgId(requesterId);
+    if (!requesterOrgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
+    }
 
     // First verify the goal exists
     const { data: goal, error: fetchError } = await fastify.supabaseService
       .from("goals")
       .select("id")
       .eq("id", goalId)
+      .eq("org_id", requesterOrgId)
       .maybeSingle();
 
     if (fetchError) {
@@ -386,7 +448,8 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
     const { error: deleteError } = await fastify.supabaseService
       .from("goals")
       .delete()
-      .eq("id", goalId);
+      .eq("id", goalId)
+      .eq("org_id", requesterOrgId);
 
     if (deleteError) {
       if (isSchemaCacheUnavailable(deleteError)) {

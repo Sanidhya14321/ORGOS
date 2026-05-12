@@ -8,6 +8,7 @@ import { getIngestQueue, getSynthesizeQueue } from "../queue/index.js";
 import { emitTaskReportSubmittedCascade } from "../services/notifier.js";
 import { getTaskWithScope } from "../services/taskAccess.js";
 import { recomputeGoalRollup } from "../services/goalEngine.js";
+import { syncUserOpenTaskCounts } from "../services/workloadService.js";
 
 const ReportCreateSchema = ReportSchema.omit({ id: true }).extend({
   id: z.string().uuid().optional(),
@@ -203,7 +204,7 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const taskSnapshotResult = await fastify.supabaseService
       .from("tasks")
-      .select("id, org_id, goal_id, parent_id, status, report_id")
+      .select("id, org_id, goal_id, parent_id, status, report_id, assigned_to")
       .eq("id", payload.task_id)
       .maybeSingle();
 
@@ -269,6 +270,11 @@ const reportsRoutes: FastifyPluginAsync = async (fastify) => {
     if (nextTaskStatus === "completed") {
       await enqueueIfSiblingsDone(fastify, payload.task_id);
     }
+
+    await syncUserOpenTaskCounts(
+      fastify.supabaseService,
+      [(taskSnapshotResult.data.assigned_to as string | null | undefined) ?? null]
+    );
 
     if (taskSnapshotResult.data.goal_id) {
       await recomputeGoalRollup(fastify.supabaseService, String(taskSnapshotResult.data.goal_id));

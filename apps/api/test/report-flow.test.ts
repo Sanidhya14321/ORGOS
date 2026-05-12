@@ -8,6 +8,8 @@ const taskId = "00000000-0000-0000-0000-000000000222";
 const goalId = "00000000-0000-0000-0000-000000000333";
 
 function createReportResolver() {
+  let currentStatus = "in_progress";
+
   return (operation: QueryOperation) => {
     if (operation.table === "tasks" && operation.action === "select" && operation.select === "id, assigned_to") {
       return { data: { id: taskId, assigned_to: userId } };
@@ -16,7 +18,7 @@ function createReportResolver() {
     if (
       operation.table === "tasks" &&
       operation.action === "select" &&
-      operation.select === "id, org_id, goal_id, parent_id, status, report_id"
+      operation.select === "id, org_id, goal_id, parent_id, status, report_id, assigned_to"
     ) {
       return {
         data: {
@@ -24,8 +26,10 @@ function createReportResolver() {
           org_id: null,
           goal_id: goalId,
           parent_id: null,
-          status: "in_progress",
+          status: currentStatus,
           report_id: null
+          ,
+          assigned_to: userId
         }
       };
     }
@@ -35,6 +39,19 @@ function createReportResolver() {
     }
 
     if (operation.table === "tasks" && operation.action === "update") {
+      currentStatus = String((operation.values as { status?: string }).status ?? currentStatus);
+      return { data: null };
+    }
+
+    if (operation.table === "tasks" && operation.action === "select" && operation.select === "assigned_to, status") {
+      return {
+        data: currentStatus === "completed"
+          ? []
+          : [{ assigned_to: userId, status: currentStatus }]
+      };
+    }
+
+    if (operation.table === "users" && operation.action === "update") {
       return { data: null };
     }
 
@@ -105,8 +122,9 @@ test("partial reports keep tasks in progress and do not zero counters", async ()
   assert.ok(taskUpdate);
   assert.equal((taskUpdate.values as { status: string }).status, "in_progress");
 
-  const userCounterReset = operations.find((operation) => operation.table === "users" && operation.action === "update");
-  assert.equal(userCounterReset, undefined);
+  const workloadSync = operations.find((operation) => operation.table === "users" && operation.action === "update");
+  assert.ok(workloadSync);
+  assert.equal((workloadSync.values as { open_task_count: number }).open_task_count, 1);
 
   await app.close();
 });
@@ -135,6 +153,10 @@ test("completed reports move tasks to completed", async () => {
   const taskUpdate = operations.find((operation) => operation.table === "tasks" && operation.action === "update");
   assert.ok(taskUpdate);
   assert.equal((taskUpdate.values as { status: string }).status, "completed");
+
+  const workloadSync = operations.find((operation) => operation.table === "users" && operation.action === "update");
+  assert.ok(workloadSync);
+  assert.equal((workloadSync.values as { open_task_count: number }).open_task_count, 0);
 
   await app.close();
 });

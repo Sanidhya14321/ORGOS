@@ -12,6 +12,7 @@ function titleFromPath(pathname: string): string {
   if (pathname.startsWith("/dashboard/task-board")) return "My Tasks";
   if (pathname.startsWith("/dashboard/capture")) return "Smart Input";
   if (pathname.startsWith("/dashboard/inbox")) return "Inbox";
+  if (pathname.startsWith("/dashboard/team")) return "Collaboration";
   if (pathname.startsWith("/dashboard/time")) return "Time";
   if (pathname.startsWith("/dashboard/forecast")) return "Forecast";
   if (pathname.startsWith("/dashboard/analytics")) return "Analytics";
@@ -19,7 +20,6 @@ function titleFromPath(pathname: string): string {
   if (pathname.startsWith("/dashboard/org-tree")) return "Org Tree";
   if (pathname.startsWith("/dashboard/goals")) return "Goals";
   if (pathname.startsWith("/dashboard/recruit")) return "Recruitment";
-  if (pathname.startsWith("/dashboard/approvals")) return "Approvals";
   if (pathname.startsWith("/dashboard/shortcuts")) return "Shortcuts";
   return "Dashboard";
 }

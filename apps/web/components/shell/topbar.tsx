@@ -12,14 +12,13 @@ const BASE_CARD_NAV_ITEMS: CardNavItem[] = [
     label: "Operations",
     links: [
       { label: "Task Board", href: "/dashboard/task-board" },
-      { label: "Projects", href: "/dashboard/projects" },
-      { label: "Approvals", href: "/dashboard/approvals" },
+      { label: "Projects", href: "/dashboard/projects" }
     ]
   },
   {
     label: "People & Growth",
     links: [
-      { label: "Team Directory", href: "/dashboard/team" },
+      { label: "Collaboration Hub", href: "/dashboard/team" },
       { label: "Org Tree", href: "/dashboard/org-tree" },
       { label: "Recruitment", href: "/dashboard/recruit" },
       { label: "Inbox", href: "/dashboard/inbox" }

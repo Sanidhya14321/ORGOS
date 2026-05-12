@@ -6,9 +6,10 @@ import { sendApiError } from "../lib/errors.js";
 import { requireRole } from "../plugins/rbac.js";
 import { assignTask } from "../services/assignmentEngine.js";
 import { emitTaskAssigned, emitTaskStatusChanged, emitToUser } from "../services/notifier.js";
-import { getManagerQueue } from "../queue/index.js";
+import { getExecuteQueue, getManagerQueue } from "../queue/index.js";
 import { persistRoutingOutcome } from "../services/routingMemory.js";
 import { recomputeGoalRollup } from "../services/goalEngine.js";
+import { syncUserOpenTaskCounts } from "../services/workloadService.js";
 
 const ListQuerySchema = z.object({
   status: TaskStatusSchema.optional(),
@@ -397,6 +398,8 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to create task");
     }
 
+    await syncUserOpenTaskCounts(fastify.supabaseService, [(data.assigned_to as string | null | undefined) ?? null]);
+
     return reply.status(202).send(data);
   });
 
@@ -597,6 +600,10 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         taskId: params.data.id,
         confidence: suggestion.confidence
       });
+    }
+
+    if (updateTask.data.is_agent_task === true) {
+      await getExecuteQueue().add("task_execute", { taskId: params.data.id }, { jobId: `task_execute:${params.data.id}` });
     }
 
     return reply.send(updateTask.data);
@@ -975,6 +982,8 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
       await recomputeGoalRollup(fastify.supabaseService, String(task.goal_id));
     }
 
+    await syncUserOpenTaskCounts(fastify.supabaseService, [(task.assigned_to as string | null | undefined) ?? null]);
+
     return reply.send(updated);
   });
 
@@ -1049,6 +1058,8 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
     if (taskResult.data.goal_id) {
       await recomputeGoalRollup(fastify.supabaseService, String(taskResult.data.goal_id));
     }
+
+    await syncUserOpenTaskCounts(fastify.supabaseService, [(taskResult.data.assigned_to as string | null | undefined) ?? null]);
 
     return reply.send(updated.data);
   });
