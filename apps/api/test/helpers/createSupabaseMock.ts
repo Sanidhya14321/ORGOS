@@ -74,7 +74,9 @@ export function createSupabaseMock(fixtures: FixtureStore) {
 
     const builder = {
       select(_columns?: string) {
-        action = "select";
+        if (action === "select") {
+          action = "select";
+        }
         return builder;
       },
       eq(column: string, value: unknown) {

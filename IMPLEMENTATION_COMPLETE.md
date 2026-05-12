@@ -143,6 +143,46 @@
   - Health endpoint: ✅ db: fulfilled, redis: fulfilled
   - Settings endpoints: ✅ Responding with 401 auth (correct behavior)
 
+## Task 7: Routing + Recruitment Enhancements ✅
+
+### 7a. Task Routing UI ✅
+- **Files**:
+  - `apps/web/components/tasks/task-drawer.tsx`
+  - `apps/web/components/tasks/task-board-view.tsx`
+  - `apps/web/components/tasks/task-card.tsx`
+- **Status**: ✅ COMPLETE
+- **Features**:
+  - Request routing suggestions from the task drawer
+  - Display team capacity and routing confidence
+  - Confirm suggested routing decisions
+  - One-click assign action per suggestion card
+  - Per-suggestion pending state in the UI
+
+### 7b. Recruitment Updates ✅
+- **Files**:
+  - `apps/web/app/dashboard/recruitment/page.tsx`
+  - `apps/api/src/routes/org.ts`
+- **Status**: ✅ COMPLETE
+- **Features**:
+  - Removed the approvals section from recruitment
+  - Show unfilled positions in recruitment
+  - Highlight unfilled positions red in the org tree
+  - Added filled/unfilled metadata to org position responses
+  - Added "Create job" action from unfilled positions
+
+### 7c. Validation Coverage ✅
+- **Files**:
+  - `apps/api/test/task-routing-flow.integration.test.ts`
+  - `apps/api/test/task-routing-smoke.integration.test.ts`
+- **Status**: ✅ COMPLETE
+- **Checks**:
+  - Routing suggestions are stored and emitted to the task owner
+  - Routing confirmation persists the confirmed state
+  - Delegation updates the assignee and emits assignment notifications
+  - Websocket smoke test validates live `task:routing_ready` and `task:assigned` events
+  - API typecheck passes after the new coverage was added
+  - Live Supabase validation passed for a freshly seeded organization, including login, org tree, task create, routing suggest, routing confirm, delegate, websocket events, and Groq connectivity
+
 ## Summary
 
 ### User Requirements Met

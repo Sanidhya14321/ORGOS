@@ -92,7 +92,7 @@ const ConfirmRoutingBodySchema = z.object({
     reason: z.string().trim().min(1).max(400),
     confidence: z.number().min(0).max(1)
   })).min(1).max(20),
-  status: z.enum(["pending", "active"]).default("active")
+  status: z.enum(["pending", "in_progress"]).default("pending")
 });
 
 const roleHierarchyLevel: Record<"ceo" | "cfo" | "manager" | "worker", number> = {
@@ -355,7 +355,6 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         title: payload.title,
         description: payload.description,
         success_criteria: payload.successCriteria,
-        required_skills: payload.requiredSkills,
         priority: payload.priority,
         assigned_role: payload.assignedRole,
         assigned_to: payload.assignees?.[0] ?? null,
@@ -368,7 +367,7 @@ const tasksRoutes: FastifyPluginAsync = async (fastify) => {
         requires_evidence: payload.requiresEvidence,
         estimated_effort_hours: payload.estimatedEffortHours ?? null,
         is_agent_task: false,
-        status: "routing",
+        status: "pending",
         routing_confirmed: false,
         deadline: payload.deadline,
         sla_deadline: payload.deadline

@@ -138,7 +138,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
     mutationFn: (confirmed: RoutingSuggestion[]) =>
       apiFetch(`/api/tasks/${task?.id}/routing-confirm`, {
         method: "POST",
-        body: JSON.stringify({ confirmed, status: "active" })
+        body: JSON.stringify({ confirmed, status: "pending" })
       }),
     onSuccess: () => {
       setRoutingSuggestions([]);
