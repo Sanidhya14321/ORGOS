@@ -186,10 +186,9 @@ export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
                   }
                 };
               })
-              .filter((item): item is RagSearchResult => item !== null)
-              .sort((left, right) => right.score - left.score)
-              .slice(0, topK);
-            vectorResults = inMemoryResults;
+              .filter((item) => item !== null) as RagSearchResult[];
+            const sorted = inMemoryResults.slice().sort((left, right) => right.score - left.score);
+            vectorResults = sorted.slice(0, topK);
           }
         }
       }

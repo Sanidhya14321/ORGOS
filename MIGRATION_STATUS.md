@@ -3,6 +3,10 @@
 **Current Phase**: Data Migration (Phase 4 of 4)
 **Status**: ⚠️ Blocked on database schema migration
 
+## Source of truth (2026-05)
+
+Canonical SQL lives in [`packages/db/schema/`](packages/db/schema/). Before running `scripts/migrate_assigned_role_to_position.mjs`, confirm **`011_add_assigned_position_id.sql`** (or equivalent) is applied on the **target** database—this file may already exist in repo while remote lagged. See also [`docs/PLATFORM_DEPLOY.md`](docs/PLATFORM_DEPLOY.md).
+
 ## Summary
 
 The hierarchical agent refactoring is **95% complete**:

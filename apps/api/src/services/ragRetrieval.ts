@@ -26,6 +26,43 @@ export interface IndexedDocumentSection {
   keyword_terms: string[];
 }
 
+export interface PdfPageSlice {
+  pageNumber: number;
+  text: string;
+}
+
+/**
+ * Build section rows for org_document_sections.
+ * PDF: one section per non-empty page with accurate page_start/page_end.
+ * Other formats: paragraph-based sections with heuristic page span.
+ */
+export function buildDocumentSectionsForIndexing(
+  normalizedFullText: string,
+  options?: { pdfPages?: PdfPageSlice[]; sourceFormat?: string }
+): IndexedDocumentSection[] {
+  const format = options?.sourceFormat;
+  const rawPages = options?.pdfPages?.filter((p) => p.pageNumber > 0) ?? [];
+  const pages = rawPages.filter((p) => normalizeContent(p.text).length > 0);
+
+  if (format === "pdf" && pages.length > 0) {
+    return pages.map((page, idx) => {
+      const content = normalizeContent(page.text);
+      const pn = page.pageNumber;
+      return {
+        section_index: idx,
+        heading: `Page ${pn}`,
+        section_path: `page:${pn}`,
+        content,
+        page_start: pn,
+        page_end: pn,
+        keyword_terms: Array.from(extractKeywords(page.text)).slice(0, 20)
+      };
+    });
+  }
+
+  return splitIntoSections(normalizedFullText);
+}
+
 /**
  * Extract keywords from a goal/task input
  * Simple word frequency + stop-word filtering
@@ -255,7 +292,16 @@ export async function retrieveRelevantSections(
     return [];
   }
 
-  return (data as OrgDocumentSection[])
+  if (process.env.ORGOS_RAG_RETRIEVAL_LOG === "1") {
+    console.info("[rag_retrieval]", {
+      orgId: params.orgId,
+      queryKeywords: Array.from(inputKeywords),
+      rawSectionRows: data.length,
+      topN
+    });
+  }
+
+  const scored = (data as OrgDocumentSection[])
     .map((section) => ({
       section,
       score: calculateSimilarity(inputKeywords, new Set(section.keyword_terms ?? []))
@@ -275,9 +321,20 @@ export async function retrieveRelevantSections(
       return scopes.length === 0 || scopes.some((scope) => params.knowledgeScopes?.includes(scope));
     })
     .filter(({ score }) => score >= similarityThreshold)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, topN)
-    .map(({ section }) => section);
+    .sort((left, right) => right.score - left.score);
+
+  if (process.env.ORGOS_RAG_RETRIEVAL_LOG === "1") {
+    console.info("[rag_retrieval]", {
+      orgId: params.orgId,
+      afterFilter: scored.length,
+      topScores: scored.slice(0, 3).map((row) => ({
+        section_index: row.section.section_index,
+        score: row.score
+      }))
+    });
+  }
+
+  return scored.slice(0, topN).map(({ section }) => section);
 }
 
 /**
@@ -303,7 +360,13 @@ export function buildRAGContext(
         docContexts.push(`[${doc.doc_type.toUpperCase()}: ${doc.file_name}]\n${excerpt}\n`);
       } else {
         const excerpt = doc.content.substring(0, 1500);
-        docContexts.push(`[SECTION ${doc.section_index + 1}${doc.heading ? `: ${doc.heading}` : ""}]\n${excerpt}\n`);
+        const pageHint =
+          doc.page_start != null && doc.page_end != null
+            ? ` pp.${doc.page_start}-${doc.page_end}`
+            : "";
+        docContexts.push(
+          `[SECTION ${doc.section_index + 1}${doc.heading ? `: ${doc.heading}` : ""}${pageHint}]\n${excerpt}\n`
+        );
       }
     }
 
@@ -331,6 +394,8 @@ export async function indexDocument(
     sourceFormat?: string;
     contentHash?: string;
     ingestionWarnings?: string[];
+    pdfPages?: PdfPageSlice[];
+    pdfTotalPages?: number;
   }
 ): Promise<{
   normalizedContent: string;
@@ -345,11 +410,18 @@ export async function indexDocument(
     topics = Array.from(contentKeywords).slice(0, 10);
   }
 
-  // Count pages (rough estimate: 3000 chars ≈ 1 page)
-  const pageCount = Math.ceil(fileContent.length / 3000);
-
   const normalizedContent = normalizeContent(fileContent);
-  const sections = splitIntoSections(normalizedContent);
+  const sections = buildDocumentSectionsForIndexing(normalizedContent, {
+    ...(options?.pdfPages && options.pdfPages.length > 0 ? { pdfPages: options.pdfPages } : {}),
+    ...(options?.sourceFormat ? { sourceFormat: options.sourceFormat } : {})
+  });
+
+  const pageCount =
+    options?.pdfTotalPages && options.pdfTotalPages > 0
+      ? options.pdfTotalPages
+      : sections.length > 0
+        ? Math.max(...sections.map((s) => s.page_end))
+        : Math.max(1, Math.ceil(fileContent.length / 3000));
 
   const { error } = await supabase
     .from("org_documents")

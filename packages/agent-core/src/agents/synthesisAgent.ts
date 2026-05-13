@@ -31,6 +31,7 @@ export interface SynthesisReportInput {
     knowledgeScopes?: string[];
     sourceFormats?: string[];
     sourceTypes?: string[];
+    rerankByQueryKeywords?: boolean;
   };
 }
 
@@ -78,6 +79,8 @@ export async function synthesisAgent(input: SynthesisReportInput): Promise<Synth
   const systemPrompt = [
     "You are ORGOS synthesis agent.",
     "Never reference data not in childReports.",
+    "When retrieved reference material (RAG) is present in the user message, cite facts using the [ref=...] tokens from that material; do not invent refs.",
+    "Each key_finding must trace to a specific childReports[].id (via its insight text) or to an explicit [ref=...] line in RAG; omit findings that have no such trace.",
     "Explicitly identify contradictions between reports.",
     "Return JSON only with keys: summary,key_findings,contradictions,recommended_action,flagged_items.",
     "Summary must be concise."
@@ -108,7 +111,8 @@ export async function synthesisAgent(input: SynthesisReportInput): Promise<Synth
       docTypes: input.rag.docTypes,
       knowledgeScopes: input.rag.knowledgeScopes,
       sourceFormats: input.rag.sourceFormats,
-      sourceTypes: input.rag.sourceTypes
+      sourceTypes: input.rag.sourceTypes,
+      rerankByQueryKeywords: input.rag.rerankByQueryKeywords ?? true
     });
     messages = augmented.messages;
   }

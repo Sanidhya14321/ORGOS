@@ -37,6 +37,23 @@ async function checkRedis() {
   }
 }
 
+async function checkRemoteApiHealth() {
+  const base = process.env.ORGOS_SMOKE_API_URL?.trim();
+  if (!base) {
+    return;
+  }
+  const url = `${base.replace(/\/$/, '')}/health`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) {
+    throw new Error(`Remote API health check failed: ${res.status} ${url}`);
+  }
+  const body = await res.json().catch(() => null);
+  if (!body || typeof body.status !== 'string') {
+    throw new Error(`Remote API health returned unexpected JSON: ${url}`);
+  }
+  console.log('Remote API OK:', url, 'status=', body.status);
+}
+
 (async function main(){
   try {
     console.log('Checking Postgres...');
@@ -44,6 +61,11 @@ async function checkRedis() {
 
     console.log('Checking Redis...');
     await checkRedis();
+
+    if (process.env.ORGOS_SMOKE_API_URL) {
+      console.log('Checking remote API (ORGOS_SMOKE_API_URL)...');
+      await checkRemoteApiHealth();
+    }
 
     console.log('\nSmoke tests passed.\nStart your services or run integration tests that depend on Postgres/Redis.');
     process.exit(0);

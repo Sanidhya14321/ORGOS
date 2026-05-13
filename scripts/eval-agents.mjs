@@ -11,7 +11,10 @@ async function loadBuiltModule(relativePath) {
 
 async function run() {
   const { buildRoutingMemoryContext } = await loadBuiltModule("apps/api/dist/services/routingMemory.js");
-  const { buildRAGContext } = await loadBuiltModule("apps/api/dist/services/ragRetrieval.js");
+  const { buildRAGContext, buildDocumentSectionsForIndexing } = await loadBuiltModule(
+    "apps/api/dist/services/ragRetrieval.js"
+  );
+  const { rerankRagDocumentsByQueryOverlap } = await loadBuiltModule("packages/agent-core/dist/rag.js");
 
   const routingContext = buildRoutingMemoryContext({
     historyRows: [
@@ -82,6 +85,40 @@ async function run() {
 
   assert.match(ragContext.contextInstruction, /\[HANDBOOK: handbook\.txt\]/, "RAG eval should label included documents");
   assert.ok(ragContext.docContexts[0]?.length && ragContext.docContexts[0].length < 1700, "RAG eval should truncate oversized excerpts");
+
+  const pdfSections = buildDocumentSectionsForIndexing("", {
+    sourceFormat: "pdf",
+    pdfPages: [
+      { pageNumber: 2, text: "incident response taxonomy" },
+      { pageNumber: 5, text: "budget overview" }
+    ]
+  });
+  assert.equal(pdfSections.length, 2, "PDF indexing should emit one section per page");
+  assert.equal(pdfSections[0]?.page_start, 2, "PDF page_start should match source page");
+  assert.equal(pdfSections[1]?.page_end, 5, "PDF page_end should match source page");
+
+  const ranked = rerankRagDocumentsByQueryOverlap(
+    [
+      {
+        id: "a",
+        sourceType: "document_section",
+        sourceId: null,
+        chunkIndex: 0,
+        score: 0.4,
+        textSnippet: "incident response checklist production systems"
+      },
+      {
+        id: "b",
+        sourceType: "document_section",
+        sourceId: null,
+        chunkIndex: 0,
+        score: 0.42,
+        textSnippet: "unrelated fluff about cats"
+      }
+    ],
+    "incident response production"
+  );
+  assert.equal(ranked[0]?.id, "a", "Reranker should boost keyword overlap with query");
 
   console.log("Agent evals passed");
 }

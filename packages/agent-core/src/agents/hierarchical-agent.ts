@@ -1,9 +1,24 @@
 import { z } from "zod";
 import type { Task } from "@orgos/shared-types";
-import { type Position, type UserCapacity, type OrgStructureKind } from "@orgos/shared-types";
+import { type Position, type OrgStructureKind } from "@orgos/shared-types";
 import { callLLM } from "../llm/router.js";
 import type { LLMMessage } from "../llm/provider.js";
 import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
+import type { UserCapacity } from "../types/hierarchical-agent.types.js";
+
+function positionPolicy(position: Position): {
+  maxTaskDepth: number;
+  canDelegate: boolean;
+  maxDirectReports: number;
+} {
+  const meta = (position.metadata ?? {}) as Record<string, unknown>;
+  return {
+    maxTaskDepth: typeof meta.max_task_depth === "number" ? meta.max_task_depth : 10,
+    canDelegate: typeof meta.can_delegate === "boolean" ? meta.can_delegate : position.power_level >= 40,
+    maxDirectReports:
+      typeof meta.max_direct_reports === "number" ? meta.max_direct_reports : position.seat_count
+  };
+}
 
 /**
  * HierarchicalAgent: Universal agent that handles decomposition at ANY level of the org
@@ -160,12 +175,12 @@ Given a task and your current position in the org, you must decide:
 
 4. **ESCALATE**: Route to your superior
    - Use when task requires higher authority
-   - Or when it's beyond your max_task_depth
+   - Or when it's beyond your configured max task depth
    - Provide clear escalation reason
 
 DECISION RULES:
 - Respect org hierarchy: Can only delegate downward, escalate upward
-- Don't decompose if you're already at max depth (task.depth >= position.max_task_depth)
+- Don't decompose if you're already at max depth (task.depth >= position policy max depth)
 - Consider deadline: Tight deadlines may require delegation instead of decomposition
 - Factor in team capacity: Don't overload anyone
 - Task complexity vs Team capability: Match task difficulty to position levels
@@ -248,36 +263,38 @@ export async function hierarchicalAgent(
  */
 function buildOrgChartContext(position: Position, orgChart: Position[], orgStructure?: string): string {
   const lines: string[] = [];
-  lines.push(`Your Position: ${position.name} (Level ${position.level})`);
+  const policy = positionPolicy(position);
+  lines.push(`Your Position: ${position.title} (Level ${position.level})`);
   if (orgStructure) {
     lines.push(`Org Model: ${orgStructure}`);
   }
   lines.push(`Your Powers:`);
-  lines.push(`  - Can delegate: ${position.can_delegate}`);
-  lines.push(`  - Max task depth: ${position.max_task_depth}`);
-  lines.push(`  - Max direct reports: ${position.max_direct_reports}`);
+  lines.push(`  - Can delegate: ${policy.canDelegate}`);
+  lines.push(`  - Max task depth: ${policy.maxTaskDepth}`);
+  lines.push(`  - Max direct reports (policy): ${policy.maxDirectReports}`);
   lines.push("");
 
-  // Find direct reports
-  const directReports = orgChart.filter((p) => p.parent_position_id === position.id);
+  const directReports = orgChart.filter((p) => p.reports_to_position_id === position.id);
   if (directReports.length > 0) {
     lines.push("Your Direct Reports:");
     directReports.forEach((p) => {
-      // In matrix or functional models, list function or project if available
-      const pa = p as any;
-      const extra = (pa.function || pa.project || pa.slug) ? ` [${pa.function ?? pa.project ?? pa.slug}]` : "";
-      lines.push(`  - ${p.name} (Level ${p.level}, Power: ${p.power_level})${extra}`);
+      const pa = p as Record<string, unknown>;
+      const extra = (pa.function || pa.project || pa.slug)
+        ? ` [${String(pa.function ?? pa.project ?? pa.slug)}]`
+        : "";
+      lines.push(`  - ${p.title} (Level ${p.level}, Power: ${p.power_level})${extra}`);
     });
+  } else {
+    lines.push("Your Direct Reports: (none)");
   }
 
-  // Find superior
-  if (position.parent_position_id) {
-    const superior = orgChart.find((p) => p.id === position.parent_position_id);
+  if (position.reports_to_position_id) {
+    const superior = orgChart.find((p) => p.id === position.reports_to_position_id);
     if (superior) {
       lines.push("");
-      lines.push(`Your Superior: ${superior.name} (Level ${superior.level})`);
+      lines.push(`Your Superior: ${superior.title} (Level ${superior.level})`);
     }
-  } else if (orgStructure === 'flat') {
+  } else if (orgStructure === "flat") {
     lines.push("");
     lines.push(`Note: Organization appears to be flat — favor direct assignments to individuals.`);
   }
@@ -344,9 +361,7 @@ function validateDecision(decision: HierarchicalAgentOutput, input: Hierarchical
 
   // Rule 1: Can't delegate if no direct reports
   if (decision.action === "delegate") {
-    const subordinates = input.org_chart.filter(
-      (p) => p.parent_position_id === current_position.id
-    );
+    const subordinates = input.org_chart.filter((p) => p.reports_to_position_id === current_position.id);
     if (subordinates.length === 0) {
       throw new Error("Cannot delegate: no direct reports");
     }
@@ -354,16 +369,15 @@ function validateDecision(decision: HierarchicalAgentOutput, input: Hierarchical
 
   // Rule 2: Can't decompose beyond max depth
   if (decision.action === "decompose") {
-    if (task.depth >= current_position.max_task_depth) {
-      throw new Error(
-        `Cannot decompose: task at depth ${task.depth}, max allowed is ${current_position.max_task_depth}`
-      );
+    const maxDepth = positionPolicy(current_position).maxTaskDepth;
+    if (task.depth >= maxDepth) {
+      throw new Error(`Cannot decompose: task at depth ${task.depth}, max allowed is ${maxDepth}`);
     }
   }
 
   // Rule 3: Can't escalate if no superior
   if (decision.action === "escalate") {
-    if (!current_position.parent_position_id) {
+    if (!current_position.reports_to_position_id) {
       throw new Error("Cannot escalate: already at top level");
     }
   }

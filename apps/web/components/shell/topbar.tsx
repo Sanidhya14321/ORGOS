@@ -31,6 +31,7 @@ const BASE_CARD_NAV_ITEMS: CardNavItem[] = [
     links: [
       { label: "Analytics", href: "/dashboard/analytics" },
       { label: "Goals & OKRs", href: "/dashboard/goals" },
+      { label: "Knowledge base", href: "/dashboard/knowledge" },
       { label: "Forecasting", href: "/dashboard/forecast" },
       { label: "Settings", href: "/dashboard/settings" }
     ]
@@ -63,6 +64,7 @@ function getCardNavItemsForRole(role?: Role): CardNavItem[] {
         if (link.href === "/dashboard/org-tree") return canAccessSection(role, "orgTree");
         if (link.href === "/dashboard/power") return canAccessSection(role, "powerControl");
         if (link.href === "/dashboard/goals") return canAccessSection(role, "goals");
+        if (link.href === "/dashboard/knowledge") return canAccessSection(role, "knowledge");
         if (link.href === "/dashboard/team") return canAccessSection(role, "team");
         if (link.href === "/dashboard/task-board") return canAccessSection(role, "taskBoard");
         return true;

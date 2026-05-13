@@ -16,6 +16,8 @@ test("executives retain org-wide management sections", () => {
   assert.equal(canAccessSection("ceo", "recruitment"), true);
   assert.equal(canAccessSection("cfo", "orgSettings"), true);
   assert.equal(canAccessSection("ceo", "forecast"), true);
+  assert.equal(canAccessSection("ceo", "knowledge"), true);
+  assert.equal(canAccessSection("cfo", "knowledge"), false);
   assert.equal(canManageGoals("ceo"), true);
   assert.equal(canManageGoals("cfo"), true);
 });

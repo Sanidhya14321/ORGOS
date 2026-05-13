@@ -13,6 +13,11 @@ export interface ParsedTable {
   rows: Array<Record<string, string>>;
 }
 
+export interface ParsedPdfPage {
+  pageNumber: number;
+  text: string;
+}
+
 export interface ParsedLocalFile {
   text: string;
   sourceFormat: SupportedSourceFormat;
@@ -20,6 +25,10 @@ export interface ParsedLocalFile {
   detectedHeaders: string[];
   warnings: string[];
   tables: ParsedTable[];
+  /** Per-page text when source is PDF (1-based page numbers). */
+  pdfPages?: ParsedPdfPage[];
+  /** Total pages in PDF per parser (includes empty pages). */
+  pdfTotalPages?: number;
 }
 
 function normalizeWhitespace(value: string): string {
@@ -246,8 +255,27 @@ export async function parseLocalFile(params: {
       const parser = new PDFParse({ data: params.buffer });
       const result = await parser.getText();
       text = result.text ?? "";
+      const total = typeof result.total === "number" ? result.total : 0;
+      const pagesRaw = Array.isArray(result.pages) ? result.pages : [];
+      const pdfPages: ParsedPdfPage[] = pagesRaw
+        .map((page: { num?: number; text?: string }) => ({
+          pageNumber: typeof page.num === "number" ? page.num : 0,
+          text: normalizeWhitespace(page.text ?? "")
+        }))
+        .filter((page) => page.pageNumber > 0);
+
       await parser.destroy();
-      break;
+
+      return {
+        text: normalizeWhitespace(text),
+        sourceFormat,
+        mimeType: params.mimeType?.trim() || "application/octet-stream",
+        detectedHeaders: collectDetectedHeaders(tables),
+        warnings,
+        tables,
+        pdfPages,
+        pdfTotalPages: total > 0 ? total : pdfPages.length
+      };
     }
     case "docx": {
       const result = await mammoth.extractRawText({ buffer: params.buffer });

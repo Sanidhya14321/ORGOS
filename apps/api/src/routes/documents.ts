@@ -11,6 +11,11 @@ import { indexDocument, getOrgDocuments, archiveDocument } from "../services/rag
 import { decryptText, encryptText } from "../lib/encryption.js";
 import { parseLocalFile } from "../services/localFileParser.js";
 import { getIngestQueue } from "../queue/index.js";
+import {
+  hasOpenAiEmbeddingKey,
+  resolveEmbeddingIngestPlan,
+  type DocumentRetrievalMode
+} from "../services/documentRetrieval.js";
 
 const MAX_DOCUMENT_CHARS = 200_000;
 const MAX_FILENAME_LENGTH = 255;
@@ -134,7 +139,10 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       parsedFile = await parseLocalFile({
         buffer: uploaded.buffer,
         fileName,
-        mimeType: uploaded.payload.mime_type ?? normalizedPayload.data.mime_type ?? null
+        mimeType:
+          (typeof uploaded.payload.mime_type === "string" ? uploaded.payload.mime_type : null) ??
+          normalizedPayload.data.mime_type ??
+          null
       });
     } catch (error) {
       return sendApiError(reply, request, 422, "VALIDATION_ERROR", "Document format could not be parsed locally", {
@@ -143,6 +151,10 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const extractedText = parsedFile.text.trim();
+    const requestedMode = normalizedPayload.data.retrieval_mode as DocumentRetrievalMode;
+    const ingestPlan = resolveEmbeddingIngestPlan(requestedMode, hasOpenAiEmbeddingKey());
+    const ingestionWarnings = [...parsedFile.warnings, ...ingestPlan.ingestionNotes];
+
     const contentHash = crypto.createHash("sha256").update(extractedText).digest("hex");
 
     if (!fileName) {
@@ -180,12 +192,12 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
         summary: normalizedPayload.data.summary ?? null,
         branch_id: normalizedPayload.data.branch_id ?? null,
         department: normalizedPayload.data.department ?? null,
-        retrieval_mode: normalizedPayload.data.retrieval_mode,
+        retrieval_mode: ingestPlan.storedRetrievalMode,
         normalized_content: extractedText,
         knowledge_scope: normalizedPayload.data.knowledge_scope,
         source_format: parsedFile.sourceFormat,
         content_hash: contentHash,
-        ingestion_warnings: parsedFile.warnings,
+        ingestion_warnings: ingestionWarnings,
         file_size: uploaded.buffer.length,
         mime_type: uploaded.payload.mime_type ?? normalizedPayload.data.mime_type ?? parsedFile.mimeType,
         is_indexed: false,
@@ -210,14 +222,19 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
         knowledgeScope: normalizedPayload.data.knowledge_scope,
         sourceFormat: parsedFile.sourceFormat,
         contentHash,
-        ingestionWarnings: parsedFile.warnings
+        ingestionWarnings,
+        ...(parsedFile.pdfPages && parsedFile.pdfPages.length > 0
+          ? { pdfPages: parsedFile.pdfPages, pdfTotalPages: parsedFile.pdfTotalPages ?? parsedFile.pdfPages.length }
+          : {})
       });
       indexedSections = indexResult.sections;
     } catch (e) {
       request.log.warn({ err: e }, "Failed to index document");
     }
 
-    if (normalizedPayload.data.retrieval_mode !== "vectorless" && indexedSections.length > 0) {
+    const embeddingEnqueued = ingestPlan.enqueueEmbeddingJob && indexedSections.length > 0;
+
+    if (embeddingEnqueued) {
       try {
         await getIngestQueue().add("document_ingest", {
           orgId,
@@ -244,6 +261,11 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         request.log.warn({ err: error }, "Failed to enqueue document embeddings");
       }
+    } else if (requestedMode !== "vectorless" && !embeddingEnqueued && indexedSections.length > 0) {
+      request.log.info(
+        { docId: doc.id, requestedMode, storedMode: ingestPlan.storedRetrievalMode },
+        "document embedding ingest skipped (vectorless effective or empty sections)"
+      );
     }
 
     return reply.status(201).send({
@@ -252,7 +274,10 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       doc_type: docType,
       source_format: parsedFile.sourceFormat,
       knowledge_scope: normalizedPayload.data.knowledge_scope,
-      warnings: parsedFile.warnings,
+      warnings: ingestionWarnings,
+      retrieval_mode_requested: requestedMode,
+      retrieval_mode_stored: ingestPlan.storedRetrievalMode,
+      embedding_enqueued: embeddingEnqueued,
       uploaded_at: new Date().toISOString()
     });
   });
@@ -298,6 +323,7 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
         source_format: doc.source_format ?? "unknown",
         ingestion_warnings: doc.ingestion_warnings ?? [],
         section_count: doc.section_count ?? 0,
+        retrieval_mode: doc.retrieval_mode ?? "vectorless",
         uploaded_at: doc.uploaded_at,
         indexed_at: doc.indexed_at
       }))

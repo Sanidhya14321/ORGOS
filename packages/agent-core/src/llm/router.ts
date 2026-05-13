@@ -319,6 +319,25 @@ async function buildRuleBasedFallback(
   };
 }
 
+function emitLlmTrace(provider: string, response: LLMResponse, context?: LLMLogContext): void {
+  if (process.env.ORGOS_LLM_TRACE !== "1") {
+    return;
+  }
+  console.error(
+    JSON.stringify({
+      event: "llm_trace",
+      provider,
+      agentType: context?.agentType ?? null,
+      action: context?.action ?? null,
+      taskId: context?.taskId ?? null,
+      goalId: context?.goalId ?? null,
+      latencyMs: response.latencyMs,
+      promptTokens: response.promptTokens,
+      compTokens: response.compTokens
+    })
+  );
+}
+
 async function logLLMCall(
   providerName: string,
   messages: LLMMessage[],
@@ -368,6 +387,7 @@ export async function callLLM(
     const result = await resilientComplete(groqProvider, messages, opts);
     llmMetrics.recordRouterLatency(groqProvider.name, result.latencyMs);
     await logLLMCall(groqProvider.name, messages, result, context);
+    emitLlmTrace(groqProvider.name, result, context);
     return result;
   } catch (error) {
     const elapsed = Date.now() - groqStartedAt;
@@ -389,6 +409,7 @@ export async function callLLM(
     llmMetrics.recordRouterLatency(geminiProvider.name, result.latencyMs);
     llmMetrics.recordRouterFallback(groqProvider.name, geminiProvider.name);
     await logLLMCall(geminiProvider.name, messages, result, context);
+    emitLlmTrace(geminiProvider.name, result, context);
     return result;
   } catch (error) {
     const elapsed = Date.now() - geminiStartedAt;
@@ -410,6 +431,7 @@ export async function callLLM(
     llmMetrics.recordRouterLatency("rule-based", fallback.latencyMs);
     llmMetrics.recordRouterFallback(geminiProvider.name, "rule-based");
     await logLLMCall("rule-based", messages, fallback, context);
+    emitLlmTrace("rule-based", fallback, context);
     return fallback;
   } catch (error) {
     const elapsed = Date.now() - fallbackStartedAt;

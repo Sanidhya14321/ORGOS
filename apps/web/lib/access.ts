@@ -11,7 +11,8 @@ export type DashboardSection =
   | "analytics"
   | "orgSettings"
   | "capture"
-  | "approvals";
+  | "approvals"
+  | "knowledge";
 
 export function isExecutiveRole(role?: Role): boolean {
   return role === "ceo" || role === "cfo";
@@ -47,6 +48,8 @@ export function canAccessSection(role: Role | undefined, section: DashboardSecti
       return isExecutiveRole(role);
     case "approvals":
       return isExecutiveRole(role);
+    case "knowledge":
+      return role === "ceo";
     default:
       return false;
   }

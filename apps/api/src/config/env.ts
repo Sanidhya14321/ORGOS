@@ -16,6 +16,9 @@ const EnvSchema = z.object({
   UPSTASH_REDIS_TOKEN: z.string().min(1),
   GROQ_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  /** Optional; document embedding ingest + vector/hybrid retrieval need this at runtime. */
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_EMBEDDING_MODEL: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
   DATADOG_API_KEY: z.string().optional(),
   DATADOG_ENABLED: z.coerce.boolean().default(false)

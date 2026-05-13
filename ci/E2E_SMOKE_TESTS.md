@@ -9,6 +9,16 @@ This guide covers setting up and running smoke tests for the ORGOS platform loca
 
 ## Quick Start
 
+### Remote API health (no auth)
+
+From repo root, after API deployed and reachable:
+
+```bash
+ORGOS_SMOKE_API_URL=https://your-api-host.example.com node scripts/smoke-local.js
+```
+
+Uses `GET {ORGOS_SMOKE_API_URL}/health`. Local Postgres/Redis checks still run unless you split scripts later. See also [docs/PLATFORM_DEPLOY.md](../docs/PLATFORM_DEPLOY.md).
+
 ### Prerequisites
 - Node.js 18+ (from `.node-version`)
 - Free Supabase account (https://supabase.com)

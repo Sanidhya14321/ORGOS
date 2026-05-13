@@ -84,3 +84,59 @@ test("document upload parses local text and stores RAG metadata", async () => {
 
   await app.close();
 });
+
+test("document upload hybrid without OPENAI_API_KEY stores vectorless and reports no embedding enqueue", async () => {
+  const prevKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+
+  try {
+    const supabase = createSupabaseMock({
+      resolve: createDocumentsResolver()
+    });
+
+    const app = await buildRouteTestApp({
+      routes: documentsRoutes,
+      supabaseService: supabase.client,
+      currentUser: {
+        id: ownerId,
+        role: "ceo",
+        email: "owner@orgos.test"
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/documents/upload",
+      payload: {
+        org_id: orgId,
+        file_name: "policy-fallback.txt",
+        file_content: "Remote work policy requires VPN for production access.",
+        doc_type: "policy",
+        retrieval_mode: "hybrid",
+        knowledge_scope: ["policy"]
+      }
+    });
+
+    assert.equal(response.statusCode, 201, response.body);
+    const body = JSON.parse(response.body) as {
+      retrieval_mode_requested: string;
+      retrieval_mode_stored: string;
+      embedding_enqueued: boolean;
+    };
+    assert.equal(body.retrieval_mode_requested, "hybrid");
+    assert.equal(body.retrieval_mode_stored, "vectorless");
+    assert.equal(body.embedding_enqueued, false);
+
+    const documentInsert = supabase.operations.find(
+      (operation) => operation.table === "org_documents" && operation.action === "insert"
+    );
+    assert.ok(documentInsert);
+    assert.equal((documentInsert.values as { retrieval_mode: string }).retrieval_mode, "vectorless");
+
+    await app.close();
+  } finally {
+    if (prevKey !== undefined) {
+      process.env.OPENAI_API_KEY = prevKey;
+    }
+  }
+});

@@ -13,7 +13,7 @@
     "test": "npm run guard:schemas && npm --workspace @orgos/api run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "eval:agents": "node scripts/eval-agents.mjs",
+    "eval:agents": "npm --workspace @orgos/api run build && npm --workspace @orgos/agent-core run build && node scripts/eval-agents.mjs",
     "guard:schemas": "node scripts/check-legacy-schema-refs.mjs",
     "smoke:local": "node scripts/smoke-local.js",
     "db:apply-remote": "bash scripts/apply-remote-schema.sh",

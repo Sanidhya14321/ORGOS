@@ -1,5 +1,7 @@
 # ORGOS — MEMORY
 
+**Roadmap / phase context:** [docs/ROADMAP_CONTEXT.md](docs/ROADMAP_CONTEXT.md) · **Deploy + workers:** [docs/PLATFORM_DEPLOY.md](docs/PLATFORM_DEPLOY.md) · **Staging demo script:** [docs/GOLDEN_JOURNEY_STAGING.md](docs/GOLDEN_JOURNEY_STAGING.md)
+
 ## WHAT THIS PROJECT IS
 ORGOS is an AI-powered organizational task management system where tasks flow downward through hierarchy and each assignee can use an agent to decompose work.
 
