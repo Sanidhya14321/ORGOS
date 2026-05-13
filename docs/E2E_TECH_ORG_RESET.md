@@ -136,10 +136,10 @@ Then start API + `npm run e2e:upload-knowledge-pdf`.
 | Login `400` `Invalid login payload` / `email` `Invalid email` | Seed used non-DNS-looking domain (e.g. `.e2e`) | Default seed domain is `nexustech-e2e.org`. Re-seed after pull, or set `SEED_USER_EMAIL_DOMAIN` to a valid-looking host + `npm run db:seed:tech-e2e` |
 | `No orgos_access_token in Set-Cookie` | Cookie parse / proxy stripped headers | Use Node 18+; hit API directly; check login response body still 200 |
 | Upload `403` `Only CEO can upload` | Logged-in user not CEO | Use CEO email or `E2E_CEO_EMAIL` |
-| Upload `400` `Invalid document upload payload` | Multipart field names / missing file | Field names: `org_id`, `doc_type`, `retrieval_mode`, file field **`file`** (see `apps/api/test/documents-multipart.test.ts`) |
+| Upload `404` `Organization not found` | `documents` route requires `orgs.created_by ===` CEO user id | Run `npm run db:seed:tech-e2e` again (seeds now patch `created_by`); or SQL: `update orgs set created_by = '<ceo_user_uuid>' where id = '<org_id>'` |
 | Hybrid upload + `ingestion_warnings` / no embedding | No `OPENAI_API_KEY` on API | Keep default `E2E_DOCUMENT_RETRIEVAL_MODE=vectorless` for script; or set key + `hybrid` |
 | `ORGOS_SECTION_TSVECTOR=1` + empty / errors | Migration `017` not applied | Apply schema / `017` RPC exists before flag |
-| Web 401 loop after login | API origin vs cookie | Match `WEB_ORIGIN` / CORS + `NEXT_PUBLIC_API_URL`; same-site cookies |
+| `listen EADDRINUSE ... :4000` | Old API still bound | `fuser -k 4000/tcp` (Linux) or stop prior `tsx watch` |
 | `SESSION_LIMITED` / `429` on login | Too many sessions for role | Clear old sessions or wait; see auth route limits for CEO/CFO |
 
 ---

@@ -220,6 +220,11 @@ async function seed(): Promise<void> {
     throw new Error("Unable to resolve executive IDs after upsert");
   }
 
+  const orgOwner = await supabase.from("orgs").update({ created_by: ceoId }).eq("id", orgId);
+  if (orgOwner.error) {
+    throw new Error(`Unable to set org created_by: ${orgOwner.error.message}`);
+  }
+
   const purgeOldSeededTasks = await supabase
     .from("tasks")
     .delete()
