@@ -1,5 +1,16 @@
 # Phase 4: Data Migration Status
 
+## 2026-05 — RAG SQL (016 / 017)
+
+For **hybrid RAG metadata** and **optional section FTS**, apply in order on the target database:
+
+- `packages/db/schema/016_rag_hybrid_metadata.sql`
+- `packages/db/schema/017_org_document_sections_tsvector.sql`
+
+One command: `bash scripts/apply-016-017-rag-migrations.sh` (requires `DATABASE_URL` or `DIRECT_URL`). See [`docs/PLATFORM_DEPLOY.md`](docs/PLATFORM_DEPLOY.md). This is separate from historical `011` / `assigned_position_id` blocker below.
+
+---
+
 **Current Phase**: Data Migration (Phase 4 of 4)
 **Status**: ⚠️ Blocked on database schema migration
 

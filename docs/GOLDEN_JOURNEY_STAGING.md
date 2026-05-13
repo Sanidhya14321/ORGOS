@@ -28,3 +28,10 @@ Scripted path for **non-dev** validation of ORGOS end-to-end. Replace placeholde
 
 - API health: `ORGOS_SMOKE_API_URL=<api> node scripts/smoke-local.js`  
 - Full API test suite: `npm test` from repo root  
+- RAG SQL on Postgres (staging/prod): `DATABASE_URL=... bash scripts/apply-016-017-rag-migrations.sh` (runs `016` then `017`; same as two separate apply scripts)
+
+## Post-deploy verification (operator)
+
+1. Run combined migration (or `apply-016` then `apply-017`) on target DB; only then enable `ORGOS_SECTION_TSVECTOR` / `ORGOS_RAG_MERGE_RRF` in API env.  
+2. Smoke: `ORGOS_SMOKE_API_URL` + `node scripts/smoke-local.js`.  
+3. Product: complete [Steps](#steps) above; mark remote checklist in [`ROADMAP_CONTEXT.md`](./ROADMAP_CONTEXT.md) when staging sign-off done.
