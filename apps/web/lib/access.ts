@@ -4,6 +4,7 @@ export type DashboardSection =
   | "taskBoard"
   | "goals"
   | "orgTree"
+  | "powerControl"
   | "team"
   | "recruitment"
   | "forecast"
@@ -35,6 +36,8 @@ export function canAccessSection(role: Role | undefined, section: DashboardSecti
     case "orgTree":
     case "team":
       return true;
+    case "powerControl":
+      return role === "ceo" || role === "cfo" || role === "manager";
     case "recruitment":
     case "forecast":
     case "analytics":

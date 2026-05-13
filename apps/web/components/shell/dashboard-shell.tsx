@@ -19,6 +19,7 @@ function titleFromPath(pathname: string): string {
   if (pathname.startsWith("/dashboard/analytics")) return "Analytics";
   if (pathname.startsWith("/dashboard/assistant")) return "Assistant";
   if (pathname.startsWith("/dashboard/org-tree")) return "Org Tree";
+  if (pathname.startsWith("/dashboard/power")) return "Power Control";
   if (pathname.startsWith("/dashboard/goals")) return "Goals";
   if (pathname.startsWith("/dashboard/recruit")) return "Recruitment";
   if (pathname.startsWith("/dashboard/shortcuts")) return "Shortcuts";

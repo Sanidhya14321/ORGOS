@@ -10,6 +10,7 @@ import {
   Goal,
   Menu,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   Target,
   Users,
@@ -45,6 +46,7 @@ function iconForLink(label: string) {
   if (label === "Approvals") return UserRound;
   if (label === "Team Directory") return Users;
   if (label === "Org Tree") return Users;
+  if (label === "Power Control") return SlidersHorizontal;
   if (label === "Recruitment") return UserRound;
   if (label === "Inbox") return Sparkles;
   if (label === "Analytics") return BarChart3;

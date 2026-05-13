@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
+import { isExecutiveRole } from "@/lib/access";
 import { useSocket } from "@/lib/socket";
 import { toast } from "sonner";
 import type { Task, User } from "@/lib/models";
@@ -49,8 +50,64 @@ type WorkloadItem = {
   heat: "low" | "medium" | "high";
 };
 
+type TaskDetailResponse = {
+  task: Task;
+  goal?: {
+    id: string;
+    title: string;
+    status?: string | null;
+    priority?: string | null;
+    deadline?: string | null;
+  } | null;
+  parent?: {
+    id: string;
+    title: string;
+    status?: string | null;
+    assigned_to?: string | null;
+  } | null;
+};
+
 function isRoutingRole(role?: string | null): boolean {
   return role === "ceo" || role === "cfo" || role === "manager";
+}
+
+function canMutateTaskStatus(task: Task | null | undefined, user: User | null | undefined): boolean {
+  if (!task || !user) {
+    return false;
+  }
+
+  return task.assigned_to === user.id || isExecutiveRole(user.role);
+}
+
+function canMarkTaskComplete(task: Task | null | undefined): boolean {
+  return Boolean(task && (task.status === "pending" || task.status === "active" || task.status === "in_progress"));
+}
+
+function canBlockTask(task: Task | null | undefined): boolean {
+  return Boolean(
+    task &&
+      (task.status === "pending" ||
+        task.status === "routing" ||
+        task.status === "active" ||
+        task.status === "in_progress" ||
+        task.status === "rejected")
+  );
+}
+
+function getResumeStatus(task: Task | null | undefined): Task["status"] | null {
+  if (!task) {
+    return null;
+  }
+
+  if (task.status === "blocked" || task.status === "rejected") {
+    return "in_progress";
+  }
+
+  if (task.status === "pending") {
+    return "active";
+  }
+
+  return null;
 }
 
 export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -66,45 +123,105 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
     queryFn: () => apiFetch<User>("/api/me").catch(() => null),
     enabled: open
   });
+  const taskDetailQuery = useQuery({
+    queryKey: ["task", task?.id, "detail"],
+    queryFn: () => apiFetch<TaskDetailResponse>(`/api/tasks/${task?.id}`),
+    enabled: Boolean(task?.id && open)
+  });
+  const activeTask = taskDetailQuery.data?.task ?? task;
+  const activeGoal = taskDetailQuery.data?.goal ?? null;
+  const activeParent = taskDetailQuery.data?.parent ?? null;
 
   const canRequestRouting = isRoutingRole(meQuery.data?.role);
+  const canManageStatus = canMutateTaskStatus(activeTask, meQuery.data ?? null);
+  const canApproveManagerCompletion = Boolean(
+    activeTask &&
+      isExecutiveRole(meQuery.data?.role) &&
+      activeTask.assigned_role === "manager" &&
+      (activeTask.status === "pending" || activeTask.status === "completed") &&
+      !activeTask.completion_approved
+  );
+  const resumeStatus = getResumeStatus(activeTask);
 
   const workloadQuery = useQuery({
     queryKey: ["tasks", "workload", "capacity"],
     queryFn: () => apiFetch<{ items: WorkloadItem[] }>("/api/tasks/workload/capacity"),
     select: (data) => data.items,
-    enabled: Boolean(task?.id && open && canRequestRouting)
+    enabled: Boolean(activeTask?.id && open && canRequestRouting)
   });
 
   const commentsQuery = useQuery({
     queryKey: ["task-comments", task?.id],
-    queryFn: () => apiFetch<{ items: Comment[] }>(`/api/tasks/${task?.id}/comments`),
+    queryFn: () => apiFetch<{ items: Comment[] }>(`/api/tasks/${activeTask?.id}/comments`),
     select: (data) => data.items,
-    enabled: Boolean(task?.id && open)
+    enabled: Boolean(activeTask?.id && open)
   });
 
   const attachmentsQuery = useQuery({
     queryKey: ["task-attachments", task?.id],
-    queryFn: () => apiFetch<{ items: Attachment[] }>(`/api/tasks/${task?.id}/attachments`),
+    queryFn: () => apiFetch<{ items: Attachment[] }>(`/api/tasks/${activeTask?.id}/attachments`),
     select: (data) => data.items,
-    enabled: Boolean(task?.id && open)
+    enabled: Boolean(activeTask?.id && open)
   });
 
   const addCommentMutation = useMutation({
     mutationFn: () =>
-      apiFetch(`/api/tasks/${task?.id}/comments`, {
+      apiFetch(`/api/tasks/${activeTask?.id}/comments`, {
         method: "POST",
         body: JSON.stringify({ body: commentBody, mentions: [] })
       }),
     onSuccess: () => {
       setCommentBody("");
-      queryClient.invalidateQueries({ queryKey: ["task-comments", task?.id] });
+      queryClient.invalidateQueries({ queryKey: ["task-comments", activeTask?.id] });
+    }
+  });
+
+  const refreshTaskQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+      queryClient.invalidateQueries({ queryKey: ["task", activeTask?.id] }),
+      queryClient.invalidateQueries({ queryKey: ["goals"] })
+    ]);
+  };
+
+  const statusMutation = useMutation({
+    mutationFn: (status: Task["status"]) =>
+      apiFetch<Task>(`/api/tasks/${activeTask?.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status })
+      }),
+    onSuccess: async (_updatedTask, status) => {
+      const message = status === "completed"
+        ? "Task marked complete."
+        : status === "blocked"
+          ? "Task marked blocked."
+          : "Task resumed.";
+      toast.success(message);
+      await refreshTaskQueries();
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Unable to update task status");
+    }
+  });
+
+  const approveCompletionMutation = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/tasks/${activeTask?.id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ approved: true })
+      }),
+    onSuccess: async () => {
+      toast.success("Manager task completion approved.");
+      await refreshTaskQueries();
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Unable to approve manager task completion");
     }
   });
 
   const requestRoutingMutation = useMutation({
     mutationFn: () =>
-      apiFetch<{ status?: string; taskId?: string; suggestions?: RoutingSuggestion[] }>(`/api/tasks/${task?.id}/routing-suggest`, {
+      apiFetch<{ status?: string; taskId?: string; suggestions?: RoutingSuggestion[] }>(`/api/tasks/${activeTask?.id}/routing-suggest`, {
         method: "POST",
         body: JSON.stringify({})
       }),
@@ -114,7 +231,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
 
       if (suggestions.length > 0) {
         setRoutingStatus(`Received ${suggestions.length} routing suggestion${suggestions.length === 1 ? "" : "s"}.`);
-        toast.success(`Routing suggestions ready for ${task?.title ?? "this task"}.`);
+        toast.success(`Routing suggestions ready for ${activeTask?.title ?? "this task"}.`);
         return;
       }
 
@@ -136,7 +253,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
 
   const confirmRoutingMutation = useMutation({
     mutationFn: (confirmed: RoutingSuggestion[]) =>
-      apiFetch(`/api/tasks/${task?.id}/routing-confirm`, {
+      apiFetch(`/api/tasks/${activeTask?.id}/routing-confirm`, {
         method: "POST",
         body: JSON.stringify({ confirmed, status: "pending" })
       }),
@@ -145,7 +262,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
       setRoutingStatus("Routing confirmed and saved.");
       toast.success("Routing confirmed.");
       void queryClient.invalidateQueries({ queryKey: ["tasks", "board"] });
-      void queryClient.invalidateQueries({ queryKey: ["task", task?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["task", activeTask?.id] });
     },
     onError: (err) => {
       const message = err instanceof Error ? err.message : "Failed to confirm routing";
@@ -155,14 +272,14 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
 
   const delegateMutation = useMutation({
     mutationFn: (assigneeId: string) =>
-      apiFetch(`/api/tasks/${task?.id}/delegate`, {
+      apiFetch(`/api/tasks/${activeTask?.id}/delegate`, {
         method: "POST",
         body: JSON.stringify({ assignTo: assigneeId })
       }),
     onSuccess: (updated) => {
       toast.success("Task assigned");
       void queryClient.invalidateQueries({ queryKey: ["tasks", "board"] });
-      void queryClient.invalidateQueries({ queryKey: ["task", task?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["task", activeTask?.id] });
       // remove suggestions after assignment to avoid duplicate actions
       setRoutingSuggestions([]);
       setRoutingStatus("Assigned");
@@ -184,7 +301,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
     }
   };
 
-  const dependsOn = useMemo(() => task?.depends_on ?? [], [task]);
+  const dependsOn = useMemo(() => activeTask?.depends_on ?? [], [activeTask?.depends_on]);
 
   const capacityByUser = useMemo(() => {
     return new Map((workloadQuery.data ?? []).map((item) => [item.userId, item]));
@@ -200,15 +317,15 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
   useEffect(() => {
     setRoutingSuggestions([]);
     setRoutingStatus(null);
-  }, [task?.id]);
+  }, [activeTask?.id]);
 
   useEffect(() => {
-    if (!task?.id || !open) {
+    if (!activeTask?.id || !open) {
       return;
     }
 
     const onRoutingReady = (payload: { taskId?: string; suggestions?: RoutingSuggestion[] }) => {
-      if (payload.taskId !== task.id) {
+      if (payload.taskId !== activeTask.id) {
         return;
       }
 
@@ -219,7 +336,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
           ? `Routing suggestions ready: ${suggestions.length} candidate${suggestions.length === 1 ? "" : "s"}.`
           : "Routing suggestions ready."
       );
-      toast.success(`Routing suggestions ready for ${task.title}.`);
+      toast.success(`Routing suggestions ready for ${activeTask.title}.`);
     };
 
     socket.on("task:routing_ready", onRoutingReady);
@@ -227,7 +344,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
     return () => {
       socket.off("task:routing_ready", onRoutingReady);
     };
-  }, [open, socket, task?.id, task?.title]);
+  }, [activeTask?.id, activeTask?.title, open, socket]);
 
   const suggestionCards = routingSuggestions.map((suggestion) => {
     const workload = capacityByUser.get(suggestion.assigneeId);
@@ -240,27 +357,109 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
         {!task ? null : (
           <ScrollArea className="h-full pr-4">
             <SheetHeader>
-              <SheetTitle>{task.title}</SheetTitle>
-              <SheetDescription>Goal {task.goal_id}</SheetDescription>
+              <SheetTitle>{activeTask?.title ?? task.title}</SheetTitle>
+              <SheetDescription>
+                {activeGoal?.title ? activeGoal.title : `Goal ${activeTask?.goal_id ?? task.goal_id}`}
+              </SheetDescription>
             </SheetHeader>
 
             <div className="mt-4 space-y-4">
               <div className="flex flex-wrap gap-2">
-                <Badge className="bg-bg-subtle text-text-secondary">{task.priority ?? "medium"}</Badge>
-                <Badge className="bg-bg-subtle text-text-secondary">{task.status}</Badge>
-                <Badge className={task.sla_status === "breached" ? "bg-danger-subtle text-danger" : task.sla_status === "at_risk" ? "bg-warning-subtle text-warning" : "bg-success-subtle text-success"}>
-                  SLA {task.sla_status ?? "on_track"}
+                <Badge className="bg-bg-subtle text-text-secondary">{activeTask?.priority ?? "medium"}</Badge>
+                <Badge className="bg-bg-subtle text-text-secondary">{activeTask?.status ?? "pending"}</Badge>
+                <Badge className={activeTask?.sla_status === "breached" ? "bg-danger-subtle text-danger" : activeTask?.sla_status === "at_risk" ? "bg-warning-subtle text-warning" : "bg-success-subtle text-success"}>
+                  SLA {activeTask?.sla_status ?? "on_track"}
                 </Badge>
               </div>
 
+              <div className="space-y-3 rounded-lg border border-border bg-bg-subtle p-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">Work controls</p>
+                  <p className="text-xs text-text-secondary">
+                    Explicit task actions for assignees and executives. Manager-completed tasks still require executive approval.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {canManageStatus && canMarkTaskComplete(activeTask) ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-success text-white hover:bg-success/90"
+                      disabled={statusMutation.isPending}
+                      onClick={() => statusMutation.mutate("completed")}
+                    >
+                      {statusMutation.isPending ? "Saving..." : "Mark complete"}
+                    </Button>
+                  ) : null}
+                  {canManageStatus && canBlockTask(activeTask) ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={statusMutation.isPending}
+                      onClick={() => statusMutation.mutate("blocked")}
+                    >
+                      Block task
+                    </Button>
+                  ) : null}
+                  {canManageStatus && resumeStatus ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={statusMutation.isPending}
+                      onClick={() => statusMutation.mutate(resumeStatus)}
+                    >
+                      {resumeStatus === "active" ? "Start task" : "Resume task"}
+                    </Button>
+                  ) : null}
+                  {canApproveManagerCompletion ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-accent hover:bg-accent-hover"
+                      disabled={approveCompletionMutation.isPending}
+                      onClick={() => approveCompletionMutation.mutate()}
+                    >
+                      {approveCompletionMutation.isPending ? "Approving..." : "Approve completion"}
+                    </Button>
+                  ) : null}
+                </div>
+                {!canManageStatus ? (
+                  <p className="text-xs text-text-secondary">
+                    Only the assignee, CEO, or CFO can update task status directly from this drawer.
+                  </p>
+                ) : null}
+                {activeTask?.requires_evidence ? (
+                  <p className="text-xs text-text-secondary">
+                    This task requires evidence before completion can be accepted.
+                  </p>
+                ) : null}
+                {activeTask?.assigned_role === "manager" && activeTask?.status === "pending" && !activeTask.completion_approved ? (
+                  <p className="text-xs text-text-secondary">
+                    This manager task is awaiting executive approval before it can stay completed.
+                  </p>
+                ) : null}
+              </div>
+
+              {activeParent ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-text-primary">Parent task</p>
+                  <div className="rounded-md border border-border bg-bg-subtle p-3 text-sm text-text-secondary">
+                    <p className="font-medium text-text-primary">{activeParent.title}</p>
+                    <p className="mt-1 text-xs">Status: {activeParent.status ?? "unknown"}</p>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="space-y-2">
                 <p className="text-sm font-medium text-text-primary">Description</p>
-                <Textarea value={task.description ?? ""} readOnly className="min-h-[90px] border-border bg-bg-subtle" />
+                <Textarea value={activeTask?.description ?? ""} readOnly className="min-h-[90px] border-border bg-bg-subtle" />
               </div>
 
               <div className="space-y-2">
                 <p className="text-sm font-medium text-text-primary">Success criteria</p>
-                <p className="rounded-md border border-border bg-bg-subtle p-3 text-sm text-text-secondary">{task.success_criteria}</p>
+                <p className="rounded-md border border-border bg-bg-subtle p-3 text-sm text-text-secondary">{activeTask?.success_criteria ?? ""}</p>
               </div>
 
               <Separator />
@@ -368,7 +567,7 @@ export function TaskDrawer({ task, open, onOpenChange }: { task: Task | null; op
 
               <div className="space-y-2">
                 <p className="text-sm font-medium text-text-primary">Dependencies</p>
-                {dependsOn.length === 0 ? <p className="text-xs text-text-secondary">No blockers</p> : dependsOn.map((dep) => <p key={dep} className="text-xs text-text-secondary">Blocked by {dep}</p>)}
+                  {dependsOn.length === 0 ? <p className="text-xs text-text-secondary">No blockers</p> : dependsOn.map((dep) => <p key={dep} className="text-xs text-text-secondary">Blocked by {dep}</p>)}
               </div>
 
               <div className="space-y-2">

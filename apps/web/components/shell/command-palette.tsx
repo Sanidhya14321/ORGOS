@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Target, CheckSquare, UserRound, BriefcaseBusiness, Sparkles } from "lucide-react";
+import { Search, Target, CheckSquare, UserRound, BriefcaseBusiness, Sparkles, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { canAccessSection, canManageGoals } from "@/lib/access";
@@ -61,6 +61,9 @@ export function CommandPalette({
         : []),
       ...(canAccessSection(role, "recruitment")
         ? [{ id: "open-recruitment", label: "Open Recruitment", description: "Review positions and applicants", href: "/dashboard/recruit", icon: BriefcaseBusiness }]
+        : []),
+      ...(canAccessSection(role, "powerControl")
+        ? [{ id: "open-power-control", label: "Open Power Control", description: "Adjust subordinate position power levels", href: "/dashboard/power", icon: SlidersHorizontal }]
         : [])
     ],
     [role]

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Role } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { canAccessSection } from "@/lib/access";
 
 type AppShellProps = {
   eyebrow: string;
@@ -20,6 +21,7 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
     { href: `/dashboard/${role}`, label: "Overview" },
     { href: "/dashboard/task-board", label: "Task board" },
     ...(role === "ceo" || role === "cfo" || role === "manager" ? [{ href: "/dashboard/org-tree", label: "Org tree" }] : []),
+    ...(canAccessSection(role, "powerControl") ? [{ href: "/dashboard/power", label: "Power control" }] : []),
     ...(role === "ceo" ? [{ href: "/dashboard/ceo", label: "CEO control" }] : [])
   ] : [];
 

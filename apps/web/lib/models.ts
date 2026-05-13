@@ -14,6 +14,34 @@ export interface User {
   open_task_count?: number;
 }
 
+export type VisibilityScope = "org" | "branch" | "department" | "subtree" | "self";
+
+export interface PositionPowerItem {
+  id: string;
+  title: string;
+  level: number;
+  department?: string | null;
+  power_level: number;
+  visibility_scope: VisibilityScope | string;
+  parent_position_id?: string | null;
+  parent_position_title?: string | null;
+  occupant_id?: string | null;
+  occupant_name?: string | null;
+  occupant_email?: string | null;
+  occupant_role?: Role | null;
+  occupant_status?: string | null;
+  is_self: boolean;
+  can_edit: boolean;
+  max_allowed_power_level?: number | null;
+}
+
+export interface PositionPowerControlsResponse {
+  requesterPositionId?: string | null;
+  requesterPowerLevel: number;
+  maxAssignablePowerLevel: number;
+  items: PositionPowerItem[];
+}
+
 export type GoalStatus = "active" | "paused" | "completed" | "cancelled";
 export type GoalPriority = "low" | "medium" | "high" | "critical";
 

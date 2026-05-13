@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
@@ -7,6 +8,7 @@ import { DashboardMetric, DashboardPageFrame, DashboardSection } from "@/compone
 import { GoalsTable } from "@/components/dashboard/goals-table";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Role, Task, Goal, Applicant } from "@/lib/models";
 
@@ -34,6 +36,39 @@ function roleDescription(role: Role): string {
     default:
       return "Execute your assigned tasks and submit reports as work moves forward.";
   }
+}
+
+function priorityRank(task: Task): number {
+  if (task.priority === "critical") {
+    return 0;
+  }
+  if (task.priority === "high") {
+    return 1;
+  }
+  if (task.priority === "medium" || !task.priority) {
+    return 2;
+  }
+  return 3;
+}
+
+function sortTasksForExecution(a: Task, b: Task): number {
+  const overdueDelta = Number(Boolean(b.is_overdue)) - Number(Boolean(a.is_overdue));
+  if (overdueDelta !== 0) {
+    return overdueDelta;
+  }
+
+  const priorityDelta = priorityRank(a) - priorityRank(b);
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+  const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+  if (aDeadline !== bDeadline) {
+    return aDeadline - bDeadline;
+  }
+
+  return a.title.localeCompare(b.title);
 }
 
 export function RoleDashboard({ role }: { role: Role }) {
@@ -72,6 +107,43 @@ export function RoleDashboard({ role }: { role: Role }) {
 
   const tasks = tasksQuery.data ?? [];
   const goals = goalsQuery.data ?? [];
+  const openTasks = useMemo(
+    () => tasks.filter((task) => task.status !== "completed" && task.status !== "cancelled"),
+    [tasks]
+  );
+  const priorityQueue = useMemo(
+    () => openTasks.slice().sort(sortTasksForExecution).slice(0, role === "worker" ? 8 : 10),
+    [openTasks, role]
+  );
+  const blockedTasks = useMemo(
+    () => openTasks.filter((task) => task.status === "blocked").slice().sort(sortTasksForExecution).slice(0, 6),
+    [openTasks]
+  );
+  const activeTasks = useMemo(
+    () => openTasks
+      .filter((task) => task.status === "active" || task.status === "in_progress" || task.status === "pending")
+      .slice()
+      .sort(sortTasksForExecution)
+      .slice(0, 6),
+    [openTasks]
+  );
+  const completedTasks = useMemo(
+    () => tasks
+      .filter((task) => task.status === "completed")
+      .slice()
+      .sort((a, b) => new Date(b.updated_at ?? b.created_at ?? 0).getTime() - new Date(a.updated_at ?? a.created_at ?? 0).getTime())
+      .slice(0, 6),
+    [tasks]
+  );
+  const statusSummary = useMemo(
+    () => [
+      { label: "Pending", count: tasks.filter((task) => task.status === "pending").length, tone: "warning" as const },
+      { label: "In flight", count: tasks.filter((task) => task.status === "active" || task.status === "in_progress").length, tone: "info" as const },
+      { label: "Blocked", count: tasks.filter((task) => task.status === "blocked").length, tone: "danger" as const },
+      { label: "Completed", count: tasks.filter((task) => task.status === "completed").length, tone: "success" as const }
+    ],
+    [tasks]
+  );
 
   const metrics = useMemo(() => {
     const inProgress = tasks.filter((task) => task.status === "active" || task.status === "in_progress").length;
@@ -89,7 +161,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
     if (role === "manager") {
       return [
-        { label: "My Open Tasks", value: tasks.filter((t) => t.status !== "completed").length, tone: "info" as const },
+        { label: "Visible Open Tasks", value: openTasks.length, tone: "info" as const },
         { label: "Team Load", value: loadPct, tone: "warning" as const },
         { label: "SLA At Risk", value: atRisk, tone: "warning" as const }
       ];
@@ -101,7 +173,7 @@ export function RoleDashboard({ role }: { role: Role }) {
       { label: "Team Load", value: loadPct, tone: "warning" as const },
       { label: "SLA Breaches", value: breaches, tone: breaches > 0 ? "danger" as const : "success" as const }
     ];
-  }, [goals.length, role, tasks]);
+  }, [goals.length, openTasks.length, role, tasks]);
 
   const loading = tasksQuery.isLoading || (role !== "worker" && goalsQuery.isLoading);
 
@@ -135,21 +207,127 @@ export function RoleDashboard({ role }: { role: Role }) {
 
         {role !== "ceo" && role !== "cfo" ? (
           <DashboardSection
-            title="Tasks"
-            description="Your current work queue arranged by urgency and execution state."
+            title={role === "manager" ? "Execution queue" : "Priority queue"}
+            description={
+              role === "manager"
+                ? "A task-first view of the work currently visible in your reporting scope."
+                : "Your most urgent execution work, ranked by overdue risk, priority, and current state."
+            }
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{priorityQueue.length} prioritized cards</Badge>
+                <Link
+                  href="/dashboard/task-board"
+                  className="rounded-full border border-border bg-bg-surface px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary transition hover:border-border-strong hover:bg-bg-elevated hover:text-text-primary"
+                >
+                  Open full board
+                </Link>
+              </div>
+            }
+          >
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.95fr)]">
+              <div className="grid gap-3 md:grid-cols-2">
+                {tasksQuery.isLoading ? (
+                  <>
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                  </>
+                ) : priorityQueue.length > 0 ? (
+                  priorityQueue.map((task) => <TaskCard key={task.id} task={task} onOpen={setSelectedTask} />)
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-text-secondary md:col-span-2">
+                    No active work is visible right now.
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {statusSummary.map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-border bg-bg-elevated p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-text-primary">{item.label}</p>
+                      <Badge variant="outline">{item.count}</Badge>
+                    </div>
+                    <p className="mt-2 text-xs text-text-secondary">
+                      {item.label === "Pending"
+                        ? "New work that can be started or completed directly from the drawer."
+                        : item.label === "In flight"
+                          ? "Tasks currently moving through active execution."
+                          : item.label === "Blocked"
+                            ? "Work that needs unblocking or a resume action."
+                            : "Recently completed work in your visible queue."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DashboardSection>
+        ) : null}
+
+        {role !== "ceo" && role !== "cfo" ? (
+          <div className="grid gap-6 xl:grid-cols-2">
+            <DashboardSection
+              title="Blocked and waiting"
+              description="Tasks that need intervention, clarification, or a resume action."
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                {tasksQuery.isLoading ? (
+                  <>
+                    <Skeleton className="h-36 w-full" />
+                    <Skeleton className="h-36 w-full" />
+                  </>
+                ) : blockedTasks.length > 0 ? (
+                  blockedTasks.map((task) => <TaskCard key={task.id} task={task} onOpen={setSelectedTask} />)
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-text-secondary md:col-span-2">
+                    No blocked tasks in your current queue.
+                  </div>
+                )}
+              </div>
+            </DashboardSection>
+
+            <DashboardSection
+              title="Recently completed"
+              description="Closed work that just moved out of your execution queue."
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                {tasksQuery.isLoading ? (
+                  <>
+                    <Skeleton className="h-36 w-full" />
+                    <Skeleton className="h-36 w-full" />
+                  </>
+                ) : completedTasks.length > 0 ? (
+                  completedTasks.map((task) => <TaskCard key={task.id} task={task} onOpen={setSelectedTask} />)
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-text-secondary md:col-span-2">
+                    No completed tasks yet.
+                  </div>
+                )}
+              </div>
+            </DashboardSection>
+          </div>
+        ) : null}
+
+        {role !== "ceo" && role !== "cfo" ? (
+          <DashboardSection
+            title={role === "manager" ? "Team execution snapshot" : "Execution snapshot"}
+            description="A compact view of the next tasks currently moving through your queue."
           >
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {tasksQuery.isLoading ? (
                 <>
-                  <Skeleton className="h-40 w-full" />
-                  <Skeleton className="h-40 w-full" />
-                  <Skeleton className="h-40 w-full" />
+                  <Skeleton className="h-36 w-full" />
+                  <Skeleton className="h-36 w-full" />
+                  <Skeleton className="h-36 w-full" />
                 </>
+              ) : activeTasks.length > 0 ? (
+                activeTasks.map((task) => <TaskCard key={task.id} task={task} onOpen={setSelectedTask} />)
               ) : (
-                tasks
-                  .sort((a, b) => Number(Boolean(b.is_overdue)) - Number(Boolean(a.is_overdue)))
-                  .slice(0, 12)
-                  .map((task) => <TaskCard key={task.id} task={task} onOpen={setSelectedTask} />)
+                <div className="rounded-2xl border border-dashed border-border p-5 text-sm text-text-secondary xl:col-span-3">
+                  No in-flight tasks are active right now.
+                </div>
               )}
             </div>
           </DashboardSection>

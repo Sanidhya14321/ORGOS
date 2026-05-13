@@ -68,6 +68,15 @@ const PositionBodySchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional()
 });
 
+const PositionParamSchema = z.object({
+  id: z.string().uuid(),
+  positionId: z.string().uuid()
+});
+
+const PositionPowerUpdateBodySchema = z.object({
+  powerLevel: z.coerce.number().int().min(0).max(100)
+});
+
 const AccountsListQuerySchema = z.object({
   page: z.coerce.number().int().positive().catch(1).default(1),
   limit: z.coerce.number().int().positive().max(100).catch(20).default(20)
@@ -167,6 +176,19 @@ function deriveRoleFromPosition(position: { title?: string | null; level?: numbe
   }
   const level = Number(position.level ?? 2);
   return level <= 1 ? "manager" : "worker";
+}
+
+function fallbackPowerLevelForRole(role: z.infer<typeof MemberRoleSchema>): number {
+  if (role === "ceo") {
+    return 100;
+  }
+  if (role === "cfo") {
+    return 90;
+  }
+  if (role === "manager") {
+    return 80;
+  }
+  return 20;
 }
 
 function generatePassword(): string {
@@ -670,6 +692,226 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
       orgId: parsed.data.id,
       nodes,
       positions: positionsWithFilled
+    });
+  });
+
+  fastify.get("/orgs/:id/positions/power-levels", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+    const params = OrgIdParamSchema.safeParse(request.params);
+    if (!params.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization id");
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scope = await getHierarchyScope(fastify, requesterId);
+    if (!scope || scope.orgId !== params.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
+    }
+
+    const [positionsResult, usersResult] = await Promise.all([
+      fastify.supabaseService
+        .from("positions")
+        .select("id, title, level, department, reports_to_position_id, power_level, visibility_scope")
+        .eq("org_id", params.data.id)
+        .order("level", { ascending: true })
+        .order("title", { ascending: true }),
+      fastify.supabaseService
+        .from("users")
+        .select("id, full_name, email, role, status, position_id")
+        .eq("org_id", params.data.id)
+    ]);
+
+    if (positionsResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization positions");
+    }
+
+    if (usersResult.error) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to load organization members");
+    }
+
+    const positions = positionsResult.data ?? [];
+    const users = usersResult.data ?? [];
+    const positionById = new Map(
+      positions.map((position) => [
+        String(position.id),
+        {
+          id: String(position.id),
+          title: String(position.title),
+          level: Number(position.level ?? 0),
+          department: (position.department as string | null | undefined) ?? null,
+          reports_to_position_id: (position.reports_to_position_id as string | null | undefined) ?? null,
+          power_level: Number(position.power_level ?? 50),
+          visibility_scope: String(position.visibility_scope ?? "org")
+        }
+      ])
+    );
+    const occupantByPositionId = new Map<string, {
+      id: string;
+      full_name: string;
+      email: string | null;
+      role: z.infer<typeof MemberRoleSchema>;
+      status: string | null;
+    }>();
+
+    for (const user of users) {
+      const positionId = (user.position_id as string | null | undefined) ?? null;
+      const role = user.role;
+      if (!positionId || (role !== "ceo" && role !== "cfo" && role !== "manager" && role !== "worker")) {
+        continue;
+      }
+
+      if (!occupantByPositionId.has(positionId)) {
+        occupantByPositionId.set(positionId, {
+          id: String(user.id),
+          full_name: String(user.full_name ?? "Assigned member"),
+          email: (user.email as string | null | undefined) ?? null,
+          role,
+          status: (user.status as string | null | undefined) ?? null
+        });
+      }
+    }
+
+    const requesterPosition = scope.positionId ? positionById.get(scope.positionId) ?? null : null;
+    const requesterPowerLevel = requesterPosition?.power_level ?? fallbackPowerLevelForRole(scope.role);
+    const requesterMaxAssignablePower = Math.max(0, requesterPowerLevel - 1);
+    const visiblePositions = positions
+      .map((position) => positionById.get(String(position.id)))
+      .filter((position): position is NonNullable<typeof position> => Boolean(position))
+      .filter((position) => scope.visibleTreePositionIds.has(position.id));
+
+    return reply.send({
+      requesterPositionId: scope.positionId,
+      requesterPowerLevel,
+      maxAssignablePowerLevel: requesterMaxAssignablePower,
+      items: visiblePositions.map((position) => {
+        const occupant = occupantByPositionId.get(position.id) ?? null;
+        const parent = position.reports_to_position_id ? positionById.get(position.reports_to_position_id) ?? null : null;
+        const canEdit = position.id !== scope.positionId && position.power_level < requesterPowerLevel;
+
+        return {
+          id: position.id,
+          title: position.title,
+          level: position.level,
+          department: position.department,
+          power_level: position.power_level,
+          visibility_scope: position.visibility_scope,
+          parent_position_id: position.reports_to_position_id,
+          parent_position_title: parent?.title ?? null,
+          occupant_id: occupant?.id ?? null,
+          occupant_name: occupant?.full_name ?? null,
+          occupant_email: occupant?.email ?? null,
+          occupant_role: occupant?.role ?? null,
+          occupant_status: occupant?.status ?? null,
+          is_self: position.id === scope.positionId,
+          can_edit: canEdit,
+          max_allowed_power_level: canEdit ? requesterMaxAssignablePower : null
+        };
+      })
+    });
+  });
+
+  fastify.patch("/orgs/:id/positions/:positionId/power-level", { preHandler: requireRole("ceo", "cfo", "manager") }, async (request, reply) => {
+    const params = PositionParamSchema.safeParse(request.params);
+    const body = PositionPowerUpdateBodySchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid position power update payload", {
+        details: {
+          params: params.success ? null : params.error.flatten(),
+          body: body.success ? null : body.error.flatten()
+        }
+      });
+    }
+
+    const requesterId = request.user?.id;
+    if (!requesterId) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing user context");
+    }
+
+    const scope = await getHierarchyScope(fastify, requesterId);
+    if (!scope || scope.orgId !== params.data.id) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Requester does not belong to this organization");
+    }
+
+    if (!scope.visibleTreePositionIds.has(params.data.positionId)) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Position is outside your management scope");
+    }
+
+    if (scope.positionId && scope.positionId === params.data.positionId) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "You cannot change your own position power level");
+    }
+
+    const [positionsResult, targetResult] = await Promise.all([
+      scope.positionId
+        ? fastify.supabaseService
+            .from("positions")
+            .select("id, power_level")
+            .eq("id", scope.positionId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      fastify.supabaseService
+        .from("positions")
+        .select("id, org_id, title, power_level")
+        .eq("id", params.data.positionId)
+        .maybeSingle()
+    ]);
+
+    if (targetResult.error || !targetResult.data?.id || targetResult.data.org_id !== params.data.id) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Position not found");
+    }
+
+    const requesterPowerLevel = positionsResult.data?.id
+      ? Number(positionsResult.data.power_level ?? fallbackPowerLevelForRole(scope.role))
+      : fallbackPowerLevelForRole(scope.role);
+    const maxAllowedPowerLevel = Math.max(0, requesterPowerLevel - 1);
+    const targetPowerLevel = Number(targetResult.data.power_level ?? 50);
+
+    if (targetPowerLevel >= requesterPowerLevel) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "You can only manage positions below your own power level");
+    }
+
+    if (body.data.powerLevel > maxAllowedPowerLevel) {
+      return sendApiError(
+        reply,
+        request,
+        400,
+        "VALIDATION_ERROR",
+        `Power level cannot exceed ${maxAllowedPowerLevel} for your role and position`
+      );
+    }
+
+    const updated = await fastify.supabaseService
+      .from("positions")
+      .update({
+        power_level: body.data.powerLevel,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", params.data.positionId)
+      .select("id, title, level, power_level, visibility_scope, reports_to_position_id")
+      .single();
+
+    if (updated.error || !updated.data) {
+      return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to update position power level");
+    }
+
+    await fastify.supabaseService.from("audit_log").insert({
+      org_id: params.data.id,
+      actor_id: requesterId,
+      action: "position_power_level_updated",
+      entity: "position",
+      entity_id: params.data.positionId,
+      meta: {
+        title: targetResult.data.title,
+        previous_power_level: targetPowerLevel,
+        next_power_level: body.data.powerLevel
+      }
+    });
+
+    return reply.send({
+      ...updated.data,
+      max_allowed_power_level: maxAllowedPowerLevel
     });
   });
 

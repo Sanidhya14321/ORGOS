@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, CheckSquare, Target, BriefcaseBusiness, Network, UserCheck, UserPlus } from "lucide-react";
+import { LayoutDashboard, CheckSquare, Target, BriefcaseBusiness, Network, UserCheck, UserPlus, SlidersHorizontal } from "lucide-react";
 import { canAccessSection } from "@/lib/access";
 import type { Role } from "@/lib/models";
 import { useMeQuery } from "@/lib/queries";
@@ -14,6 +14,7 @@ const items = [
   { href: "/dashboard/goals", label: "Goals", icon: Target, show: (role: Role) => canAccessSection(role, "goals") },
   { href: "/dashboard/recruit", label: "Recruit", icon: BriefcaseBusiness, show: (role: Role) => canAccessSection(role, "recruitment") },
   { href: "/dashboard/org-tree", label: "Tree", icon: Network, show: (role: Role) => canAccessSection(role, "orgTree") },
+  { href: "/dashboard/power", label: "Power", icon: SlidersHorizontal, show: (role: Role) => canAccessSection(role, "powerControl") },
   { href: "/dashboard/approvals", label: "Approve", icon: UserCheck, show: (role: Role) => canAccessSection(role, "approvals") },
   { href: "/dashboard/recruit/refer", label: "Refer", icon: UserPlus, show: (role: Role) => canAccessSection(role, "recruitment") }
 ] as const;
