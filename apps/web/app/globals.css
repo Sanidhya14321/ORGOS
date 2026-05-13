@@ -135,7 +135,9 @@ select {
 
 .dashboard-surface {
   position: relative;
-  overflow: hidden;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: visible;
   border: 1px solid var(--border);
   border-radius: 28px;
   background: var(--surface-glass);
@@ -154,6 +156,7 @@ select {
 .dashboard-panel {
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 
 .dashboard-kpi {

@@ -246,8 +246,8 @@ export default function TeamPage() {
         ) : undefined
       }
     >
-      <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 grid gap-4 md:grid-cols-4">
         <Card className="border border-border bg-bg-surface p-4">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-text-secondary">Active threads</p>
           <p className="mt-2 text-3xl font-bold text-text-primary">{openThreads.length}</p>
@@ -270,7 +270,7 @@ export default function TeamPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,340px)]">
+      <div className="min-w-0 grid gap-6 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,340px)]">
         <Card className="border border-border bg-bg-surface p-0">
           <div className="border-b border-border px-4 py-3">
             <p className="text-sm font-semibold text-text-primary">Channels</p>
@@ -428,7 +428,7 @@ export default function TeamPage() {
           </Card>
         </div>
 
-        <div className="space-y-4 xl:col-span-2 2xl:col-span-1">
+        <div className="min-w-0 space-y-4 xl:col-span-2 2xl:col-span-1">
           <Card className="border border-border bg-bg-surface p-4">
             <div className="flex items-center justify-between gap-3">
               <div>

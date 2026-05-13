@@ -58,8 +58,8 @@ export default function ReportsPage() {
       description="Review submitted reports, confidence levels, and escalations across the active task tree."
       role={meQuery.data?.role}
     >
-      <div className="space-y-6">
-        <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="min-w-0 space-y-6">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
           <Card className="p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-3">
@@ -102,7 +102,7 @@ export default function ReportsPage() {
           </Card>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="min-w-0 grid gap-4 md:grid-cols-3">
           <Card className="p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-text-secondary">Reports</p>
             <p className="mt-2 text-3xl font-semibold text-text-primary">{reportsQuery.data?.length ?? 0}</p>
@@ -121,7 +121,7 @@ export default function ReportsPage() {
           </Card>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[280px_1fr]">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[280px_1fr]">
           <Card className="p-4">
             <div className="mb-3 flex items-center gap-2">
               <FileText className="h-4 w-4 text-text-secondary" />

@@ -60,9 +60,9 @@ export default function InboxPage() {
   if (inboxQuery.isLoading) {
     return (
       <AppShell eyebrow="Inbox" title="Syncing Intelligence" description="Gathering latest node updates..." role={undefined}>
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-8">
           <Skeleton className="h-24 w-full rounded-2xl bg-bg-subtle" />
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="min-w-0 grid gap-6 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-96 w-full rounded-2xl bg-bg-subtle" />
             ))}
@@ -79,8 +79,8 @@ export default function InboxPage() {
       description="Manage pending execution nodes, intelligence syncs, and system audit events." 
       role={undefined as Role | undefined}
     >
-      <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="min-w-0 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
           <Card className="p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-3">
@@ -109,7 +109,7 @@ export default function InboxPage() {
             </div>
           </Card>
 
-          <div className="grid gap-4">
+          <div className="min-w-0 grid gap-4">
             <Card className="p-5">
               <p className="dashboard-label">Queue health</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -121,7 +121,7 @@ export default function InboxPage() {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="min-w-0 grid grid-cols-1 gap-4 sm:grid-cols-4">
           <SummaryCard label="Operational Nodes" value={tasks.length} tone="info" icon={<Layers className="h-4 w-4" />} />
           <SummaryCard label="Intelligence Syncs" value={meetings.length} tone="success" icon={<Video className="h-4 w-4" />} />
           <SummaryCard label="Audit Events" value={security.length} tone="danger" icon={<ShieldAlert className="h-4 w-4" />} />
@@ -139,7 +139,7 @@ export default function InboxPage() {
           </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-3 items-start">
+        <div className="min-w-0 grid gap-8 items-start lg:grid-cols-3">
           <InboxColumn
             title="Tasks"
             subtitle="Pending execution"
@@ -242,7 +242,7 @@ function SummaryCard({ label, value, icon, tone }: { label: string; value: numbe
   }[tone];
 
   return (
-    <Card className="flex flex-col justify-between p-4">
+    <Card className="flex min-w-0 flex-col justify-between p-4">
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">{label}</p>
         <div className={cn("p-1.5 rounded-lg", toneColor)}>{icon}</div>
@@ -298,7 +298,7 @@ function InboxColumn({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex items-center gap-3">
         <span className={cn("h-10 w-1.5 rounded-full", accentClass)} />
         <div className="space-y-1">

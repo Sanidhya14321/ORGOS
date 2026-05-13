@@ -112,8 +112,8 @@ export default function ProjectsDashboardPage() {
       description="A structured view of how strategic goals flow into execution tasks, with direct jumps to each level of work."
       role={meQuery.data?.role}
     >
-      <div className="space-y-8">
-        <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="min-w-0 space-y-8">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <Card className="p-6">
             <div className="space-y-3">
               <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
@@ -139,7 +139,7 @@ export default function ProjectsDashboardPage() {
           </Card>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-5">
+        <section className="min-w-0 grid gap-4 md:grid-cols-5">
           <MetricCard label="Goals" value={metrics.totalGoals} icon={<Target className="h-5 w-5" />} caption="Strategic objectives" />
           <MetricCard label="Tasks" value={metrics.totalTasks} icon={<Layers3 className="h-5 w-5" />} caption="Execution nodes" />
           <MetricCard label="Completed goals" value={metrics.completedGoals} icon={<CheckSquare className="h-5 w-5" />} caption="Delivered projects" />
@@ -147,7 +147,7 @@ export default function ProjectsDashboardPage() {
           <MetricCard label="Blocked tasks" value={metrics.blockedTasks} icon={<AlertCircle className="h-5 w-5" />} caption="Items needing attention" />
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
           <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
               <div>
@@ -208,7 +208,7 @@ export default function ProjectsDashboardPage() {
                         </div>
                       </div>
 
-                      <div className="grid w-full grid-cols-2 gap-3 rounded-2xl border border-border bg-bg-subtle p-3 text-center text-xs text-text-secondary sm:w-auto sm:min-w-[240px] sm:grid-cols-4">
+                      <div className="grid min-w-0 w-full grid-cols-2 gap-3 rounded-2xl border border-border bg-bg-subtle p-3 text-center text-xs text-text-secondary sm:w-auto sm:min-w-[240px] sm:grid-cols-4">
                         <div>
                           <p className="text-lg font-semibold text-text-primary">{row.totalTasks}</p>
                           <p>Tasks</p>

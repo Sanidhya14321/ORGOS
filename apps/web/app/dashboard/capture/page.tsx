@@ -115,7 +115,7 @@ export default function CapturePage() {
       description="Draft a goal, task, or meeting note from one short instruction."
       role={meQuery.data?.role}
     >
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="min-w-0 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="space-y-5 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
@@ -150,7 +150,7 @@ export default function CapturePage() {
             />
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="min-w-0 grid gap-3 md:grid-cols-2">
             <Input value={deadline} onChange={(event) => setDeadline(event.target.value)} type="date" />
           <Select value={goalId} onValueChange={setGoalId} disabled={!goalsQuery.data?.length}>
             <SelectTrigger>
@@ -173,7 +173,7 @@ export default function CapturePage() {
           </div>
         </Card>
 
-        <div className="grid gap-4">
+        <div className="min-w-0 grid gap-4">
           <Card className="p-5">
             <p className="dashboard-label">Suggested structure</p>
             {parsed ? (

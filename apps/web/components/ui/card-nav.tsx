@@ -20,7 +20,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const TOPBAR_HEIGHT = 56;
-const DESKTOP_EXPANDED_HEIGHT = 260;
+/** SSR / pre-layout fallback total nav height */
+const NAV_EXPANDED_FALLBACK = 260;
+const VIEWPORT_HEIGHT_CAP = 0.88;
 
 export interface CardNavLink {
   label: string;
@@ -75,16 +77,17 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
   );
 
   const getExpandedHeight = () => {
-    if (typeof window === "undefined") return DESKTOP_EXPANDED_HEIGHT;
-    if (window.innerWidth < 768) {
-      const contentHeight = contentRef.current?.scrollHeight ?? 0;
-      return TOPBAR_HEIGHT + contentHeight;
-    }
-    return DESKTOP_EXPANDED_HEIGHT;
+    if (typeof window === "undefined") return NAV_EXPANDED_FALLBACK;
+    const contentHeight = contentRef.current?.scrollHeight ?? 0;
+    const raw = TOPBAR_HEIGHT + contentHeight;
+    if (contentHeight <= 0) return NAV_EXPANDED_FALLBACK;
+    const cap = Math.floor(window.innerHeight * VIEWPORT_HEIGHT_CAP);
+    return Math.min(raw, cap);
   };
 
   useLayoutEffect(() => {
     const nav = navRef.current;
+    const contentEl = contentRef.current;
     if (!nav) return;
 
     const cards = cardRefs.current.filter((card): card is HTMLDivElement => card !== null);
@@ -127,11 +130,24 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
 
     window.addEventListener("resize", handleResize);
 
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && contentEl) {
+      resizeObserver = new ResizeObserver(() => {
+        const current = timelineRef.current;
+        if (!current) return;
+        if (current.progress() > 0 && !current.reversed()) {
+          gsap.set(nav, { height: getExpandedHeight() });
+        }
+      });
+      resizeObserver.observe(contentEl);
+    }
+
     return () => {
       window.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
       timeline.kill();
     };
-  }, []);
+  }, [items]);
 
   const toggleMenu = () => {
     const timeline = timelineRef.current;
@@ -151,12 +167,12 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
     <nav
       ref={navRef}
       className={cn(
-        "w-full overflow-hidden sticky rounded-[28px] border border-border/60 bg-bg-surface/85 shadow-[0_24px_60px_rgba(23,21,19,0.10)] backdrop-blur-xl",
+        "sticky flex w-full flex-col overflow-hidden rounded-[28px] border border-border/60 bg-bg-surface/85 shadow-[0_24px_60px_rgba(23,21,19,0.10)] backdrop-blur-xl",
         className
       )}
       aria-label="Primary navigation"
     >
-      <div className="relative flex h-14 items-center gap-2 px-3 md:px-5">
+      <div className="relative flex h-14 shrink-0 items-center gap-2 px-3 md:px-5">
         <button
           type="button"
           onClick={toggleMenu}
@@ -189,7 +205,11 @@ export function CardNav({ items, pageTitle = "Dashboard", isAuthenticated = true
         </div>
       </div>
 
-      <div id="card-nav-content" ref={contentRef} className="px-3 pb-3 md:px-5 md:pb-4">
+      <div
+        id="card-nav-content"
+        ref={contentRef}
+        className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 md:px-5 md:pb-4"
+      >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {items.map((item, index) => (
             <div

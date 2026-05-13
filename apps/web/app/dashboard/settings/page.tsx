@@ -141,7 +141,7 @@ export default function SettingsPage() {
 
   if (prefsQuery.isLoading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto min-w-0 w-full space-y-6">
         <div className="flex flex-col gap-4">
           <div className="h-10 w-64 bg-bg-subtle rounded-xl animate-pulse" />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -154,7 +154,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto pb-20">
+    <div className="max-w-5xl mx-auto min-w-0 w-full pb-20">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
         <div className="space-y-1">
@@ -181,9 +181,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+      <div className="min-w-0 grid grid-cols-1 gap-10 md:grid-cols-12">
         {/* Navigation Sidebar - Functional Tabs */}
-        <aside className="md:col-span-3">
+        <aside className="min-w-0 md:col-span-3">
           <nav className="flex flex-col gap-1 sticky top-8">
             <button
               onClick={() => setActiveTab('general')}
@@ -222,7 +222,7 @@ export default function SettingsPage() {
         </aside>
 
         {/* Content Modules - Conditional Rendering */}
-        <div className="md:col-span-9">
+        <div className="min-w-0 md:col-span-9">
           
           {/* 1. General Tab */}
           {activeTab === 'general' && (
@@ -232,7 +232,7 @@ export default function SettingsPage() {
                 <h2 className="text-lg font-bold tracking-tight uppercase text-xs tracking-[0.2em]">Interface & Region</h2>
               </div>
               <Card className="border border-border bg-bg-surface p-8 rounded-2xl shadow-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+                <div className="min-w-0 grid grid-cols-1 gap-10 sm:grid-cols-2">
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <label className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] flex items-center gap-2">

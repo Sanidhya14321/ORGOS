@@ -23,14 +23,14 @@ export default function ForecastPage() {
 
   return (
     <AppShell eyebrow="Forecast" title="Delivery outlook" description="See how much work is open and where the pressure sits." role={meQuery.data?.role}>
-      <div className="space-y-8">
+      <div className="min-w-0 space-y-8">
         {!canViewForecast ? (
           <Card className="p-4 text-sm text-[var(--muted)]">
             Forecasting is available to CEO, CFO, and manager roles.
           </Card>
         ) : null}
 
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
           <Card className="p-6">
             <div className="space-y-3">
               <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
@@ -48,7 +48,7 @@ export default function ForecastPage() {
 
           <Card className="p-6">
             <p className="dashboard-label">Planning posture</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-3">
               <ForecastStat label="Open effort" value={`${forecastQuery.data?.openEffortHours ?? 0}h`} />
               <ForecastStat label="Blocked" value={forecastQuery.data?.blockedTaskCount ?? 0} />
               <ForecastStat label="Staffing" value={`${Math.round((forecastQuery.data?.staffingPressure ?? 0) * 100)}%`} />
@@ -56,21 +56,21 @@ export default function ForecastPage() {
           </Card>
         </section>
 
-        <div className="space-y-6">
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0 space-y-6">
+          <section className="min-w-0 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <DashboardMetric label="Open effort" value={`${forecastQuery.data?.openEffortHours ?? 0}h`} tone="info" loading={forecastQuery.isLoading} />
             <DashboardMetric label="Critical" value={`${forecastQuery.data?.byPriority.critical ?? 0}`} tone="danger" loading={forecastQuery.isLoading} />
             <DashboardMetric label="High" value={`${forecastQuery.data?.byPriority.high ?? 0}`} tone="warning" loading={forecastQuery.isLoading} />
             <DashboardMetric label="14d completion" value={`${forecastQuery.data?.forecast[1]?.expectedCompletion ?? 0}%`} tone="success" loading={forecastQuery.isLoading} />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2">
+          <section className="min-w-0 grid gap-4 md:grid-cols-2">
             <DashboardMetric label="Blocked tasks" value={`${forecastQuery.data?.blockedTaskCount ?? 0}`} tone="warning" loading={forecastQuery.isLoading} />
             <DashboardMetric label="Staffing pressure" value={`${Math.round((forecastQuery.data?.staffingPressure ?? 0) * 100)}%`} tone="info" loading={forecastQuery.isLoading} />
           </section>
 
           <DashboardSection title="Horizon" description="Each bucket shows expected completion and remaining effort.">
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="min-w-0 grid gap-4 lg:grid-cols-2">
               {(forecastQuery.data?.forecast ?? []).map((bucket) => (
                 <article key={bucket.bucket} className="dashboard-dense-row p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -92,7 +92,7 @@ export default function ForecastPage() {
           </DashboardSection>
 
           <DashboardSection title="Goal Risk Signals" description="Advisory signals derived from open effort, blockers, and staffing pressure.">
-            <div className="grid gap-4">
+            <div className="min-w-0 grid gap-4">
               {(forecastQuery.data?.goalSignals ?? []).map((signal) => (
                 <article key={signal.goalId} className="dashboard-dense-row p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">

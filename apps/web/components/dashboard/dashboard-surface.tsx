@@ -37,19 +37,19 @@ const toneClassNames: Record<NonNullable<DashboardMetricProps["tone"]>, string> 
 
 export function DashboardPageFrame({ eyebrow, title, description, actions, children, className }: DashboardPageFrameProps) {
   return (
-    <div className={cn("space-y-7 animate-rise-in", className)}>
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-4xl space-y-4">
+    <div className={cn("min-w-0 space-y-7 animate-rise-in", className)}>
+      <header className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0 max-w-4xl space-y-4">
           {eyebrow ? <p className="dashboard-label">{eyebrow}</p> : null}
           <h1 className="text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl lg:text-[3.4rem]">{title}</h1>
           {description ? <p className="max-w-3xl text-sm leading-7 text-[var(--muted)] sm:text-base">{description}</p> : null}
         </div>
 
-        {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
+        {actions ? <div className="flex min-w-0 flex-wrap items-center gap-3">{actions}</div> : null}
       </header>
 
-      <section className="dashboard-surface">
-        <div className="dashboard-panel p-5 sm:p-6 lg:p-8 xl:p-10">{children}</div>
+      <section className="dashboard-surface min-w-0">
+        <div className="dashboard-panel min-w-0 p-5 sm:p-6 lg:p-8 xl:p-10">{children}</div>
       </section>
     </div>
   );
@@ -57,7 +57,7 @@ export function DashboardPageFrame({ eyebrow, title, description, actions, child
 
 export function DashboardSection({ title, description, actions, children, className }: DashboardSectionProps) {
   return (
-    <section className={cn("space-y-4", className)}>
+    <section className={cn("min-w-0 space-y-4", className)}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight text-[var(--ink)] sm:text-[1.35rem]">{title}</h2>

@@ -68,7 +68,7 @@ export default function AnalyticsPage() {
   if (overviewQuery.isLoading) {
     return (
       <AppShell eyebrow="Analytics" title="Operational analytics" description="Gathering latest snapshot..." role={meQuery.data?.role}>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="min-w-0 grid gap-4 md:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-32 w-full rounded-2xl bg-bg-subtle" />
           ))}
@@ -84,15 +84,15 @@ export default function AnalyticsPage() {
       description="Track throughput, completion, and effort variance across your digital estate." 
       role={meQuery.data?.role}
     >
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="min-w-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {!canViewAnalytics ? (
           <Card className="p-5 text-sm text-text-secondary">
             Analytics are available to CEO, CFO, and manager roles.
           </Card>
         ) : null}
 
-        <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-          <Card className="p-6">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+          <Card className="min-w-0 p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-3">
                 <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
@@ -120,7 +120,7 @@ export default function AnalyticsPage() {
             </div>
           </Card>
 
-          <div className="grid gap-4">
+          <div className="min-w-0 grid gap-4">
             {analyticsHighlights.map((item) => (
               <Card key={item.label} className="p-5">
                 <p className="dashboard-label">{item.label}</p>
@@ -131,7 +131,7 @@ export default function AnalyticsPage() {
           </div>
         </section>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="min-w-0 grid gap-4 md:grid-cols-3">
           <MetricCard 
             label="Total Goals" 
             value={metrics?.totalGoals ?? 0} 
@@ -172,7 +172,7 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
           <Card className="flex flex-col items-center justify-center border-dashed p-12 text-center">
             <BarChart3 className="mb-4 h-10 w-10 text-text-secondary opacity-30" />
             <p className="text-sm font-medium text-text-secondary">Historical throughput charts are being processed.</p>
@@ -212,7 +212,7 @@ interface MetricCardProps {
 
 function MetricCard({ label, value, icon, description, trend }: MetricCardProps) {
   return (
-    <Card className="group relative overflow-hidden p-6 transition-all hover:-translate-y-0.5">
+    <Card className="group relative min-w-0 overflow-hidden p-6 transition-all hover:-translate-y-0.5">
       <div className="flex items-start justify-between">
         <div className="space-y-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-text-secondary opacity-80">

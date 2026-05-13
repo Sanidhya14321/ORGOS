@@ -195,11 +195,11 @@ export function OrgTree() {
   if (treeQuery.isLoading) return <Skeleton className="h-[600px] w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)]" />;
 
   return (
-    <div className="flex h-[calc(100vh-120px)] flex-col gap-4 select-none rounded-[32px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_24px_80px_rgba(23,21,19,0.08)]">
+    <div className="flex h-[calc(100vh-120px)] min-w-0 flex-col gap-4 select-none rounded-[32px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_24px_80px_rgba(23,21,19,0.08)]">
       {/* Top Toolbar */}
-      <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface-glass)] p-2 shadow-sm backdrop-blur-md">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="relative max-w-sm w-full">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-glass)] p-2 shadow-sm backdrop-blur-md">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3">
+          <div className="relative min-w-0 w-full max-w-sm sm:flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
             <Input
               value={search}
@@ -208,15 +208,15 @@ export function OrgTree() {
               className="pl-9 border-[var(--border)] bg-[var(--bg-subtle)]/60 focus-visible:ring-[var(--accent)]"
             />
           </div>
-          <div className="mx-2 h-6 w-px bg-[var(--border)]" />
-          <div className="flex items-center gap-1 text-xs font-medium text-[var(--muted)]">
+          <div className="mx-2 hidden h-6 w-px shrink-0 bg-[var(--border)] sm:block" />
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-xs font-medium text-[var(--muted)]">
             <Badge variant="outline" className="border-[var(--success)]/20 bg-[var(--success-subtle)] text-[var(--success)]">On Track</Badge>
             <Badge variant="outline" className="border-[var(--warning)]/20 bg-[var(--warning-subtle)] text-[var(--warning)]">At Risk</Badge>
             <Badge variant="outline" className="border-[var(--danger)]/20 bg-[var(--danger-subtle)] text-[var(--danger)]">Breached</Badge>
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <Button variant="ghost" size="icon" onClick={() => setZoom(z => z + 0.1)}><ZoomIn className="h-4 w-4"/></Button>
             <Button variant="ghost" size="icon" onClick={() => setZoom(z => z - 0.1)}><ZoomOut className="h-4 w-4"/></Button>
             <Button variant="ghost" size="icon" onClick={resetView}><Maximize className="h-4 w-4"/></Button>
@@ -226,7 +226,7 @@ export function OrgTree() {
         </div>
       </div>
 
-      <div className="relative flex-1 overflow-hidden rounded-[28px] border border-[var(--border)] bg-bg-elevated shadow-inner">
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[28px] border border-[var(--border)] bg-bg-elevated shadow-inner">
         {/* SVG Canvas */}
         <svg
           ref={svgRef}

@@ -381,10 +381,10 @@ export default function GoalsPage() {
         </Dialog>
       }
     >
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
 
       {/* Filters */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(['all', 'active', 'completed'] as const).map((status) => (
           <Button
             key={status}
@@ -397,9 +397,9 @@ export default function GoalsPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="min-w-0 grid gap-6 lg:grid-cols-3">
         {/* Goals List */}
-        <div className="lg:col-span-1 space-y-3">
+        <div className="min-w-0 space-y-3 lg:col-span-1">
           <h2 className="font-semibold text-text-primary">Goals ({goalsQuery.data?.length || 0})</h2>
 
           {goalsQuery.isLoading ? (
@@ -468,7 +468,7 @@ export default function GoalsPage() {
         </div>
 
         {/* Goal Detail */}
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           {selectedGoalData ? (
             <div className="space-y-4">
               <Card className="border-border bg-bg-surface p-6">

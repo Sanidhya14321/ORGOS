@@ -119,14 +119,14 @@ export function PositionPowerDashboard() {
         </div>
       }
     >
-      <div className="space-y-8">
+      <div className="min-w-0 space-y-8">
         {!canViewPowerControls ? (
           <div className="rounded-2xl border border-border bg-bg-elevated p-4 text-sm text-text-secondary">
             Power control is available to CEO, CFO, and manager roles only.
           </div>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="min-w-0 grid gap-4 md:grid-cols-3">
           <DashboardMetric label="Visible positions" value={items.length} loading={powerQuery.isLoading} tone="info" />
           <DashboardMetric label="Editable positions" value={editableItems.length} loading={powerQuery.isLoading} tone="warning" />
           <DashboardMetric label="My power cap" value={maxAssignablePowerLevel} loading={powerQuery.isLoading} tone="success" />

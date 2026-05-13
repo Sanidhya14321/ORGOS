@@ -29,7 +29,7 @@ export default function AssistantPage() {
 
   return (
     <AppShell eyebrow="Assistant" title="Contextual AI assistant" description="Ask for next actions, summaries, or workflow guidance." role={undefined}>
-      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="min-w-0 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="space-y-5 p-5">
           <div className="space-y-3">
             <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">

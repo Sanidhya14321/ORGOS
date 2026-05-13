@@ -17,7 +17,7 @@ const shortcuts = [
 export default function ShortcutsPage() {
   return (
     <AppShell eyebrow="Shortcuts" title="Keyboard shortcuts" description="A small map for power users and repetitive workflows." role={undefined}>
-      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="min-w-0 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="space-y-4 p-5">
           <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
             Operator memory
@@ -30,7 +30,7 @@ export default function ShortcutsPage() {
 
         <Card className="space-y-3 p-4">
           {shortcuts.map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between rounded-2xl border border-border bg-bg-elevated px-4 py-3 text-sm">
+            <div key={key} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-bg-elevated px-4 py-3 text-sm">
               <span className="font-medium text-text-primary">{key}</span>
               <span className="text-text-secondary">{label}</span>
             </div>

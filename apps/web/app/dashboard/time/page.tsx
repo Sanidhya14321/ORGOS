@@ -35,7 +35,7 @@ export default function TimePage() {
 
   return (
     <AppShell eyebrow="Time Tracking" title="Track real effort" description="Start a timer, stop it, or log work manually against a task." role={undefined}>
-      <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+      <div className="min-w-0 grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
         <Card className="space-y-4 p-5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
@@ -44,7 +44,7 @@ export default function TimePage() {
             {taskId ? <Badge variant="secondary">Task selected</Badge> : null}
           </div>
 
-          <div className="grid gap-3">
+          <div className="min-w-0 grid gap-3">
             <Input value={taskId} onChange={(event) => setTaskId(event.target.value)} placeholder="Paste task id or select a task below" />
             <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes" className="min-h-28" />
           </div>
@@ -60,10 +60,10 @@ export default function TimePage() {
           </div>
         </Card>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <Card className="space-y-3 p-4">
             <h2 className="text-lg font-semibold">Tasks</h2>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <div className="min-w-0 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {(taskQuery.data ?? []).slice(0, 12).map((task) => (
               <button
                 key={task.id}

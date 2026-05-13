@@ -35,7 +35,7 @@ function VirtualApplicantCards({ applicants, onOpen }: { applicants: Applicant[]
   });
 
   return (
-    <div ref={setContainer} className="max-h-[65vh] overflow-auto">
+    <div ref={setContainer} className="max-h-[65vh] min-w-0 overflow-auto">
       <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
         {rowVirtualizer.getVirtualItems().map((item) => {
           const applicant = applicants[item.index];
@@ -107,21 +107,21 @@ export default function RecruitDashboardPage() {
         </Badge>
       }
     >
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         {!canViewRecruitment ? (
           <Card className="p-4 text-sm text-text-secondary">
             Recruitment dashboards are available to CEO, CFO, and manager roles.
           </Card>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="min-w-0 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Open Positions" value={(jobsQuery.data ?? []).filter((j) => j.status === "open").length} loading={jobsQuery.isLoading} />
           <MetricCard label="Total Applicants" value={applicants.length} loading={applicantsQuery.isLoading} />
           <MetricCard label="Avg AI Score" value={avgScore} loading={applicantsQuery.isLoading} />
           <MetricCard label="Referrals This Month" value={applicants.filter((a) => a.source === "referral").length} loading={applicantsQuery.isLoading} />
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
+        <section className="min-w-0 grid gap-4 xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
           <Card className="p-4">
             <div className="mb-4 space-y-1">
               <p className="dashboard-label">Open roles</p>
