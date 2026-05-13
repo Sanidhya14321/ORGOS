@@ -23,7 +23,7 @@ type SeedUser = {
 
 const ORG_NAME = process.env.SEED_ORG_NAME ?? "Nexus Tech Solutions";
 const ORG_DOMAIN = process.env.SEED_ORG_DOMAIN ?? "nexustech.solutions";
-const EMAIL_DOMAIN = process.env.SEED_USER_EMAIL_DOMAIN ?? "nexustech.e2e";
+const EMAIL_DOMAIN = process.env.SEED_USER_EMAIL_DOMAIN ?? "nexustech-e2e.org";
 
 function requiredEnv(name: string): string {
   const value = process.env[name];

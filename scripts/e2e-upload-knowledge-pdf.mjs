@@ -20,7 +20,7 @@ dotenv.config({ path: path.join(rootDir, ".env") });
 dotenv.config({ path: path.join(rootDir, ".env.local"), override: true });
 
 const API_URL = (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
-const CEO_EMAIL = process.env.E2E_CEO_EMAIL ?? "ceo@nexustech.e2e";
+const CEO_EMAIL = process.env.E2E_CEO_EMAIL ?? "ceo@nexustech-e2e.org";
 const CEO_PASSWORD = process.env.E2E_CEO_PASSWORD ?? CEO_EMAIL;
 const PDF_PATH =
   process.env.PDF_PATH ?? path.join(rootDir, "tmp", "e2e", "nexus-tech-employee-handbook.pdf");
@@ -116,7 +116,13 @@ async function uploadPdf(cookieHeader, orgId, pdfAbsolutePath) {
 
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Upload failed ${res.status}: ${text.slice(0, 600)}`);
+    const hint =
+      res.status === 403
+        ? " (CEO only — check E2E_CEO_EMAIL / role.)"
+        : res.status === 401
+          ? " (session — check login password = email, API_URL matches API.)"
+          : "";
+    throw new Error(`Upload failed ${res.status}${hint}: ${text.slice(0, 600)}`);
   }
 
   let json;
@@ -146,5 +152,8 @@ async function main() {
 
 main().catch((err) => {
   console.error(err);
+  console.error(
+    "\nHints: API running? Redis up if workers? CEO password = email unless E2E_CEO_PASSWORD. PDF default tmp/e2e/nexus-tech-employee-handbook.pdf. See docs/E2E_TECH_ORG_RESET.md#credentials\n"
+  );
   process.exit(1);
 });

@@ -2,7 +2,7 @@
 
 Scripted path for **non-dev** validation of ORGOS end-to-end. Replace placeholders with your staging host and test accounts.
 
-- Full wipe + tech org + PDF pipeline: [E2E_TECH_ORG_RESET.md](./E2E_TECH_ORG_RESET.md)  
+- Full wipe + tech org + PDF pipeline: [E2E_TECH_ORG_RESET.md](./E2E_TECH_ORG_RESET.md) (includes [login table + errors](./E2E_TECH_ORG_RESET.md#credentials))  
 - CEO test user (completed onboarding, owns org).  
 - Optional: second user for approvals (per feature).
 
