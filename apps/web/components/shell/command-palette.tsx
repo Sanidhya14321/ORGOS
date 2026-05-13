@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Target, CheckSquare, UserRound, BriefcaseBusiness, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Search, Target, CheckSquare, UserRound, BriefcaseBusiness, Sparkles, SlidersHorizontal, MessageCircle, FileUp } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { canAccessSection, canManageGoals } from "@/lib/access";
@@ -14,6 +14,7 @@ type ActionItem = {
   description: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  onSelect?: () => void;
 };
 
 export function CommandPalette({
@@ -64,6 +65,31 @@ export function CommandPalette({
         : []),
       ...(canAccessSection(role, "powerControl")
         ? [{ id: "open-power-control", label: "Open Power Control", description: "Adjust subordinate position power levels", href: "/dashboard/power", icon: SlidersHorizontal }]
+        : []),
+      ...(role === "ceo"
+        ? [
+            {
+              id: "import-positions",
+              label: "Import positions from file",
+              description: "Bulk roster (CSV / XLSX / PDF with parseable table)",
+              href: "/dashboard/positions-import",
+              icon: FileUp
+            }
+          ]
+        : []),
+      ...(role
+        ? [
+            {
+              id: "open-help",
+              label: "Open Help assistant",
+              description: "Ask how dashboards, onboarding, and imports work",
+              href: "",
+              icon: MessageCircle,
+              onSelect: () => {
+                window.dispatchEvent(new Event("orgos:open-help"));
+              }
+            }
+          ]
         : [])
     ],
     [role]
@@ -84,7 +110,11 @@ export function CommandPalette({
                   value={`${item.label} ${item.description}`}
                   onSelect={() => {
                     setOpen(false);
-                    router.push(item.href);
+                    if (item.onSelect) {
+                      item.onSelect();
+                    } else {
+                      router.push(item.href);
+                    }
                   }}
                 >
                   <item.icon className="mr-2 h-4 w-4" />

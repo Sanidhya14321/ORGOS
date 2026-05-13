@@ -189,7 +189,7 @@ export function RoleDashboard({ role }: { role: Role }) {
         </div>
       }
     >
-      <div className="space-y-8">
+      <div className="min-w-0 space-y-8">
         <section className={`grid gap-4 ${metrics.length === 4 ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-4" : "grid-cols-1 md:grid-cols-3"}`}>
           {metrics.map((metric) => (
             <DashboardMetric key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} loading={loading} />
@@ -202,6 +202,40 @@ export function RoleDashboard({ role }: { role: Role }) {
             description="Executive goal health with completion, SLA pressure, and task breakdowns."
           >
             <GoalsTable goals={goals} tasks={tasks} loading={goalsQuery.isLoading || tasksQuery.isLoading} />
+          </DashboardSection>
+        ) : null}
+
+        {role === "ceo" ? (
+          <DashboardSection
+            title="Company setup"
+            description="Add seats from a roster file (CSV / XLSX / PDF with parseable table) or upload handbooks for agent retrieval."
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/dashboard/positions-import"
+                  className="rounded-full border border-border bg-bg-surface px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary transition hover:border-border-strong hover:bg-bg-elevated hover:text-text-primary"
+                >
+                  Import positions
+                </Link>
+                <Link
+                  href="/dashboard/knowledge"
+                  className="rounded-full border border-border bg-bg-surface px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary transition hover:border-border-strong hover:bg-bg-elevated hover:text-text-primary"
+                >
+                  Knowledge base
+                </Link>
+                <Link
+                  href="/onboarding"
+                  className="rounded-full border border-border bg-bg-surface px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary transition hover:border-border-strong hover:bg-bg-elevated hover:text-text-primary"
+                >
+                  Onboarding
+                </Link>
+              </div>
+            }
+          >
+            <p className="text-sm text-text-secondary">
+              Import positions runs the same API as onboarding file preview — CEO only. Knowledge base is for policies and
+              handbooks (RAG), not org charts.
+            </p>
           </DashboardSection>
         ) : null}
 
@@ -225,8 +259,8 @@ export function RoleDashboard({ role }: { role: Role }) {
               </div>
             }
           >
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.95fr)]">
-              <div className="grid gap-3 md:grid-cols-2">
+            <div className="min-w-0 grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.95fr)]">
+              <div className="min-w-0 grid gap-3 md:grid-cols-2">
                 {tasksQuery.isLoading ? (
                   <>
                     <Skeleton className="h-40 w-full" />
@@ -243,7 +277,7 @@ export function RoleDashboard({ role }: { role: Role }) {
                 )}
               </div>
 
-              <div className="space-y-3">
+              <div className="min-w-0 space-y-3">
                 {statusSummary.map((item) => (
                   <div key={item.label} className="rounded-2xl border border-border bg-bg-elevated p-4">
                     <div className="flex items-center justify-between gap-3">
@@ -267,12 +301,12 @@ export function RoleDashboard({ role }: { role: Role }) {
         ) : null}
 
         {role !== "ceo" && role !== "cfo" ? (
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="min-w-0 grid gap-6 xl:grid-cols-2">
             <DashboardSection
               title="Blocked and waiting"
               description="Tasks that need intervention, clarification, or a resume action."
             >
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="min-w-0 grid gap-3 md:grid-cols-2">
                 {tasksQuery.isLoading ? (
                   <>
                     <Skeleton className="h-36 w-full" />
@@ -292,7 +326,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               title="Recently completed"
               description="Closed work that just moved out of your execution queue."
             >
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="min-w-0 grid gap-3 md:grid-cols-2">
                 {tasksQuery.isLoading ? (
                   <>
                     <Skeleton className="h-36 w-full" />
@@ -315,7 +349,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             title={role === "manager" ? "Team execution snapshot" : "Execution snapshot"}
             description="A compact view of the next tasks currently moving through your queue."
           >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="min-w-0 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {tasksQuery.isLoading ? (
                 <>
                   <Skeleton className="h-36 w-full" />
@@ -338,7 +372,7 @@ export function RoleDashboard({ role }: { role: Role }) {
             title="Hiring funnel"
             description="Open positions, applicant volume, AI score, and referral flow."
           >
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="min-w-0 grid gap-4 md:grid-cols-4">
               <DashboardMetric label="Open Positions" value={jobsQuery.data?.items?.length ?? 0} loading={jobsQuery.isLoading} tone="info" />
               <DashboardMetric label="Total Applicants" value={applicantsQuery.data?.length ?? 0} loading={applicantsQuery.isLoading} tone="success" />
               <DashboardMetric

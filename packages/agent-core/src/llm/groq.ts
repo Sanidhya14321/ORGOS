@@ -1,8 +1,13 @@
 import { LLMProviderError, LLMTimeoutError, RateLimitError } from "./errors.js";
 import type { LLMMessage, LLMOptions, LLMProvider, LLMResponse } from "./provider.js";
 
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL_DEFAULT = "llama-3.3-70b-versatile";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+
+function resolveGroqModel(): string {
+  const fromEnv = process.env.GROQ_MODEL?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : GROQ_MODEL_DEFAULT;
+}
 
 interface GroqUsage {
   prompt_tokens?: number;
@@ -39,7 +44,7 @@ export class GroqProvider implements LLMProvider {
           Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: GROQ_MODEL,
+          model: resolveGroqModel(),
           messages,
           temperature: opts?.temperature,
           max_tokens: opts?.maxTokens

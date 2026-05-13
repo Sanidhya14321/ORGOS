@@ -110,7 +110,7 @@ export default function KnowledgePage() {
       description="Upload handbooks and policies for vectorless or embedding-backed retrieval."
       role={meQuery.data?.role}
     >
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="min-w-0 grid gap-6 lg:grid-cols-2">
         <Card className="space-y-4 p-5">
           <h2 className="text-lg font-semibold text-text-primary">Upload</h2>
           <div className="space-y-2">
@@ -126,7 +126,8 @@ export default function KnowledgePage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-text-muted">
-              Vector modes require <code className="rounded bg-bg-subtle px-1">OPENAI_API_KEY</code> on the API. Otherwise mode falls back to vectorless with a warning.
+              Agents use <strong>Groq</strong> on the server when <code className="rounded bg-bg-subtle px-1">GROQ_API_KEY</code> is set.
+              Vector / hybrid modes need embeddings — today that path uses <code className="rounded bg-bg-subtle px-1">OPENAI_API_KEY</code> on the API; without it, upload stays <strong>vectorless</strong> (sections only).
             </p>
           </div>
           <div className="space-y-2">

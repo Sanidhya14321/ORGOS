@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useRealtimeQueryInvalidation, useSocket } from "@/lib/socket";
 import { Topbar } from "@/components/shell/topbar";
+import { HelpChatDock } from "@/components/help-chat-dock";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGoalsQuery, useMeQuery, useOrgAccountsQuery, usePendingMembersQuery, useTasksQuery } from "@/lib/queries";
 import { isExecutiveRole } from "@/lib/access";
@@ -22,6 +23,7 @@ function titleFromPath(pathname: string): string {
   if (pathname.startsWith("/dashboard/power")) return "Power Control";
   if (pathname.startsWith("/dashboard/goals")) return "Goals";
   if (pathname.startsWith("/dashboard/knowledge")) return "Knowledge base";
+  if (pathname.startsWith("/dashboard/positions-import")) return "Import positions";
   if (pathname.startsWith("/dashboard/recruit")) return "Recruitment";
   if (pathname.startsWith("/dashboard/shortcuts")) return "Shortcuts";
   return "Dashboard";
@@ -44,7 +46,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const isLoading = meQuery.isLoading;
 
   return (
-    <div className="min-h-screen bg-bg-base">
+    <div className="min-h-screen min-w-0 bg-bg-base">
       <Topbar
         pageTitle={pageTitle}
         tasks={tasksQuery.data ?? []}
@@ -55,7 +57,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         agentRunning={socket.connected}
         role={meQuery.data?.role}
       />
-      <main className="mx-auto w-full max-w-[1400px] px-4 pb-10 pt-6 md:pr-6">
+      <main className="mx-auto min-w-0 w-full max-w-[1400px] px-4 pb-10 pt-6 md:pr-6">
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-8 w-40" />
@@ -66,6 +68,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           children
         )}
       </main>
+      <HelpChatDock />
     </div>
   );
 }

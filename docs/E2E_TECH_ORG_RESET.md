@@ -5,8 +5,8 @@
 ## 0) Preconditions
 
 - Root `.env` / `.env.local`: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `UPSTASH_REDIS_URL`, `UPSTASH_REDIS_TOKEN`, `SUPABASE_DB_PASSWORD` (for direct schema apply), LLM keys as needed.
-- Optional: `OPENAI_API_KEY` — handbook via OpenAI (`OPENAI_HANDBOOK_MODEL`, default `gpt-4o-mini`).  
-- Optional: `GROQ_API_KEY` — handbook via Groq OpenAI-compatible API if OpenAI key unset (`GROQ_HANDBOOK_MODEL`, default `llama-3.3-70b-versatile`).  
+- Optional: `GROQ_API_KEY` — handbook via Groq OpenAI-compatible API first (`GROQ_HANDBOOK_MODEL`, default `llama-3.3-70b-versatile`).
+- Optional: `OPENAI_API_KEY` — handbook via OpenAI only if Groq key unset (`OPENAI_HANDBOOK_MODEL`, default `gpt-4o-mini`).
 - If neither key set — script uses static handbook text (still produces PDF).
 
 ## 1) Wipe all app data + Auth users
@@ -49,7 +49,7 @@ Override with env: `SEED_ORG_NAME`, `SEED_ORG_DOMAIN`, `SEED_USER_EMAIL_DOMAIN`.
 npm run e2e:generate-handbook-pdf
 ```
 
-Output: `tmp/e2e/nexus-tech-employee-handbook.pdf` unless `OUT_PATH=...`. LLM priority: `OPENAI_API_KEY` → OpenAI; else `GROQ_API_KEY` → Groq; else static text.
+Output: `tmp/e2e/nexus-tech-employee-handbook.pdf` unless `OUT_PATH=...`. LLM priority: `GROQ_API_KEY` → Groq; else `OPENAI_API_KEY` → OpenAI; else static text.
 
 ## 5) Start stack and upload PDF (CEO session)
 
@@ -73,6 +73,28 @@ API_URL=http://localhost:4000 npm run e2e:upload-knowledge-pdf
 
 Optional: `E2E_ORG_ID`, `E2E_CEO_EMAIL`, `E2E_CEO_PASSWORD`, `PDF_PATH`, `E2E_DOCUMENT_RETRIEVAL_MODE` (default `vectorless`; use `hybrid` when API has `OPENAI_API_KEY`).
 
+**Hybrid vs vectorless (knowledge upload):** `vector` / `hybrid` enqueue OpenAI embeddings. If `OPENAI_API_KEY` is unset on the API, upload **falls back to vectorless** and you see `Stored mode: vectorless (requested hybrid)` — expected. Use `vectorless` for E2E without OpenAI, or set `OPENAI_API_KEY` on the API to test real hybrid.
+
+### Import positions (API or UI)
+
+Sample roster: [`scripts/fixtures/e2e-positions.csv`](../scripts/fixtures/e2e-positions.csv) (titles avoid colliding with seeded `VP Engineering`).
+
+**CLI (CEO session, same env as knowledge upload):**
+
+```bash
+API_URL=http://localhost:4000 npm run e2e:import-positions
+```
+
+Preview only. To create rows in `positions`:
+
+```bash
+E2E_POSITIONS_COMMIT=1 API_URL=http://localhost:4000 npm run e2e:import-positions
+```
+
+Optional: `POSITIONS_CSV` for your own file.
+
+**UI:** Log in as CEO → **Import positions** (nav or `/dashboard/positions-import`) → choose CSV/XLSX/PDF → **Preview import** → **Create positions in org**.
+
 ## 6) Smoke checks
 
 **Local infra optional skips** (Supabase cloud + Upstash only, no local Postgres/Redis):
@@ -89,7 +111,7 @@ ORGOS_SMOKE_API_URL=https://your-api-host npm run smoke:local
 
 ## 7) Golden journey (manual UI)
 
-Follow [GOLDEN_JOURNEY_STAGING.md](./GOLDEN_JOURNEY_STAGING.md): login CEO (`ceo@nexustech-e2e.org` / password = email), goals, knowledge (confirm uploaded doc), capture, task board, org tree.
+Follow [GOLDEN_JOURNEY_STAGING.md](./GOLDEN_JOURNEY_STAGING.md): login CEO (`ceo@nexustech-e2e.org` / password = email), goals, knowledge (confirm uploaded doc), **Import positions** (`/dashboard/positions-import` or `npm run e2e:import-positions`), capture, task board, org tree.
 
 ## One-liner reference (copy with care)
 

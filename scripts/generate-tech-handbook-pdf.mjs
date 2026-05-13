@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Generate a multi-section employee handbook PDF for E2E knowledge upload.
- * LLM text source (first match wins): `OPENAI_API_KEY` → OpenAI;
- * else `GROQ_API_KEY` → Groq (`https://api.groq.com/openai/v1/chat/completions`);
+ * LLM text source (first match wins): `GROQ_API_KEY` → Groq;
+ * else `OPENAI_API_KEY` → OpenAI;
  * else static handbook (still valid PDF).
  *
  *   node scripts/generate-tech-handbook-pdf.mjs
@@ -98,18 +98,6 @@ async function fetchHandbookViaChatCompletions(opts) {
 }
 
 async function fetchHandbookSections() {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (openaiKey) {
-    const model = process.env.OPENAI_HANDBOOK_MODEL ?? "gpt-4o-mini";
-    return fetchHandbookViaChatCompletions({
-      url: "https://api.openai.com/v1/chat/completions",
-      apiKey: openaiKey,
-      model,
-      label: "OpenAI",
-      structuredJson: true
-    });
-  }
-
   const groqKey = process.env.GROQ_API_KEY;
   if (groqKey) {
     const model = process.env.GROQ_HANDBOOK_MODEL ?? "llama-3.3-70b-versatile";
@@ -122,7 +110,19 @@ async function fetchHandbookSections() {
     });
   }
 
-  console.warn("No OPENAI_API_KEY or GROQ_API_KEY — using static handbook sections for offline E2E.");
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    const model = process.env.OPENAI_HANDBOOK_MODEL ?? "gpt-4o-mini";
+    return fetchHandbookViaChatCompletions({
+      url: "https://api.openai.com/v1/chat/completions",
+      apiKey: openaiKey,
+      model,
+      label: "OpenAI",
+      structuredJson: true
+    });
+  }
+
+  console.warn("No GROQ_API_KEY or OPENAI_API_KEY — using static handbook sections for offline E2E.");
   return staticHandbookSections();
 }
 
@@ -183,9 +183,9 @@ async function writePdf(sections, filePath) {
 }
 
 async function main() {
-  const src = process.env.OPENAI_API_KEY ? "OpenAI" : process.env.GROQ_API_KEY ? "Groq" : "static";
+  const src = process.env.GROQ_API_KEY ? "Groq" : process.env.OPENAI_API_KEY ? "OpenAI" : "static";
   if (src === "static") {
-    console.log("Using static handbook (no OPENAI_API_KEY / GROQ_API_KEY)…");
+    console.log("Using static handbook (no GROQ_API_KEY / OPENAI_API_KEY)…");
   } else {
     console.log(`Requesting handbook content from ${src}…`);
   }

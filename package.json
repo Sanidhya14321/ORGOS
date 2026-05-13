@@ -23,6 +23,7 @@
     "db:seed:tech-e2e": "npm run seed:tech-e2e --workspace @orgos/db",
     "e2e:generate-handbook-pdf": "node scripts/generate-tech-handbook-pdf.mjs",
     "e2e:upload-knowledge-pdf": "node scripts/e2e-upload-knowledge-pdf.mjs",
+    "e2e:import-positions": "node scripts/e2e-import-positions.mjs",
     "dev:redis-local": "node scripts/start-local-redis.mjs"
   },
   "devDependencies": {

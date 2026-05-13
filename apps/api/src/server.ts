@@ -30,6 +30,7 @@ import settingsRoutes from "./routes/settings.js";
 import tasksRoutes from "./routes/tasks.js";
 import onboardingRoutes from "./routes/onboarding.js";
 import documentsRoutes from "./routes/documents.js";
+import helpRoutes from "./routes/help.js";
 import { initializeQueueForwarding } from "./queue/index.js";
 import { startCsuiteDecomposeWorker } from "./queue/workers/decompose.csuite.worker.js";
 import { startManagerDecomposeWorker } from "./queue/workers/decompose.manager.worker.js";
@@ -188,6 +189,7 @@ export async function buildServer() {
     await api.register(settingsRoutes);
     await api.register(onboardingRoutes);
     await api.register(documentsRoutes);
+    await api.register(helpRoutes);
   }, { prefix: "/api" });
 
   return fastify;

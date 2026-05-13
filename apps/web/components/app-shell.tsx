@@ -22,16 +22,18 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
     { href: "/dashboard/task-board", label: "Task board" },
     ...(role === "ceo" || role === "cfo" || role === "manager" ? [{ href: "/dashboard/org-tree", label: "Org tree" }] : []),
     ...(canAccessSection(role, "powerControl") ? [{ href: "/dashboard/power", label: "Power control" }] : []),
-    ...(role === "ceo" ? [{ href: "/dashboard/ceo", label: "CEO control" }] : [])
+    ...(role === "ceo" ? [{ href: "/dashboard/ceo", label: "CEO control" }] : []),
+    ...(role === "ceo" ? [{ href: "/dashboard/positions-import", label: "Import positions" }] : []),
+    ...(role === "ceo" ? [{ href: "/dashboard/knowledge", label: "Knowledge base" }] : [])
   ] : [];
 
   return (
-    <main className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-12 lg:py-16">
+    <main className="relative mx-auto flex min-h-screen min-w-0 w-full max-w-7xl flex-col px-4 py-10 sm:px-6 sm:py-12 lg:py-16">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(circle_at_top_left,rgba(var(--accent-rgb),0.10),transparent_42%)]" />
 
       <header className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="max-w-4xl space-y-4">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="min-w-0 max-w-4xl space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="border-border bg-bg-elevated text-text-secondary">
                 {eyebrow}
@@ -48,7 +50,7 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
             </div>
           </div>
 
-          <div className="w-full rounded-[24px] border border-border bg-bg-surface/80 px-5 py-4 shadow-[0_20px_50px_rgba(23,21,19,0.08)] backdrop-blur-xl lg:w-auto xl:min-w-[250px]">
+          <div className="min-w-0 w-full rounded-[24px] border border-border bg-bg-surface/80 px-5 py-4 shadow-[0_20px_50px_rgba(23,21,19,0.08)] backdrop-blur-xl lg:w-auto xl:min-w-[250px]">
             <p className="dashboard-label">Mode</p>
             <p className="mt-2 text-base font-semibold text-text-primary">Focused execution</p>
             <p className="mt-2 text-sm leading-6 text-text-secondary">
@@ -72,11 +74,11 @@ export function AppShell({ eyebrow, title, description, children, layout = "spli
 
       <section
         className={cn(
-          "dashboard-surface animate-in fade-in slide-in-from-bottom-6 duration-1000",
+          "dashboard-surface min-w-0 animate-in fade-in slide-in-from-bottom-6 duration-1000",
           layout === "stack" ? "p-6 lg:p-8" : "p-8 lg:p-10"
         )}
       >
-        <div className="dashboard-panel">
+        <div className="dashboard-panel min-w-0">
           {children}
         </div>
       </section>

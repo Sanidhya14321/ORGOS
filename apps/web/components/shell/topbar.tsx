@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardNav, type CardNavItem } from "@/components/ui/card-nav";
@@ -21,6 +22,7 @@ const BASE_CARD_NAV_ITEMS: CardNavItem[] = [
     links: [
       { label: "Collaboration Hub", href: "/dashboard/team" },
       { label: "Org Tree", href: "/dashboard/org-tree" },
+      { label: "Import positions", href: "/dashboard/positions-import" },
       { label: "Power Control", href: "/dashboard/power" },
       { label: "Recruitment", href: "/dashboard/recruit" },
       { label: "Inbox", href: "/dashboard/inbox" }
@@ -65,6 +67,7 @@ function getCardNavItemsForRole(role?: Role): CardNavItem[] {
         if (link.href === "/dashboard/power") return canAccessSection(role, "powerControl");
         if (link.href === "/dashboard/goals") return canAccessSection(role, "goals");
         if (link.href === "/dashboard/knowledge") return canAccessSection(role, "knowledge");
+        if (link.href === "/dashboard/positions-import") return role === "ceo";
         if (link.href === "/dashboard/team") return canAccessSection(role, "team");
         if (link.href === "/dashboard/task-board") return canAccessSection(role, "taskBoard");
         return true;
@@ -92,7 +95,7 @@ export function Topbar({
   agentRunning: boolean;
   role?: Role;
 }) {
-  const items = getCardNavItemsForRole(role);
+  const items = useMemo(() => getCardNavItemsForRole(role), [role]);
 
   return (
     <header className="sticky top-4 z-30 flex justify-center px-3 md:px-6">
