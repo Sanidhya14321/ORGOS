@@ -9,6 +9,10 @@ interface IngestJobData {
   sourceType: string;
   sourceId: string | null;
   text: string;
+  chunks?: Array<{
+    text: string;
+    metadata?: Record<string, unknown>;
+  }>;
 }
 
 export async function processIngestJob(job: Job<IngestJobData>): Promise<void> {
@@ -20,7 +24,9 @@ export async function processIngestJob(job: Job<IngestJobData>): Promise<void> {
     throw new Error("Invalid ingest job payload");
   }
 
-  const chunks = embeddingService.chunkText(text);
+  const chunks = job.data.chunks && job.data.chunks.length > 0
+    ? job.data.chunks
+    : embeddingService.chunkText(text);
   await embeddingService.upsertEmbeddings(supabase, orgId, sourceType, sourceId, chunks);
 }
 

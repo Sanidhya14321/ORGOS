@@ -8,6 +8,24 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { OrgDocument, type OrgDocumentSection, RAGContextSchema } from "@orgos/shared-types";
 import { decryptText } from "../lib/encryption.js";
 
+export interface RagFilterOptions {
+  branchId?: string | null;
+  department?: string | null;
+  docTypes?: string[];
+  knowledgeScopes?: string[];
+  sourceFormats?: string[];
+}
+
+export interface IndexedDocumentSection {
+  section_index: number;
+  heading: string | null;
+  section_path: string | null;
+  content: string;
+  page_start: number;
+  page_end: number;
+  keyword_terms: string[];
+}
+
 /**
  * Extract keywords from a goal/task input
  * Simple word frequency + stop-word filtering
@@ -31,17 +49,41 @@ function extractKeywords(text: string): Set<string> {
 }
 
 function normalizeContent(text: string): string {
-  return text.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const lines = normalized.split("\n");
+  const seen = new Map<string, number>();
+  const filtered = lines.filter((line) => {
+    const key = line.trim().toLowerCase();
+    if (key.length < 4 || key.length > 120) {
+      return true;
+    }
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    return count <= 2;
+  });
+
+  return filtered.join("\n").trim();
 }
 
-function splitIntoSections(text: string): Array<{
-  section_index: number;
-  heading: string | null;
-  content: string;
-  page_start: number;
-  page_end: number;
-  keyword_terms: string[];
-}> {
+function isHeadingLike(block: string): boolean {
+  const trimmed = block.trim();
+  if (!trimmed || trimmed.length > 140) {
+    return false;
+  }
+  return (
+    /^#{1,6}\s+/.test(trimmed) ||
+    /^sheet:\s+/i.test(trimmed) ||
+    /^section\s+\d+/i.test(trimmed) ||
+    /^[A-Z][A-Z0-9 /&().:-]{3,}$/.test(trimmed)
+  );
+}
+
+function splitIntoSections(text: string): IndexedDocumentSection[] {
   const normalized = normalizeContent(text);
   if (!normalized) {
     return [];
@@ -52,17 +94,11 @@ function splitIntoSections(text: string): Array<{
     .map((chunk) => chunk.trim())
     .filter(Boolean);
 
-  const sections: Array<{
-    section_index: number;
-    heading: string | null;
-    content: string;
-    page_start: number;
-    page_end: number;
-    keyword_terms: string[];
-  }> = [];
+  const sections: IndexedDocumentSection[] = [];
 
   let buffer: string[] = [];
   let sectionIndex = 0;
+  let currentHeading: string | null = null;
 
   function flushBuffer() {
     if (buffer.length === 0) {
@@ -78,7 +114,8 @@ function splitIntoSections(text: string): Array<{
     const approxPages = Math.max(1, Math.ceil(content.length / 3000));
     sections.push({
       section_index: sectionIndex,
-      heading: buffer[0]?.length && buffer[0]!.length < 120 ? buffer[0]! : null,
+      heading: currentHeading,
+      section_path: currentHeading,
       content,
       page_start: pageStart,
       page_end: pageStart + approxPages - 1,
@@ -89,7 +126,15 @@ function splitIntoSections(text: string): Array<{
   }
 
   for (const chunk of paragraphChunks) {
+    if (isHeadingLike(chunk)) {
+      flushBuffer();
+      currentHeading = chunk.replace(/^#{1,6}\s+/, "").trim();
+      continue;
+    }
     buffer.push(chunk);
+    if (chunk.includes("|") && buffer.join("\n\n").length < 2200) {
+      continue;
+    }
     if (buffer.join("\n\n").length >= 1600) {
       flushBuffer();
     }
@@ -178,6 +223,9 @@ export async function retrieveRelevantSections(
     similarityThreshold?: number;
     branchId?: string | null;
     department?: string | null;
+    docTypes?: string[];
+    knowledgeScopes?: string[];
+    sourceFormats?: string[];
   }
 ): Promise<OrgDocumentSection[]> {
   const topN = params.topN ?? 5;
@@ -195,6 +243,12 @@ export async function retrieveRelevantSections(
   if (params.department) {
     query = query.eq("department", params.department);
   }
+  if (params.docTypes && params.docTypes.length > 0) {
+    query = query.in("doc_type", params.docTypes);
+  }
+  if (params.sourceFormats && params.sourceFormats.length > 0) {
+    query = query.in("source_format", params.sourceFormats);
+  }
 
   const { data, error } = await query;
   if (error || !data) {
@@ -205,7 +259,21 @@ export async function retrieveRelevantSections(
     .map((section) => ({
       section,
       score: calculateSimilarity(inputKeywords, new Set(section.keyword_terms ?? []))
+        + (
+          params.knowledgeScopes && params.knowledgeScopes.length > 0
+            ? params.knowledgeScopes.some((scope) => (section.knowledge_scope ?? []).map(String).includes(scope))
+              ? 0.08
+              : 0
+            : 0
+        )
     }))
+    .filter(({ section }) => {
+      if (!params.knowledgeScopes || params.knowledgeScopes.length === 0) {
+        return true;
+      }
+      const scopes = section.knowledge_scope ?? [];
+      return scopes.length === 0 || scopes.some((scope) => params.knowledgeScopes?.includes(scope));
+    })
     .filter(({ score }) => score >= similarityThreshold)
     .sort((left, right) => right.score - left.score)
     .slice(0, topN)
@@ -258,8 +326,18 @@ export async function indexDocument(
     orgId?: string;
     branchId?: string | null;
     department?: string | null;
+    docType?: string;
+    knowledgeScope?: string[];
+    sourceFormat?: string;
+    contentHash?: string;
+    ingestionWarnings?: string[];
   }
-): Promise<void> {
+): Promise<{
+  normalizedContent: string;
+  topics: string[];
+  pageCount: number;
+  sections: IndexedDocumentSection[];
+}> {
   // Extract topics from content if not provided
   let topics = userProvidedTopics || [];
   if (topics.length === 0) {
@@ -281,22 +359,27 @@ export async function indexDocument(
       page_count: pageCount,
       key_topics: topics,
       normalized_content: normalizedContent,
-      section_count: sections.length
+      section_count: sections.length,
+      doc_type: options?.docType,
+      knowledge_scope: options?.knowledgeScope ?? [],
+      source_format: options?.sourceFormat ?? "unknown",
+      content_hash: options?.contentHash,
+      ingestion_warnings: options?.ingestionWarnings ?? []
     })
     .eq("id", documentId);
 
   if (error) {
     console.warn(`Failed to index document: ${error.message}`);
-    return;
+    return { normalizedContent, topics, pageCount, sections };
   }
 
   if (!options?.orgId) {
-    return;
+    return { normalizedContent, topics, pageCount, sections };
   }
 
   await supabase.from("org_document_sections").delete().eq("document_id", documentId);
   if (sections.length === 0) {
-    return;
+    return { normalizedContent, topics, pageCount, sections };
   }
 
   const insertResult = await supabase.from("org_document_sections").insert(
@@ -309,14 +392,20 @@ export async function indexDocument(
       page_start: section.page_start,
       page_end: section.page_end,
       heading: section.heading,
+      section_path: section.section_path,
       content: section.content,
-      keyword_terms: section.keyword_terms
+      keyword_terms: section.keyword_terms,
+      doc_type: options.docType ?? "other",
+      knowledge_scope: options.knowledgeScope ?? [],
+      source_format: options.sourceFormat ?? "unknown"
     }))
   );
 
   if (insertResult.error) {
     console.warn(`Failed to index document sections: ${insertResult.error.message}`);
   }
+
+  return { normalizedContent, topics, pageCount, sections };
 }
 
 /**

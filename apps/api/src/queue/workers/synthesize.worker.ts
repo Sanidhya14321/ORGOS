@@ -3,6 +3,7 @@ import { Worker, type Job } from "bullmq";
 import { synthesisAgent } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
+import { buildRagProvenance, buildSynthesisRagOptions } from "../../services/ragContext.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { getRedisConnection, getSynthesizeQueue } from "../index.js";
 import { emitTaskReportSubmittedCascade } from "../../services/notifier.js";
@@ -89,6 +90,15 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
     .maybeSingle();
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
+  const ragOptions = buildSynthesisRagOptions();
+  const ragProvenance = parentTask.org_id
+    ? await ragSearchClient.search({
+        orgId: String(parentTask.org_id),
+        query: `${parentTask.title} ${goal?.title ?? ""} ${goal?.description ?? ""}`.trim(),
+        topK: 4,
+        ...ragOptions
+      })
+    : [];
 
   const synthesis = await synthesisAgent({
     parentTask: {
@@ -111,7 +121,8 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
             orgId: String(parentTask.org_id),
             searchClient: ragSearchClient,
             topK: 4,
-            maxSnippetChars: 400
+            maxSnippetChars: 400,
+            ...ragOptions
           }
         }
       : {})
@@ -133,7 +144,7 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
       flagged_items: synthesis.flagged_items
     },
     confidence: synthesis.overall_confidence,
-    sources: [],
+    sources: buildRagProvenance(ragProvenance),
     escalate: synthesis.flagged_items.length > 0
   });
 
@@ -147,6 +158,20 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
     .eq("id", parentTask.id);
 
   await recomputeGoalRollup(supabase, String(parentTask.goal_id));
+
+  await supabase.from("agent_logs").insert({
+    goal_id: parentTask.goal_id,
+    task_id: parentTask.id,
+    agent_type: "synthesis_agent",
+    action: "synthesize",
+    model: "synthesis_agent",
+    input: { parentTaskId: parentTask.id, ragDocuments: buildRagProvenance(ragProvenance) },
+    output: {
+      summary: synthesis.summary,
+      flagged_items: synthesis.flagged_items,
+      overall_confidence: synthesis.overall_confidence
+    }
+  });
 
   await enqueueParentIfReady(parentTask.id as string);
 

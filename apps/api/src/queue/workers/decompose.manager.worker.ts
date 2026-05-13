@@ -7,6 +7,7 @@ import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { assignTask } from "../../services/assignmentEngine.js";
 import { suggestRoutingForTask } from "../../services/agentService.js";
+import { buildManagerRagOptions, buildRagProvenance } from "../../services/ragContext.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitTaskAssigned, emitToUser } from "../../services/notifier.js";
 import { syncUserOpenTaskCounts } from "../../services/workloadService.js";
@@ -200,6 +201,15 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
     .maybeSingle();
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
+  const ragOptions = buildManagerRagOptions({ department: job.data.department });
+  const ragProvenance = goalResult.data?.org_id
+    ? await ragSearchClient.search({
+        orgId: String(goalResult.data.org_id),
+        query: [job.data.directive, job.data.department, existingTasks.map((task) => task.title).join(" ")].filter(Boolean).join(" "),
+        topK: 4,
+        ...ragOptions
+      })
+    : [];
 
   const managerInput = {
     directive: job.data.directive,
@@ -214,7 +224,8 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
       orgId: String(goalResult.data.org_id),
       searchClient: ragSearchClient,
       topK: 4,
-      maxSnippetChars: 400
+      maxSnippetChars: 400,
+      ...ragOptions
     };
   }
 
@@ -259,6 +270,27 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
       await enqueueExecute(task.id);
     }
   }
+
+  await supabase.from("agent_logs").insert({
+    goal_id: job.data.goalId,
+    agent_type: "manager_agent",
+    action: "decompose",
+    model: "manager_agent",
+    input: {
+      directive: job.data.directive,
+      department: job.data.department,
+      ragDocuments: buildRagProvenance(ragProvenance)
+    },
+    output: {
+      taskCount: assignedTasks.length,
+      tasks: assignedTasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        assigned_role: task.assigned_role,
+        is_agent_task: task.is_agent_task
+      }))
+    }
+  });
 }
 
 export function startManagerDecomposeWorker(): Worker<ManagerJobData> {

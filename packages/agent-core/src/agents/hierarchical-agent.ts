@@ -3,6 +3,7 @@ import type { Task } from "@orgos/shared-types";
 import { type Position, type UserCapacity, type OrgStructureKind } from "@orgos/shared-types";
 import { callLLM } from "../llm/router.js";
 import type { LLMMessage } from "../llm/provider.js";
+import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
 
 /**
  * HierarchicalAgent: Universal agent that handles decomposition at ANY level of the org
@@ -102,6 +103,18 @@ export interface HierarchicalAgentInput {
   // Historical context
   parent_task?: Task;                   // Task that created this one
   sibling_tasks?: Task[];               // Other subtasks at same level
+  rag?: {
+    orgId: string;
+    searchClient: RagSearchClient;
+    topK?: number;
+    maxSnippetChars?: number;
+    branchId?: string | null;
+    department?: string | null;
+    docTypes?: string[];
+    knowledgeScopes?: string[];
+    sourceFormats?: string[];
+    sourceTypes?: string[];
+  };
 }
 
 export type HierarchicalAgentOutput = z.infer<typeof HierarchicalAgentOutputSchema>;
@@ -183,7 +196,7 @@ export async function hierarchicalAgent(
   const taskContext = buildTaskContext(task, input.parent_task, input.sibling_tasks);
 
   // Build LLM messages
-  const messages: LLMMessage[] = [
+  let messages: LLMMessage[] = [
     {
       role: "system",
       content: `${HIERARCHICAL_AGENT_SYSTEM_PROMPT}\n\nOrg Structure: ${input.org_structure ?? 'hierarchical'}\n\nOrg Chart:\n${orgChartContext}\n\nTeam Capacity:\n${capacityContext}`,
@@ -193,6 +206,23 @@ export async function hierarchicalAgent(
       content: taskContext,
     },
   ];
+
+  if (input.rag) {
+    const ragQuery = [task.title, task.description ?? "", task.success_criteria].filter(Boolean).join(" ");
+    const augmented = await buildRagAugmentedMessages(messages, input.rag.searchClient, {
+      orgId: input.rag.orgId,
+      query: ragQuery,
+      topK: input.rag.topK ?? 4,
+      maxSnippetChars: input.rag.maxSnippetChars ?? 400,
+      branchId: input.rag.branchId,
+      department: input.rag.department,
+      docTypes: input.rag.docTypes,
+      knowledgeScopes: input.rag.knowledgeScopes,
+      sourceFormats: input.rag.sourceFormats,
+      sourceTypes: input.rag.sourceTypes
+    });
+    messages = augmented.messages;
+  }
 
   // Call LLM with JSON mode
   const llmResponse = await callLLM(messages);

@@ -3,21 +3,14 @@
  * Company document management and RAG indexing
  */
 
-import type { FastifyPluginAsync } from "fastify";
+import crypto from "node:crypto";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { sendApiError } from "../lib/errors.js";
 import { DocumentUploadRequestSchema } from "@orgos/shared-types";
 import { indexDocument, getOrgDocuments, archiveDocument } from "../services/ragRetrieval.js";
 import { decryptText, encryptText } from "../lib/encryption.js";
-
-/**
- * Simple plaintext extraction from common formats
- * In production, use pdf-parse, mammoth, etc.
- */
-function extractTextFromFile(buffer: Buffer, mimeType: string): string {
-  // For now, assume pre-extracted text passed in request
-  // Production: parse PDF/Word/etc. and extract text
-  return buffer.toString("utf-8");
-}
+import { parseLocalFile } from "../services/localFileParser.js";
+import { getIngestQueue } from "../queue/index.js";
 
 const MAX_DOCUMENT_CHARS = 200_000;
 const MAX_FILENAME_LENGTH = 255;
@@ -28,6 +21,78 @@ function sanitizeFileName(input: string): string {
   return normalized.slice(0, MAX_FILENAME_LENGTH);
 }
 
+async function readUploadedDocument(
+  request: FastifyRequest
+): Promise<{
+  payload: Record<string, unknown>;
+  buffer: Buffer;
+} | null> {
+  const multipartRequest = request as typeof request & {
+    isMultipart?: () => boolean;
+    parts?: () => AsyncIterable<{
+      type?: string;
+      fieldname?: string;
+      value?: unknown;
+      filename?: string;
+      mimetype?: string;
+      toBuffer?: () => Promise<Buffer>;
+    }>;
+  };
+
+  if (typeof multipartRequest.isMultipart === "function" && multipartRequest.isMultipart() && typeof multipartRequest.parts === "function") {
+    const fields: Record<string, string[]> = {};
+    let fileName = "";
+    let mimeType = "";
+    let buffer: Buffer | null = null;
+
+    for await (const part of multipartRequest.parts()) {
+      if (part.type === "file") {
+        fileName = part.filename ?? "";
+        mimeType = part.mimetype ?? "";
+        buffer = part.toBuffer ? await part.toBuffer() : Buffer.alloc(0);
+        continue;
+      }
+
+      if (part.fieldname) {
+        fields[part.fieldname] = [...(fields[part.fieldname] ?? []), typeof part.value === "string" ? part.value : String(part.value ?? "")];
+      }
+    }
+
+    if (!buffer || !fileName) {
+      return null;
+    }
+
+    return {
+      payload: {
+        org_id: fields.org_id?.[0] ?? "",
+        file_name: fileName,
+        doc_type: fields.doc_type?.[0] ?? "other",
+        summary: fields.summary?.[0],
+        branch_id: fields.branch_id?.[0],
+        department: fields.department?.[0],
+        retrieval_mode: fields.retrieval_mode?.[0],
+        knowledge_scope: fields.knowledge_scope ?? (fields.knowledge_scope_csv?.[0]?.split(",").map((value) => value.trim()).filter(Boolean) ?? []),
+        mime_type: mimeType
+      },
+      buffer
+    };
+  }
+
+  const parsed = DocumentUploadRequestSchema.safeParse((request as { body?: unknown }).body);
+  if (!parsed.success) {
+    return null;
+  }
+
+  const buffer = parsed.data.file_content_base64
+    ? Buffer.from(parsed.data.file_content_base64, "base64")
+    : Buffer.from(parsed.data.file_content ?? "", "utf8");
+
+  return {
+    payload: parsed.data,
+    buffer
+  };
+}
+
 const documentsRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /documents/upload
@@ -36,22 +101,49 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
    * File in multipart form
    */
   fastify.post("/documents/upload", async (request, reply) => {
-    // Verify CEO
     if (!request.user || request.userRole !== "ceo") {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can upload documents");
     }
 
-    const parsed = DocumentUploadRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
+    const uploaded = await readUploadedDocument(request);
+    if (!uploaded) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid document upload payload", {
-        details: parsed.error.flatten()
+        details: "Expected multipart upload or valid JSON document payload"
       });
     }
 
-    const orgId = parsed.data.org_id;
-    const docType = parsed.data.doc_type;
-    const fileName = sanitizeFileName(parsed.data.file_name);
-    const extractedText = extractTextFromFile(Buffer.from(parsed.data.file_content, "utf8"), "text/plain").trim();
+    const isMultipartPayload =
+      typeof (request as { isMultipart?: () => boolean }).isMultipart === "function" &&
+      Boolean((request as { isMultipart?: () => boolean }).isMultipart?.());
+    const normalizedPayload = DocumentUploadRequestSchema.safeParse({
+      ...uploaded.payload,
+      ...(isMultipartPayload ? { file_content: "__multipart__" } : {})
+    });
+    if (!normalizedPayload.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid document upload payload", {
+        details: normalizedPayload.error.flatten()
+      });
+    }
+
+    const orgId = normalizedPayload.data.org_id;
+    const docType = normalizedPayload.data.doc_type;
+    const fileName = sanitizeFileName(normalizedPayload.data.file_name);
+
+    let parsedFile;
+    try {
+      parsedFile = await parseLocalFile({
+        buffer: uploaded.buffer,
+        fileName,
+        mimeType: uploaded.payload.mime_type ?? normalizedPayload.data.mime_type ?? null
+      });
+    } catch (error) {
+      return sendApiError(reply, request, 422, "VALIDATION_ERROR", "Document format could not be parsed locally", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    const extractedText = parsedFile.text.trim();
+    const contentHash = crypto.createHash("sha256").update(extractedText).digest("hex");
 
     if (!fileName) {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "A valid file name is required");
@@ -85,13 +177,17 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
         file_name: fileName,
         file_content: encryptText(extractedText),
         doc_type: docType,
-        summary: parsed.data.summary ?? null,
-        branch_id: parsed.data.branch_id ?? null,
-        department: parsed.data.department ?? null,
-        retrieval_mode: parsed.data.retrieval_mode,
+        summary: normalizedPayload.data.summary ?? null,
+        branch_id: normalizedPayload.data.branch_id ?? null,
+        department: normalizedPayload.data.department ?? null,
+        retrieval_mode: normalizedPayload.data.retrieval_mode,
         normalized_content: extractedText,
-        file_size: extractedText.length,
-        mime_type: "text/plain",
+        knowledge_scope: normalizedPayload.data.knowledge_scope,
+        source_format: parsedFile.sourceFormat,
+        content_hash: contentHash,
+        ingestion_warnings: parsedFile.warnings,
+        file_size: uploaded.buffer.length,
+        mime_type: uploaded.payload.mime_type ?? normalizedPayload.data.mime_type ?? parsedFile.mimeType,
         is_indexed: false,
         uploaded_by: request.user.id,
         uploaded_at: new Date().toISOString(),
@@ -104,21 +200,59 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Failed to store document: ${docError?.message}`);
     }
 
-    // Queue indexing job (async)
+    let indexedSections: Awaited<ReturnType<typeof indexDocument>>["sections"] = [];
     try {
-      await indexDocument(fastify.supabaseService, doc.id, extractedText, undefined, {
+      const indexResult = await indexDocument(fastify.supabaseService, doc.id, extractedText, undefined, {
         orgId,
-        branchId: parsed.data.branch_id ?? null,
-        department: parsed.data.department ?? null
+        branchId: normalizedPayload.data.branch_id ?? null,
+        department: normalizedPayload.data.department ?? null,
+        docType,
+        knowledgeScope: normalizedPayload.data.knowledge_scope,
+        sourceFormat: parsedFile.sourceFormat,
+        contentHash,
+        ingestionWarnings: parsedFile.warnings
       });
+      indexedSections = indexResult.sections;
     } catch (e) {
       request.log.warn({ err: e }, "Failed to index document");
+    }
+
+    if (normalizedPayload.data.retrieval_mode !== "vectorless" && indexedSections.length > 0) {
+      try {
+        await getIngestQueue().add("document_ingest", {
+          orgId,
+          sourceType: "document_section",
+          sourceId: doc.id,
+          text: extractedText,
+          chunks: indexedSections.map((section) => ({
+            text: section.content,
+            metadata: {
+              heading: section.heading,
+              sectionPath: section.section_path,
+              pageStart: section.page_start,
+              pageEnd: section.page_end,
+              docType,
+              knowledgeScope: normalizedPayload.data.knowledge_scope,
+              department: normalizedPayload.data.department ?? null,
+              branchId: normalizedPayload.data.branch_id ?? null,
+              sourceFormat: parsedFile.sourceFormat,
+              fileName,
+              contentHash
+            }
+          }))
+        });
+      } catch (error) {
+        request.log.warn({ err: error }, "Failed to enqueue document embeddings");
+      }
     }
 
     return reply.status(201).send({
       id: doc.id,
       file_name: fileName,
       doc_type: docType,
+      source_format: parsedFile.sourceFormat,
+      knowledge_scope: normalizedPayload.data.knowledge_scope,
+      warnings: parsedFile.warnings,
       uploaded_at: new Date().toISOString()
     });
   });
@@ -160,6 +294,9 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
         summary: doc.summary ?? null,
         branch_id: doc.branch_id ?? null,
         department: doc.department ?? null,
+        knowledge_scope: doc.knowledge_scope ?? [],
+        source_format: doc.source_format ?? "unknown",
+        ingestion_warnings: doc.ingestion_warnings ?? [],
         section_count: doc.section_count ?? 0,
         uploaded_at: doc.uploaded_at,
         indexed_at: doc.indexed_at
@@ -244,6 +381,9 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
       summary: doc.summary ?? null,
       key_topics: doc.key_topics,
       page_count: doc.page_count,
+      knowledge_scope: doc.knowledge_scope ?? [],
+      source_format: doc.source_format ?? "unknown",
+      ingestion_warnings: doc.ingestion_warnings ?? [],
       section_count: doc.section_count ?? 0,
       uploaded_at: doc.uploaded_at
     });

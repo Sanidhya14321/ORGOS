@@ -3,12 +3,14 @@
  * CEO onboarding flow: company setup, position import, org structure suggestion, credentials export
  */
 
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { sendApiError } from "../lib/errors.js";
 import {
   OrgStructureSuggestionRequestSchema,
   ApplyStructureSuggestionSchema,
-  OnboardingPositionImportSchema
+  OnboardingPositionImportSchema,
+  OnboardingPositionParsePreviewRequestSchema,
+  OnboardingPositionParsePreviewResponseSchema
 } from "@orgos/shared-types";
 import {
   createPositionCredentials,
@@ -16,6 +18,7 @@ import {
   exportOrgCredentials,
   resetPositionCredentials
 } from "../services/credentialService.js";
+import { parsePositionImportPreview } from "../services/positionImportParser.js";
 
 /**
  * Suggested org structure configurations
@@ -130,6 +133,59 @@ function slugify(input: string): string {
     .replace(/^-+|-+$/g, "");
 
   return value || "orgos";
+}
+
+async function readUploadedFile(
+  request: FastifyRequest
+): Promise<{
+  fileName: string;
+  mimeType: string | null;
+  buffer: Buffer;
+  fields: Record<string, string>;
+} | null> {
+  const multipartRequest = request as typeof request & {
+    isMultipart?: () => boolean;
+    parts?: () => AsyncIterable<{
+      type?: string;
+      fieldname?: string;
+      value?: unknown;
+      filename?: string;
+      mimetype?: string;
+      toBuffer?: () => Promise<Buffer>;
+    }>;
+  };
+
+  if (typeof multipartRequest.isMultipart !== "function" || !multipartRequest.isMultipart()) {
+    return null;
+  }
+
+  const fields: Record<string, string> = {};
+  let fileName = "";
+  let mimeType: string | null = null;
+  let buffer: Buffer | null = null;
+
+  if (typeof multipartRequest.parts !== "function") {
+    return null;
+  }
+
+  for await (const part of multipartRequest.parts()) {
+    if (part.type === "file") {
+      fileName = part.filename ?? "";
+      mimeType = part.mimetype ?? null;
+      buffer = part.toBuffer ? await part.toBuffer() : Buffer.alloc(0);
+      continue;
+    }
+
+    if (part.fieldname) {
+      fields[part.fieldname] = typeof part.value === "string" ? part.value : String(part.value ?? "");
+    }
+  }
+
+  if (!fileName || !buffer) {
+    return null;
+  }
+
+  return { fileName, mimeType, buffer, fields };
 }
 
 function derivePowerLevel(level: number): number {
@@ -261,6 +317,56 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.status(204).send();
+  });
+
+  fastify.post("/onboarding/positions/parse-preview", async (request, reply) => {
+    if (!request.user || request.userRole !== "ceo") {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Only CEO can parse position files");
+    }
+
+    const uploaded = await readUploadedFile(request);
+    let orgId = "";
+    let fileName = "";
+    let mimeType: string | null = null;
+    let buffer = Buffer.alloc(0);
+
+    if (uploaded) {
+      orgId = uploaded.fields.org_id ?? "";
+      fileName = uploaded.fileName;
+      mimeType = uploaded.mimeType;
+      buffer = Buffer.from(uploaded.buffer);
+    } else {
+      const parsed = OnboardingPositionParsePreviewRequestSchema.safeParse((request as { body?: unknown }).body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid position parse payload", {
+          details: parsed.error.flatten()
+        });
+      }
+      orgId = parsed.data.org_id;
+      fileName = parsed.data.file_name;
+      mimeType = parsed.data.mime_type ?? null;
+      buffer = Buffer.from(parsed.data.file_content_base64, "base64");
+    }
+
+    const ownsOrg = await ensureOwnedOrg(orgId, request.user.id);
+    if (!ownsOrg) {
+      return sendApiError(reply, request, 404, "NOT_FOUND", "Organization not found or not owned by you");
+    }
+
+    const preview = await parsePositionImportPreview({
+      buffer,
+      fileName,
+      mimeType
+    });
+
+    if (preview.positions.length === 0) {
+      return sendApiError(reply, request, 422, "VALIDATION_ERROR", "No positions could be parsed from the uploaded file", {
+        warnings: preview.warnings
+      });
+    }
+
+    const validated = OnboardingPositionParsePreviewResponseSchema.parse(preview);
+    return reply.send(validated);
   });
 
   /**

@@ -282,6 +282,7 @@ export async function buildRouteTestApp(options: {
   supabaseAnon?: unknown;
   currentUser?: { id: string; role: string | null; email?: string };
   env?: Partial<ReturnType<typeof createTestEnv>>;
+  beforeRoutes?: (app: FastifyInstance) => Promise<void>;
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
@@ -301,6 +302,10 @@ export async function buildRouteTestApp(options: {
       : null;
     request.userRole = options.currentUser?.role ?? null;
   });
+
+  if (options.beforeRoutes) {
+    await options.beforeRoutes(app);
+  }
 
   const routeList = Array.isArray(options.routes) ? options.routes : [options.routes];
   for (const route of routeList) {

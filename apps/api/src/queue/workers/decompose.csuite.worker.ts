@@ -4,6 +4,7 @@ import { ceoAgent } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
 import { emitGoalDecomposed } from "../../services/notifier.js";
+import { buildCeoRagOptions, buildRagProvenance } from "../../services/ragContext.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { getCsuiteQueue, getManagerQueue, getRedisConnection } from "../index.js";
 
@@ -95,6 +96,15 @@ export async function processCsuiteDecomposeJob(
   }
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
+  const ragOptions = buildCeoRagOptions();
+  const ragProvenance = goal.org_id
+    ? await ragSearchClient.search({
+        orgId: String(goal.org_id),
+        query: `${goal.title} ${goal.description ?? goal.raw_input ?? ""}`.trim(),
+        topK: 4,
+        ...ragOptions
+      })
+    : [];
 
   // Build a lightweight pseudo-task representing the goal for the hierarchical agent
   const pseudoTask = {
@@ -127,7 +137,8 @@ export async function processCsuiteDecomposeJob(
       orgId: String(goal.org_id),
       searchClient: ragSearchClient,
       topK: 4,
-      maxSnippetChars: 400
+      maxSnippetChars: 400,
+      ...ragOptions
     };
   }
 
@@ -153,7 +164,8 @@ export async function processCsuiteDecomposeJob(
               orgId: String(goal.org_id),
               searchClient: ragSearchClient,
               topK: 4,
-              maxSnippetChars: 400
+              maxSnippetChars: 400,
+              ...ragOptions
             }
           }
         : {})
@@ -208,6 +220,19 @@ export async function processCsuiteDecomposeJob(
       })
       .eq("id", goalId);
   }
+
+  await supabase.from("agent_logs").insert({
+    goal_id: goalId,
+    agent_type: "ceo_agent",
+    action: "decompose",
+    model: ceoResult?.action ? "hierarchical_agent" : "ceo_agent_fallback",
+    input: {
+      goalId,
+      title: goal.title,
+      ragDocuments: buildRagProvenance(ragProvenance)
+    },
+    output: ceoResult
+  });
 }
 
 export function startCsuiteDecomposeWorker(): Worker<CsuiteDecomposeJobData> {

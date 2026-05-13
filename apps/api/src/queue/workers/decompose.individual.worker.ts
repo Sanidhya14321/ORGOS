@@ -2,6 +2,7 @@ import { Worker, type Job } from "bullmq";
 import { individualAgent, type IndividualAgentOutput } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
+import { buildIndividualRagOptions } from "../../services/ragContext.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitToUser } from "../../services/notifier.js";
 import { getIndividualQueue, getRedisConnection } from "../index.js";
@@ -63,11 +64,13 @@ export async function processIndividualAckJob(
   }
 
   if (task.org_id) {
+    const ragOptions = buildIndividualRagOptions();
     agentInput.rag = {
       orgId: String(task.org_id),
       searchClient: ragSearchClient,
       topK: 4,
-      maxSnippetChars: 400
+      maxSnippetChars: 400,
+      ...ragOptions
     };
   }
 

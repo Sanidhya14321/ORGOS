@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
@@ -105,6 +106,13 @@ export async function buildServer() {
   await fastify.register(cors, {
     origin: env.WEB_ORIGIN,
     credentials: true
+  });
+  await fastify.register(multipart, {
+    attachFieldsToBody: false,
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+      files: 1
+    }
   });
 
   if (!relaxedLocalSecurity) {

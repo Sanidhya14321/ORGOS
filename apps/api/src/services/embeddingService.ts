@@ -60,13 +60,29 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     throw new Error(`Unsupported embedding provider: ${provider}`);
 }
 
-export async function upsertEmbeddings(dbClient: any, orgId: string, sourceType: string, sourceId: string | null, chunks: string[], embeddings?: number[][]) {
+export interface EmbeddingChunk {
+  text: string;
+  metadata?: Record<string, unknown>;
+}
+
+export async function upsertEmbeddings(
+  dbClient: any,
+  orgId: string,
+  sourceType: string,
+  sourceId: string | null,
+  chunks: Array<string | EmbeddingChunk>,
+  embeddings?: number[][]
+) {
   // dbClient is expected to be a pg client or supabase client with query/upsert capabilities.
   // This function should upsert rows into the `embeddings` table created by the migration.
   if (!dbClient) throw new Error('dbClient required for upsertEmbeddings');
 
+  const normalizedChunks = chunks.map((chunk) =>
+    typeof chunk === "string" ? { text: chunk, metadata: {} } : { text: chunk.text, metadata: chunk.metadata ?? {} }
+  );
+
   if (!embeddings) {
-    embeddings = await embedTexts(chunks);
+    embeddings = await embedTexts(normalizedChunks.map((chunk) => chunk.text));
   }
 
   if (typeof dbClient.query === 'function') {
@@ -74,14 +90,14 @@ export async function upsertEmbeddings(dbClient: any, orgId: string, sourceType:
     const placeholders: string[] = [];
     let idx = 1;
 
-    for (let i = 0; i < chunks.length; i++) {
-      const snippet = chunks[i];
+    for (let i = 0; i < normalizedChunks.length; i++) {
+      const snippet = normalizedChunks[i]?.text;
       const vector = embeddings?.[i];
       if (!vector || !Array.isArray(vector)) continue;
 
       const vecLiteral = '[' + vector.join(',') + ']';
       placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`);
-      values.push(orgId, sourceType, sourceId, i, snippet, vecLiteral, JSON.stringify({}));
+      values.push(orgId, sourceType, sourceId, i, snippet, vecLiteral, JSON.stringify(normalizedChunks[i]?.metadata ?? {}));
     }
 
     if (placeholders.length > 0) {
@@ -91,11 +107,19 @@ export async function upsertEmbeddings(dbClient: any, orgId: string, sourceType:
         await dbClient.query(sql, values);
       } catch (err) {
         console.warn('bulk upsertEmbeddings error', err);
-        for (let i = 0; i < chunks.length; i++) {
+        for (let i = 0; i < normalizedChunks.length; i++) {
           try {
             await dbClient.query(
               `INSERT INTO embeddings (org_id, source_type, source_id, chunk_index, text_snippet, embedding, metadata) VALUES ($1,$2,$3,$4,$5,$6::vector,$7)`,
-              [orgId, sourceType, sourceId, i, chunks[i], '[' + (embeddings?.[i] || []).join(',') + ']', JSON.stringify({})]
+              [
+                orgId,
+                sourceType,
+                sourceId,
+                i,
+                normalizedChunks[i]?.text,
+                '[' + (embeddings?.[i] || []).join(',') + ']',
+                JSON.stringify(normalizedChunks[i]?.metadata ?? {})
+              ]
             );
           } catch (err2) {
             console.warn('fallback insert failed', err2);
@@ -109,14 +133,14 @@ export async function upsertEmbeddings(dbClient: any, orgId: string, sourceType:
 
   if (typeof dbClient.from === 'function') {
     try {
-      const rows = chunks.map((snippet, i) => ({
+      const rows = normalizedChunks.map((chunk, i) => ({
         org_id: orgId,
         source_type: sourceType,
         source_id: sourceId,
         chunk_index: i,
-        text_snippet: snippet,
+        text_snippet: chunk.text,
         embedding: embeddings?.[i],
-        metadata: {},
+        metadata: chunk.metadata ?? {},
       }));
       await dbClient.from('embeddings').insert(rows);
     } catch (err) {

@@ -107,3 +107,49 @@ test("onboarding position import writes the foundation position schema", async (
 
   await app.close();
 });
+
+test("onboarding position parse preview returns normalized positions from uploaded file payload", async () => {
+  const supabase = createSupabaseMock({
+    resolve: createOnboardingResolver()
+  });
+
+  const app = await buildRouteTestApp({
+    routes: onboardingRoutes,
+    supabaseService: supabase.client,
+    currentUser: {
+      id: ownerId,
+      role: "ceo",
+      email: "owner@orgos.test"
+    }
+  });
+
+  const csv = [
+    "title,department,level,reports_to_title,email_prefix",
+    "VP Engineering,Engineering,1,,vp-eng",
+    "Engineering Manager,Engineering,3,VP Engineering,eng-manager"
+  ].join("\n");
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/onboarding/positions/parse-preview",
+    payload: {
+      org_id: orgId,
+      file_name: "positions.csv",
+      mime_type: "text/csv",
+      file_content_base64: Buffer.from(csv, "utf8").toString("base64")
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+
+  const payload = response.json();
+  assert.equal(payload.import_source, "file");
+  assert.equal(payload.source_format, "csv");
+  assert.equal(payload.stats.position_count, 2);
+  assert.deepEqual(payload.positions.map((position: { title: string }) => position.title), [
+    "VP Engineering",
+    "Engineering Manager"
+  ]);
+
+  await app.close();
+});

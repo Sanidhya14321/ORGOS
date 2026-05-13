@@ -18,6 +18,12 @@ export interface ManagerAgentInput {
     searchClient: RagSearchClient;
     topK?: number;
     maxSnippetChars?: number;
+    branchId?: string | null;
+    department?: string | null;
+    docTypes?: string[];
+    knowledgeScopes?: string[];
+    sourceFormats?: string[];
+    sourceTypes?: string[];
   };
 }
 
@@ -109,7 +115,13 @@ export async function managerAgent(input: ManagerAgentInput): Promise<Task[]> {
       orgId: input.rag.orgId,
       query,
       topK: input.rag.topK ?? 4,
-      maxSnippetChars: input.rag.maxSnippetChars ?? 400
+      maxSnippetChars: input.rag.maxSnippetChars ?? 400,
+      branchId: input.rag.branchId,
+      department: input.rag.department,
+      docTypes: input.rag.docTypes,
+      knowledgeScopes: input.rag.knowledgeScopes,
+      sourceFormats: input.rag.sourceFormats,
+      sourceTypes: input.rag.sourceTypes
     });
     messages = augmented.messages;
   }

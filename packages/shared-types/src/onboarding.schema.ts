@@ -92,6 +92,26 @@ export const OnboardingPositionImportSchema = z.object({
   positions: z.array(OnboardingPositionInputSchema).min(1).max(500)
 });
 
+export const OnboardingPositionParsePreviewRequestSchema = z.object({
+  org_id: z.string().uuid(),
+  file_name: z.string().trim().min(1).max(255),
+  file_content_base64: z.string().min(1),
+  mime_type: z.string().trim().min(1).optional()
+});
+
+export const OnboardingPositionParsePreviewResponseSchema = z.object({
+  import_source: z.literal("file"),
+  source_format: z.enum(["pdf", "docx", "xlsx", "csv", "txt", "md", "unknown"]),
+  branches: z.array(OnboardingBranchInputSchema),
+  positions: z.array(OnboardingPositionInputSchema),
+  warnings: z.array(z.string()),
+  detected_headers: z.array(z.string()).default([]),
+  stats: z.object({
+    branch_count: z.number().int().nonnegative(),
+    position_count: z.number().int().nonnegative()
+  })
+});
+
 /**
  * Apply Suggestion Request (CEO confirms suggested structure)
  */

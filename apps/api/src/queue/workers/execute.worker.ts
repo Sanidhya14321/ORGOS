@@ -3,6 +3,7 @@ import { hierarchicalAgent } from "@orgos/agent-core";
 import type { Task } from "@orgos/shared-types";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
+import { buildIndividualRagOptions, buildRagProvenance } from "../../services/ragContext.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { emitAgentEscalated, emitAgentExecuting } from "../../services/notifier.js";
 import { recomputeGoalRollup } from "../../services/goalEngine.js";
@@ -146,6 +147,15 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
   };
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
+  const ragOptions = buildIndividualRagOptions();
+  const ragProvenance = task.org_id
+    ? await ragSearchClient.search({
+        orgId: String(task.org_id),
+        query: `${task.title} ${task.description ?? ""} ${task.success_criteria ?? ""}`.trim(),
+        topK: 4,
+        ...ragOptions
+      })
+    : [];
 
   const agentInput = {
     task: taskForAgent,
@@ -166,7 +176,8 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
       orgId: String(task.org_id),
       searchClient: ragSearchClient,
       topK: 4,
-      maxSnippetChars: 400
+      maxSnippetChars: 400,
+      ...ragOptions
     };
   }
 
@@ -181,7 +192,7 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
     insight: (agentOutput as any).reasoning ?? null,
     data: (agentOutput as any).execution_plan ?? (agentOutput as any).plan ?? null,
     confidence: (agentOutput as any).confidence ?? null,
-    sources: (agentOutput as any).sources ?? [],
+    sources: [...buildRagProvenance(ragProvenance), ...(((agentOutput as any).sources ?? []) as Array<Record<string, unknown>>)],
     escalate: (agentOutput as any).action === "escalate" || (agentOutput as any).escalate === true
   } as any;
 
@@ -224,8 +235,8 @@ export async function processExecuteJob(job: Job<ExecuteJobData>, agentFn = hier
     goal_id: task.goal_id,
     task_id: task.id,
     model: "internal_worker_logic",
-    input: { taskId: task.id },
-    output: { confidence: report.confidence },
+    input: { taskId: task.id, ragDocuments: buildRagProvenance(ragProvenance) },
+    output: { confidence: report.confidence, sources: report.sources ?? [] },
     error: null
   });
 
