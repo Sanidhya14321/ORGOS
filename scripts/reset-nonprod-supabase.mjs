@@ -173,6 +173,13 @@ async function assertTableEmpty(supabase, table) {
 }
 
 async function main() {
+  if (process.env.ORGOS_CONFIRM_E2E_RESET !== "1") {
+    console.error(
+      "Refusing reset: set ORGOS_CONFIRM_E2E_RESET=1 to delete all public rows and all Auth users in this Supabase project."
+    );
+    process.exit(2);
+  }
+
   const supabaseUrl = requiredEnv("SUPABASE_URL");
   const supabaseKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 

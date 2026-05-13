@@ -45,6 +45,10 @@ Optional: `OPENAI_API_KEY` for document embeddings (vector / hybrid retrieval). 
 node scripts/smoke-local.js
 ```
 
+Optional skips when you use **only** Supabase cloud + Upstash (no local Postgres/Redis): `ORGOS_SMOKE_SKIP_POSTGRES=1` and/or `ORGOS_SMOKE_SKIP_REDIS=1`.
+
+Full wipe + tech seed + PDF + upload: [E2E_TECH_ORG_RESET.md](../docs/E2E_TECH_ORG_RESET.md).
+
 ### Remote API (staging / prod)
 
 Set `ORGOS_SMOKE_API_URL` to API base (no trailing slash), then:

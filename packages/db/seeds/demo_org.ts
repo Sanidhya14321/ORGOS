@@ -1,6 +1,13 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(__dirname, "../../..");
+dotenv.config({ path: path.join(rootDir, ".env") });
+dotenv.config({ path: path.join(rootDir, ".env.local"), override: true });
 
 type Role = "ceo" | "cfo" | "manager" | "worker";
 
@@ -13,8 +20,9 @@ type SeedUser = {
   reports_to_email: string | null;
 };
 
-const ORG_NAME = "ORGOS Demo Org";
-const ORG_DOMAIN = "demo.orgos.ai";
+const ORG_NAME = process.env.SEED_ORG_NAME ?? "ORGOS Demo Org";
+const ORG_DOMAIN = process.env.SEED_ORG_DOMAIN ?? "demo.orgos.ai";
+const USER_EMAIL_DOMAIN = process.env.SEED_USER_EMAIL_DOMAIN ?? "demo.orgos.ai";
 const DEPARTMENTS = ["Engineering", "Product", "Sales", "Finance", "Operations"];
 
 function requiredEnv(name: string): string {
@@ -29,7 +37,7 @@ function makeUsers(): SeedUser[] {
   const users: SeedUser[] = [];
 
   users.push({
-    email: "ceo@demo.orgos.ai",
+    email: `ceo@${USER_EMAIL_DOMAIN}`,
     full_name: "Avery Stone",
     role: "ceo",
     department: null,
@@ -38,22 +46,22 @@ function makeUsers(): SeedUser[] {
   });
 
   users.push({
-    email: "cfo@demo.orgos.ai",
+    email: `cfo@${USER_EMAIL_DOMAIN}`,
     full_name: "Riley Brooks",
     role: "cfo",
     department: "Finance",
     skills: ["budgeting", "forecasting", "risk"],
-    reports_to_email: "ceo@demo.orgos.ai"
+    reports_to_email: `ceo@${USER_EMAIL_DOMAIN}`
   });
 
   DEPARTMENTS.forEach((department, index) => {
     users.push({
-      email: `manager.${department.toLowerCase()}@demo.orgos.ai`,
+      email: `manager.${department.toLowerCase()}@${USER_EMAIL_DOMAIN}`,
       full_name: `${department} Manager ${index + 1}`,
       role: "manager",
       department,
       skills: [department.toLowerCase(), "planning", "mentoring"],
-      reports_to_email: "ceo@demo.orgos.ai"
+      reports_to_email: `ceo@${USER_EMAIL_DOMAIN}`
     });
   });
 
@@ -61,12 +69,12 @@ function makeUsers(): SeedUser[] {
   while (users.length < 50) {
     const department = DEPARTMENTS[workerIndex % DEPARTMENTS.length];
     users.push({
-      email: `worker.${workerIndex + 1}@demo.orgos.ai`,
+      email: `worker.${workerIndex + 1}@${USER_EMAIL_DOMAIN}`,
       full_name: `Worker ${workerIndex + 1}`,
       role: "worker",
       department,
       skills: [department.toLowerCase(), "delivery", `skill-${(workerIndex % 7) + 1}`],
-      reports_to_email: `manager.${department.toLowerCase()}@demo.orgos.ai`
+      reports_to_email: `manager.${department.toLowerCase()}@${USER_EMAIL_DOMAIN}`
     });
     workerIndex += 1;
   }
@@ -206,8 +214,8 @@ async function seed(): Promise<void> {
     }
   }
 
-  const ceoId = emailToId.get("ceo@demo.orgos.ai");
-  const cfoId = emailToId.get("cfo@demo.orgos.ai");
+  const ceoId = emailToId.get(`ceo@${USER_EMAIL_DOMAIN}`);
+  const cfoId = emailToId.get(`cfo@${USER_EMAIL_DOMAIN}`);
   if (!ceoId || !cfoId) {
     throw new Error("Unable to resolve executive IDs after upsert");
   }

@@ -56,11 +56,19 @@ async function checkRemoteApiHealth() {
 
 (async function main(){
   try {
-    console.log('Checking Postgres...');
-    await checkPostgres();
+    if (!process.env.ORGOS_SMOKE_SKIP_POSTGRES) {
+      console.log('Checking Postgres...');
+      await checkPostgres();
+    } else {
+      console.log('Skipping Postgres (ORGOS_SMOKE_SKIP_POSTGRES=1)');
+    }
 
-    console.log('Checking Redis...');
-    await checkRedis();
+    if (!process.env.ORGOS_SMOKE_SKIP_REDIS) {
+      console.log('Checking Redis...');
+      await checkRedis();
+    } else {
+      console.log('Skipping Redis (ORGOS_SMOKE_SKIP_REDIS=1)');
+    }
 
     if (process.env.ORGOS_SMOKE_API_URL) {
       console.log('Checking remote API (ORGOS_SMOKE_API_URL)...');

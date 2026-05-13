@@ -8,6 +8,7 @@
     "lint": "node ../../scripts/check-legacy-schema-refs.mjs",
     "typecheck": "node ../../scripts/check-legacy-schema-refs.mjs",
     "seed:demo": "tsx seeds/demo_org.ts",
+    "seed:tech-e2e": "tsx seeds/tech_solutions_e2e.ts",
     "verify:schema": "node ../../scripts/check-legacy-schema-refs.mjs"
   },
   "dependencies": {

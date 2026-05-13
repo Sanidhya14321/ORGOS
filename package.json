@@ -19,11 +19,16 @@
     "db:apply-remote": "bash scripts/apply-remote-schema.sh",
     "db:apply-remote-direct": "node scripts/apply-remote-schema-direct.mjs",
     "db:reset-nonprod": "node scripts/reset-nonprod-supabase.mjs",
+    "db:seed:demo": "npm run seed:demo --workspace @orgos/db",
+    "db:seed:tech-e2e": "npm run seed:tech-e2e --workspace @orgos/db",
+    "e2e:generate-handbook-pdf": "node scripts/generate-tech-handbook-pdf.mjs",
+    "e2e:upload-knowledge-pdf": "node scripts/e2e-upload-knowledge-pdf.mjs",
     "dev:redis-local": "node scripts/start-local-redis.mjs"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
     "ioredis": "^5.3.2",
+    "pdfkit": "^0.15.2",
     "pg": "^8.11.0",
     "redis-memory-server": "^0.16.1",
     "turbo": "^2.0.12",
