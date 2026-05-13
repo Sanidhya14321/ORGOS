@@ -5,7 +5,9 @@
 ## 0) Preconditions
 
 - Root `.env` / `.env.local`: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `UPSTASH_REDIS_URL`, `UPSTASH_REDIS_TOKEN`, `SUPABASE_DB_PASSWORD` (for direct schema apply), LLM keys as needed.
-- Optional: `OPENAI_API_KEY` — richer handbook text in `npm run e2e:generate-handbook-pdf`; without it the script uses a static realistic handbook.
+- Optional: `OPENAI_API_KEY` — handbook via OpenAI (`OPENAI_HANDBOOK_MODEL`, default `gpt-4o-mini`).  
+- Optional: `GROQ_API_KEY` — handbook via Groq OpenAI-compatible API if OpenAI key unset (`GROQ_HANDBOOK_MODEL`, default `llama-3.3-70b-versatile`).  
+- If neither key set — script uses static handbook text (still produces PDF).
 
 ## 1) Wipe all app data + Auth users
 
@@ -47,7 +49,7 @@ Override with env: `SEED_ORG_NAME`, `SEED_ORG_DOMAIN`, `SEED_USER_EMAIL_DOMAIN`.
 npm run e2e:generate-handbook-pdf
 ```
 
-Output: `tmp/e2e/nexus-tech-employee-handbook.pdf` (gitignored). Override with `OUT_PATH=...`.
+Output: `tmp/e2e/nexus-tech-employee-handbook.pdf` unless `OUT_PATH=...`. LLM priority: `OPENAI_API_KEY` → OpenAI; else `GROQ_API_KEY` → Groq; else static text.
 
 ## 5) Start stack and upload PDF (CEO session)
 
@@ -140,7 +142,7 @@ Then start API + `npm run e2e:upload-knowledge-pdf`.
 | Hybrid upload + `ingestion_warnings` / no embedding | No `OPENAI_API_KEY` on API | Keep default `E2E_DOCUMENT_RETRIEVAL_MODE=vectorless` for script; or set key + `hybrid` |
 | `ORGOS_SECTION_TSVECTOR=1` + empty / errors | Migration `017` not applied | Apply schema / `017` RPC exists before flag |
 | `listen EADDRINUSE ... :4000` | Old API still bound | `fuser -k 4000/tcp` (Linux) or stop prior `tsx watch` |
-| `SESSION_LIMITED` / `429` on login | Too many sessions for role | Clear old sessions or wait; see auth route limits for CEO/CFO |
+| Groq `413` / `rate_limit_exceeded` / TPM | `max_tokens` + prompt too large for free tier | Script caps Groq at `max_tokens` 4096 + shorter section word target; retry later or set `GROQ_HANDBOOK_MODEL` to smaller model |
 
 ---
 

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
  * Generate a multi-section employee handbook PDF for E2E knowledge upload.
- * Uses OPENAI_API_KEY when set; otherwise writes a realistic static handbook (still PDF).
+ * LLM text source (first match wins): `OPENAI_API_KEY` → OpenAI;
+ * else `GROQ_API_KEY` → Groq (`https://api.groq.com/openai/v1/chat/completions`);
+ * else static handbook (still valid PDF).
  *
  *   node scripts/generate-tech-handbook-pdf.mjs
- *   OUT_PATH=./tmp/e2e/nexus-handbook.pdf node scripts/generate-tech-handbook-pdf.mjs
+ *   GROQ_HANDBOOK_MODEL=llama-3.3-70b-versatile node scripts/generate-tech-handbook-pdf.mjs
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -18,40 +20,56 @@ const rootDir = path.resolve(__dirname, "..");
 dotenv.config({ path: path.join(rootDir, ".env") });
 dotenv.config({ path: path.join(rootDir, ".env.local"), override: true });
 
-const model = process.env.OPENAI_HANDBOOK_MODEL ?? "gpt-4o-mini";
 const outPath =
   process.env.OUT_PATH ?? path.join(rootDir, "tmp", "e2e", "nexus-tech-employee-handbook.pdf");
 
-async function fetchHandbookSections() {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) {
-    console.warn("OPENAI_API_KEY missing — using static handbook sections for offline E2E.");
-    return staticHandbookSections();
-  }
-
-  const body = {
-    model,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: `You write realistic internal employee handbooks for a B2B tech solutions company.
+function handbookMessages() {
+  return [
+    {
+      role: "system",
+      content: `You write realistic internal employee handbooks for a B2B tech solutions company.
 Company: Nexus Tech Solutions. Services: cloud migration, managed SOC, SaaS integrations, 24x7 NOC.
 Output strict JSON with shape: { "sections": [ { "title": string, "body": string } ] }.
-Exactly 6 sections. Each body 350-700 words, plain text paragraphs separated by blank lines (use \\n\\n). No markdown headings inside body.`
-      },
-      {
-        role: "user",
-        content:
-          "Generate handbook sections: Company mission & values; Security & acceptable use (include RACI snippet for incident response); Remote work & equipment; Time off & conduct; Customer data handling & confidentiality; Career growth & certifications."
-      }
-    ]
-  };
+Exactly 6 sections. Each body 150-280 words (concise but substantive), plain text paragraphs separated by blank lines (use \\n\\n). No markdown headings inside body. Reply with ONLY the JSON object — no markdown fences, no prose before or after.`
+    },
+    {
+      role: "user",
+      content:
+        "Generate handbook sections: Company mission & values; Security & acceptable use (include RACI snippet for incident response); Remote work & equipment; Time off & conduct; Customer data handling & confidentiality; Career growth & certifications."
+    }
+  ];
+}
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+function parseSectionsJson(raw, label) {
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed.sections)) {
+    throw new Error(`${label}: JSON missing sections array`);
+  }
+  return parsed.sections.map((s) => ({
+    title: String(s.title ?? "Section"),
+    body: String(s.body ?? "")
+  }));
+}
+
+/**
+ * @param {{ url: string; apiKey: string; model: string; label: string; structuredJson?: boolean }} opts
+ */
+async function fetchHandbookViaChatCompletions(opts) {
+  const { url, apiKey, model, label, structuredJson = false } = opts;
+  const body = {
+    model,
+    messages: handbookMessages(),
+    temperature: 0.4,
+    max_tokens: url.includes("groq.com") ? 4096 : 12_000
+  };
+  if (structuredJson) {
+    body.response_format = { type: "json_object" };
+  }
+
+  const res = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${key}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
@@ -59,24 +77,53 @@ Exactly 6 sections. Each body 350-700 words, plain text paragraphs separated by 
 
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`OpenAI error ${res.status}: ${t.slice(0, 500)}`);
+    throw new Error(`${label} error ${res.status}: ${t.slice(0, 500)}`);
   }
 
   const data = await res.json();
   const raw = data.choices?.[0]?.message?.content;
   if (typeof raw !== "string") {
-    throw new Error("OpenAI returned no message content");
+    throw new Error(`${label} returned no message content`);
   }
 
-  const parsed = JSON.parse(raw);
-  if (!Array.isArray(parsed.sections)) {
-    throw new Error("JSON missing sections array");
+  try {
+    return parseSectionsJson(raw, label);
+  } catch (first) {
+    const jsonMatch = raw.match(/\{[\s\S]*"sections"\s*:\s*\[[\s\S]*\]\s*}/);
+    if (jsonMatch) {
+      return parseSectionsJson(jsonMatch[0], label);
+    }
+    throw first;
+  }
+}
+
+async function fetchHandbookSections() {
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    const model = process.env.OPENAI_HANDBOOK_MODEL ?? "gpt-4o-mini";
+    return fetchHandbookViaChatCompletions({
+      url: "https://api.openai.com/v1/chat/completions",
+      apiKey: openaiKey,
+      model,
+      label: "OpenAI",
+      structuredJson: true
+    });
   }
 
-  return parsed.sections.map((s) => ({
-    title: String(s.title ?? "Section"),
-    body: String(s.body ?? "")
-  }));
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey) {
+    const model = process.env.GROQ_HANDBOOK_MODEL ?? "llama-3.3-70b-versatile";
+    return fetchHandbookViaChatCompletions({
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      apiKey: groqKey,
+      model,
+      label: "Groq",
+      structuredJson: false
+    });
+  }
+
+  console.warn("No OPENAI_API_KEY or GROQ_API_KEY — using static handbook sections for offline E2E.");
+  return staticHandbookSections();
 }
 
 function staticHandbookSections() {
@@ -136,7 +183,12 @@ async function writePdf(sections, filePath) {
 }
 
 async function main() {
-  console.log(process.env.OPENAI_API_KEY ? "Requesting handbook content from OpenAI…" : "Using static handbook (no OPENAI_API_KEY)…");
+  const src = process.env.OPENAI_API_KEY ? "OpenAI" : process.env.GROQ_API_KEY ? "Groq" : "static";
+  if (src === "static") {
+    console.log("Using static handbook (no OPENAI_API_KEY / GROQ_API_KEY)…");
+  } else {
+    console.log(`Requesting handbook content from ${src}…`);
+  }
   const sections = await fetchHandbookSections();
   console.log(`Writing PDF (${sections.length} sections) to ${outPath}`);
   await writePdf(sections, outPath);
