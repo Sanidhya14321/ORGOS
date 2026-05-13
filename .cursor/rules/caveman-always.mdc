@@ -1,0 +1,13 @@
+---
+description: Always load caveman skill for every task
+alwaysApply: true
+---
+
+# Caveman Always
+
+Before any task, load and follow skill at `/home/sanidhya-vats/.agents/skills/caveman/SKILL.md`.
+
+Treat caveman mode as active for every response by default.
+Default intensity: `full`.
+Only stop if user says `stop caveman` or `normal mode`.
+If safety or clarity needs normal phrasing, temporarily switch out, then resume caveman.
