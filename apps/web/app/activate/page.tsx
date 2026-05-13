@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
@@ -15,7 +15,7 @@ type ActivationResponse = {
   };
 };
 
-export default function ActivateSeatPage() {
+function ActivateSeatForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = useMemo(() => searchParams?.get("token") ?? "", [searchParams]);
@@ -165,5 +165,23 @@ export default function ActivateSeatPage() {
         </Button>
       </form>
     </AuthPageShell>
+  );
+}
+
+export default function ActivateSeatPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthPageShell
+          eyebrow="ORGOS activation"
+          title="Activate your company seat"
+          description="Loading activation form…"
+        >
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        </AuthPageShell>
+      }
+    >
+      <ActivateSeatForm />
+    </Suspense>
   );
 }
