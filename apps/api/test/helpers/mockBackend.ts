@@ -175,6 +175,10 @@ class MockQueryBuilder implements PromiseLike<QueryResult> {
 export function createSupabaseMock(options: {
   resolve: (operation: QueryOperation) => QueryResult | Promise<QueryResult>;
   auth?: AuthMocks;
+  rpcResolver?: (
+    fn: string,
+    args: Record<string, unknown>
+  ) => QueryResult | Promise<QueryResult>;
 }) {
   const operations: QueryOperation[] = [];
 
@@ -227,7 +231,12 @@ export function createSupabaseMock(options: {
         return new MockQueryBuilder(table, operations, options.resolve);
       },
       auth,
-      rpc: async () => ({ data: null, error: null })
+      rpc: async (fn: string, args: Record<string, unknown> = {}) => {
+        if (options.rpcResolver) {
+          return options.rpcResolver(fn, args);
+        }
+        return { data: null, error: null };
+      }
     }
   };
 }

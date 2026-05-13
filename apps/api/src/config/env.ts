@@ -19,6 +19,11 @@ const EnvSchema = z.object({
   /** Optional; document embedding ingest + vector/hybrid retrieval need this at runtime. */
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_EMBEDDING_MODEL: z.string().optional(),
+  /** Set to `1` to merge vector + lexical hybrid hits with reciprocal rank fusion (`ragSearchClient`). */
+  ORGOS_RAG_MERGE_RRF: z
+    .string()
+    .optional()
+    .transform((value) => value === "1"),
   SENTRY_DSN: z.string().optional(),
   DATADOG_API_KEY: z.string().optional(),
   DATADOG_ENABLED: z.coerce.boolean().default(false)

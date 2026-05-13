@@ -2,6 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrgDocumentSection } from "@orgos/shared-types";
 import embeddingService from "./embeddingService.js";
 import { retrieveRelevantSections } from "./ragRetrieval.js";
+import {
+  mergeSearchResultsScoreSum,
+  reciprocalRankFusionMerge
+} from "./ragSearchMerge.js";
 
 export interface RagSearchResult {
   id: string;
@@ -36,15 +40,6 @@ function toVectorLiteral(values: number[]): string {
   return `[${values.join(",")}]`;
 }
 
-function sectionResultKey(section: {
-  id: string;
-  sourceType: string;
-  sourceId: string | null;
-  chunkIndex: number;
-}): string {
-  return `${section.sourceType}:${section.sourceId ?? "none"}:${section.chunkIndex}:${section.id}`;
-}
-
 function mapFallbackSection(section: OrgDocumentSection, score: number): RagSearchResult {
   return {
     id: section.id,
@@ -67,7 +62,12 @@ function mapFallbackSection(section: OrgDocumentSection, score: number): RagSear
   };
 }
 
-export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
+export function createSupabaseRagSearchClient(
+  supabase: SupabaseClient,
+  options?: { useRrfMerge?: boolean }
+) {
+  const useRrfMerge = options?.useRrfMerge ?? process.env.ORGOS_RAG_MERGE_RRF === "1";
+
   return {
     async search({
       orgId,
@@ -193,29 +193,11 @@ export function createSupabaseRagSearchClient(supabase: SupabaseClient) {
         }
       }
 
-      const merged = new Map<string, RagSearchResult>();
-      for (const result of [...vectorResults, ...lexicalResults]) {
-        const key = sectionResultKey(result);
-        const existing = merged.get(key);
-        if (!existing) {
-          merged.set(key, result);
-          continue;
-        }
-        merged.set(key, {
-          ...existing,
-          score: existing.score + result.score,
-          textSnippet: existing.textSnippet.length >= result.textSnippet.length ? existing.textSnippet : result.textSnippet,
-          metadata: {
-            ...existing.metadata,
-            ...result.metadata,
-            retrievalSource: "hybrid"
-          }
-        });
-      }
+      const merged = useRrfMerge
+        ? reciprocalRankFusionMerge([vectorResults, lexicalResults], topK)
+        : mergeSearchResultsScoreSum(vectorResults, lexicalResults, topK);
 
-      return [...merged.values()]
-        .sort((left, right) => right.score - left.score)
-        .slice(0, topK);
+      return merged;
     }
   };
 }

@@ -251,7 +251,7 @@ export async function retrieveRelevantDocuments(
     .map(({ doc }) => doc);
 }
 
-export async function retrieveRelevantSections(
+async function retrieveRelevantSectionsLexical(
   supabase: SupabaseClient,
   params: {
     orgId: string;
@@ -294,6 +294,7 @@ export async function retrieveRelevantSections(
 
   if (process.env.ORGOS_RAG_RETRIEVAL_LOG === "1") {
     console.info("[rag_retrieval]", {
+      mode: "lexical",
       orgId: params.orgId,
       queryKeywords: Array.from(inputKeywords),
       rawSectionRows: data.length,
@@ -325,6 +326,7 @@ export async function retrieveRelevantSections(
 
   if (process.env.ORGOS_RAG_RETRIEVAL_LOG === "1") {
     console.info("[rag_retrieval]", {
+      mode: "lexical",
       orgId: params.orgId,
       afterFilter: scored.length,
       topScores: scored.slice(0, 3).map((row) => ({
@@ -335,6 +337,56 @@ export async function retrieveRelevantSections(
   }
 
   return scored.slice(0, topN).map(({ section }) => section);
+}
+
+export async function retrieveRelevantSections(
+  supabase: SupabaseClient,
+  params: {
+    orgId: string;
+    goalInput: string;
+    topN?: number;
+    similarityThreshold?: number;
+    branchId?: string | null;
+    department?: string | null;
+    docTypes?: string[];
+    knowledgeScopes?: string[];
+    sourceFormats?: string[];
+  }
+): Promise<OrgDocumentSection[]> {
+  const topN = params.topN ?? 5;
+
+  if (process.env.ORGOS_SECTION_TSVECTOR === "1") {
+    try {
+      const rpcArgs: Record<string, unknown> = {
+        p_org_id: params.orgId,
+        p_query: params.goalInput.trim(),
+        p_match_count: Math.max(topN * 4, 20),
+        p_branch_id: params.branchId ?? null,
+        p_department: params.department ?? null,
+        p_doc_types: params.docTypes && params.docTypes.length > 0 ? params.docTypes : null,
+        p_knowledge_scopes: params.knowledgeScopes && params.knowledgeScopes.length > 0 ? params.knowledgeScopes : null,
+        p_source_formats: params.sourceFormats && params.sourceFormats.length > 0 ? params.sourceFormats : null
+      };
+
+      const { data, error } = await supabase.rpc("match_org_document_sections_tsvector", rpcArgs);
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const sections = data as OrgDocumentSection[];
+        if (process.env.ORGOS_RAG_RETRIEVAL_LOG === "1") {
+          console.info("[rag_retrieval]", {
+            mode: "tsvector",
+            orgId: params.orgId,
+            rowCount: sections.length
+          });
+        }
+        return sections.slice(0, topN);
+      }
+    } catch (err) {
+      console.warn("match_org_document_sections_tsvector failed; falling back to lexical", err);
+    }
+  }
+
+  return retrieveRelevantSectionsLexical(supabase, params);
 }
 
 /**
