@@ -334,6 +334,90 @@ const orgRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  const OrgSetupMilestoneSchema = z.object({
+    kind: z.enum(["positions", "company_docs"])
+  });
+
+  fastify.post("/orgs/:id/setup-milestone", { preHandler: requireRole("ceo", "cfo") }, async (request, reply) => {
+    const parsedId = OrgIdParamSchema.safeParse(request.params);
+    const parsedBody = OrgSetupMilestoneSchema.safeParse(request.body);
+    if (!parsedId.success || !parsedBody.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid organization or milestone");
+    }
+
+    const orgId = parsedId.data.id;
+    if (request.assertOrgAccess) {
+      await request.assertOrgAccess(orgId);
+      if (reply.sent) {
+        return;
+      }
+    } else if (request.userOrgId !== orgId) {
+      return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot access other organization data");
+    }
+
+    if (parsedBody.data.kind === "positions") {
+      const { count, error } = await fastify.supabaseService
+        .from("positions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId);
+
+      if (error) {
+        request.log.warn({ err: error }, "positions count failed");
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to validate positions");
+      }
+      if ((count ?? 0) < 1) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "VALIDATION_ERROR",
+          "Add at least one position (import or create) before completing this step"
+        );
+      }
+
+      const { error: updateError } = await fastify.supabaseService
+        .from("orgs")
+        .update({ setup_positions_completed_at: new Date().toISOString() })
+        .eq("id", orgId);
+
+      if (updateError) {
+        request.log.warn({ err: updateError }, "org setup_positions update failed — apply migration 018_org_setup_gates.sql");
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Could not save setup progress");
+      }
+    } else {
+      const { count, error } = await fastify.supabaseService
+        .from("org_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId);
+
+      if (error) {
+        request.log.warn({ err: error }, "org_documents count failed");
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Failed to validate documents");
+      }
+      if ((count ?? 0) < 1) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "VALIDATION_ERROR",
+          "Upload at least one company document before completing this step"
+        );
+      }
+
+      const { error: updateError } = await fastify.supabaseService
+        .from("orgs")
+        .update({ setup_company_docs_completed_at: new Date().toISOString() })
+        .eq("id", orgId);
+
+      if (updateError) {
+        request.log.warn({ err: updateError }, "org setup_company_docs update failed — apply migration 018_org_setup_gates.sql");
+        return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Could not save setup progress");
+      }
+    }
+
+    return reply.send({ ok: true });
+  });
+
   fastify.get("/orgs/:id/positions", async (request, reply) => {
     const parsed = OrgIdParamSchema.safeParse(request.params);
     if (!parsed.success) {

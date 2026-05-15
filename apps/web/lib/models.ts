@@ -14,6 +14,17 @@ export interface User {
   open_task_count?: number;
 }
 
+/** `/api/me` may include org onboarding gates for CEO */
+export interface OrgSetupSummary {
+  required: boolean;
+  positions_complete: boolean;
+  company_docs_complete: boolean;
+}
+
+export type MeResponse = User & {
+  org_setup?: OrgSetupSummary;
+};
+
 export type VisibilityScope = "org" | "branch" | "department" | "subtree" | "self";
 
 export interface PositionPowerItem {

@@ -71,6 +71,13 @@ const goalsRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 403, "FORBIDDEN", "Requester is not assigned to an organization");
     }
 
+    if (request.assertOrgAccess) {
+      await request.assertOrgAccess(requesterOrgId);
+      if (reply.sent) {
+        return;
+      }
+    }
+
     let sanitizedRawInput: string;
     try {
       sanitizedRawInput = sanitizeGoalInput(payload.raw_input ?? payload.title);

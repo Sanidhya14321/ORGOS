@@ -109,6 +109,7 @@ export function useRealtimeQueryInvalidation(enabled = true): void {
       socket.on(event, invalidateTasks);
     }
     socket.on("goal:decomposed", onGoalDecomposed);
+    socket.on("goal:progress", onGoalDecomposed);
     socket.on("agent:executing", invalidateTasks);
     socket.on("agent:escalated", invalidateTasks);
     socket.on("connect", onConnect);
@@ -118,6 +119,7 @@ export function useRealtimeQueryInvalidation(enabled = true): void {
         socket.off(event, invalidateTasks);
       }
       socket.off("goal:decomposed", onGoalDecomposed);
+      socket.off("goal:progress", onGoalDecomposed);
       socket.off("agent:executing", invalidateTasks);
       socket.off("agent:escalated", invalidateTasks);
       socket.off("connect", onConnect);

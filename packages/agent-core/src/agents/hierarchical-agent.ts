@@ -129,6 +129,7 @@ export interface HierarchicalAgentInput {
     knowledgeScopes?: string[];
     sourceFormats?: string[];
     sourceTypes?: string[];
+    rerankByQueryKeywords?: boolean;
   };
 }
 
@@ -234,7 +235,8 @@ export async function hierarchicalAgent(
       docTypes: input.rag.docTypes,
       knowledgeScopes: input.rag.knowledgeScopes,
       sourceFormats: input.rag.sourceFormats,
-      sourceTypes: input.rag.sourceTypes
+      sourceTypes: input.rag.sourceTypes,
+      rerankByQueryKeywords: input.rag.rerankByQueryKeywords === true
     });
     messages = augmented.messages;
   }

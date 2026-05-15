@@ -3,7 +3,7 @@ import { hierarchicalAgent } from "@orgos/agent-core";
 import { ceoAgent } from "@orgos/agent-core";
 import { createSupabaseServiceClient } from "../../lib/clients.js";
 import { readEnv } from "../../config/env.js";
-import { emitGoalDecomposed } from "../../services/notifier.js";
+import { emitGoalDecomposed, emitGoalProgress } from "../../services/notifier.js";
 import { buildCeoRagOptions, buildRagProvenance } from "../../services/ragContext.js";
 import { createSupabaseRagSearchClient } from "../../services/ragSearchClient.js";
 import { getCsuiteQueue, getManagerQueue, getRedisConnection } from "../index.js";
@@ -97,16 +97,46 @@ export async function processCsuiteDecomposeJob(
 
   const ragSearchClient = createSupabaseRagSearchClient(supabase);
   const ragOptions = buildCeoRagOptions();
-  const ragProvenance = goal.org_id
-    ? await ragSearchClient.search({
-        orgId: String(goal.org_id),
-        query: `${goal.title} ${goal.description ?? goal.raw_input ?? ""}`.trim(),
+  const goalText = `${goal.title} ${goal.description ?? goal.raw_input ?? ""}`.trim();
+  const policyAugmentedQuery = `${goalText} policy procedure handbook SOP`.trim();
+
+  let ragProvenance: Awaited<ReturnType<typeof ragSearchClient.search>> = [];
+  if (goal.org_id) {
+    const orgId = String(goal.org_id);
+    const [primaryHits, policyHits] = await Promise.all([
+      ragSearchClient.search({
+        orgId,
+        query: goalText,
+        topK: 8,
+        ...ragOptions
+      }),
+      ragSearchClient.search({
+        orgId,
+        query: policyAugmentedQuery,
         topK: 4,
         ...ragOptions
       })
-    : [];
+    ]);
+    const seen = new Set<string>();
+    for (const row of [...primaryHits, ...policyHits]) {
+      const key = `${row.id}:${row.chunkIndex ?? 0}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      ragProvenance.push(row);
+    }
+  }
 
-  // Build a lightweight pseudo-task representing the goal for the hierarchical agent
+  const orgIdStr = goal.org_id ? String(goal.org_id) : null;
+  if (orgIdStr) {
+    emitGoalProgress(orgIdStr, {
+      goalId,
+      stage: "ceo_analysis",
+      progress: 10,
+      message: "Retrieved company context; running CEO decomposition"
+    });
+  }
   const pseudoTask = {
     id: goal.id,
     goal_id: goal.id,
@@ -136,24 +166,17 @@ export async function processCsuiteDecomposeJob(
     agentInput.rag = {
       orgId: String(goal.org_id),
       searchClient: ragSearchClient,
-      topK: 4,
-      maxSnippetChars: 400,
+      topK: 8,
+      maxSnippetChars: 900,
+      rerankByQueryKeywords: true,
       ...ragOptions
     };
   }
 
   let ceoResult: any;
-  try {
-    ceoResult = await agentFn(agentInput as any);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const isHierarchicalSchemaMismatch = message.includes("invalid_union_discriminator") && message.includes("\"action\"");
-    if (!isHierarchicalSchemaMismatch) {
-      throw error;
-    }
-
+  if (env.ORGOS_CEO_DECOMPOSE_SINGLE_CALL) {
     const orgContext = await buildCeoAgentContext(supabase, (goal.org_id as string | null | undefined) ?? null);
-    ceoResult = await ceoAgent({
+    const structure = await ceoAgent({
       rawGoal: goal.raw_input ?? goal.description ?? goal.title,
       priority: String(goal.priority ?? "medium"),
       orgContext,
@@ -163,13 +186,45 @@ export async function processCsuiteDecomposeJob(
             rag: {
               orgId: String(goal.org_id),
               searchClient: ragSearchClient,
-              topK: 4,
-              maxSnippetChars: 400,
+              topK: 8,
+              maxSnippetChars: 900,
+              rerankByQueryKeywords: true,
               ...ragOptions
             }
           }
         : {})
     });
+    ceoResult = { ...structure, action: "decompose" as const };
+  } else {
+    try {
+      ceoResult = await agentFn(agentInput as any);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isHierarchicalSchemaMismatch = message.includes("invalid_union_discriminator") && message.includes("\"action\"");
+      if (!isHierarchicalSchemaMismatch) {
+        throw error;
+      }
+
+      const orgContext = await buildCeoAgentContext(supabase, (goal.org_id as string | null | undefined) ?? null);
+      ceoResult = await ceoAgent({
+        rawGoal: goal.raw_input ?? goal.description ?? goal.title,
+        priority: String(goal.priority ?? "medium"),
+        orgContext,
+        ...(goal.deadline ? { deadline: new Date(String(goal.deadline)).toISOString() } : {}),
+        ...(goal.org_id
+          ? {
+              rag: {
+                orgId: String(goal.org_id),
+                searchClient: ragSearchClient,
+                topK: 8,
+                maxSnippetChars: 900,
+                rerankByQueryKeywords: true,
+                ...ragOptions
+              }
+            }
+          : {})
+      });
+    }
   }
 
   // If the hierarchical agent returned decomposition, create manager jobs
@@ -221,11 +276,26 @@ export async function processCsuiteDecomposeJob(
       .eq("id", goalId);
   }
 
+  if (orgIdStr) {
+    emitGoalProgress(orgIdStr, {
+      goalId,
+      stage: "ceo_analysis",
+      progress: 100,
+      message: "CEO decomposition stage complete"
+    });
+  }
+
+  const modelLabel = env.ORGOS_CEO_DECOMPOSE_SINGLE_CALL
+    ? "ceo_agent_single_call"
+    : (ceoResult as any)?.action
+      ? "hierarchical_agent"
+      : "ceo_agent_fallback";
+
   await supabase.from("agent_logs").insert({
     goal_id: goalId,
     agent_type: "ceo_agent",
     action: "decompose",
-    model: ceoResult?.action ? "hierarchical_agent" : "ceo_agent_fallback",
+    model: modelLabel,
     input: {
       goalId,
       title: goal.title,

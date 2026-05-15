@@ -16,6 +16,7 @@ import {
   resolveEmbeddingIngestPlan,
   type DocumentRetrievalMode
 } from "../services/documentRetrieval.js";
+import { deleteQdrantPointsBySource, isQdrantVectorStoreEnabled } from "../services/qdrantVectorStore.js";
 
 const MAX_DOCUMENT_CHARS = 200_000;
 const MAX_FILENAME_LENGTH = 255;
@@ -133,6 +134,13 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
     const orgId = normalizedPayload.data.org_id;
     const docType = normalizedPayload.data.doc_type;
     const fileName = sanitizeFileName(normalizedPayload.data.file_name);
+
+    if (request.assertOrgAccess) {
+      await request.assertOrgAccess(orgId);
+      if (reply.sent) {
+        return;
+      }
+    }
 
     let parsedFile;
     try {
@@ -308,6 +316,7 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
     const documents = await getOrgDocuments(fastify.supabaseService, org_id);
 
     return reply.send({
+      embedding_ingest_available: hasOpenAiEmbeddingKey(),
       documents: documents.map((doc) => ({
         id: doc.id,
         file_name: doc.file_name,
@@ -360,6 +369,14 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     await archiveDocument(fastify.supabaseService, orgId, id);
+
+    if (isQdrantVectorStoreEnabled()) {
+      await deleteQdrantPointsBySource({
+        orgId,
+        sourceType: "document_section",
+        sourceId: id
+      });
+    }
 
     return reply.status(204).send();
   });

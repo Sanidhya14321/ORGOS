@@ -15,6 +15,8 @@ declare module "fastify" {
     requestId: string;
     user: User | null;
     userRole: string | null;
+    userOrgId: string | null;
+    assertOrgAccess?: (targetOrgId: string | null | undefined) => Promise<unknown>;
   }
 }
 

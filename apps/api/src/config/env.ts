@@ -19,11 +19,19 @@ const EnvSchema = z.object({
   /** Optional; document embedding ingest + vector/hybrid retrieval need this at runtime. */
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_EMBEDDING_MODEL: z.string().optional(),
+  /** Qdrant REST base URL, e.g. http://localhost:6333 — when set, chunk vectors use Qdrant instead of Postgres `embeddings`. */
+  QDRANT_URL: z.string().optional(),
+  QDRANT_API_KEY: z.string().optional(),
+  QDRANT_COLLECTION: z.string().optional(),
+  /** Must match embedding model output size (OpenAI text-embedding-3-small default 1536). */
+  EMBEDDING_VECTOR_SIZE: z.coerce.number().int().positive().optional(),
   /** Set to `1` to merge vector + lexical hybrid hits with reciprocal rank fusion (`ragSearchClient`). */
   ORGOS_RAG_MERGE_RRF: z
     .string()
     .optional()
     .transform((value) => value === "1"),
+  /** When true, CEO stage uses `ceoAgent` only (single-call style eval); default keeps hierarchical agent. */
+  ORGOS_CEO_DECOMPOSE_SINGLE_CALL: z.coerce.boolean().default(false),
   SENTRY_DSN: z.string().optional(),
   DATADOG_API_KEY: z.string().optional(),
   DATADOG_ENABLED: z.coerce.boolean().default(false)

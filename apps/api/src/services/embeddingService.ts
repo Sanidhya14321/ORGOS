@@ -3,6 +3,8 @@
  * Implement provider-specific calls (OpenAI, Anthropic, etc.) in embedTexts()
  */
 
+import { isQdrantVectorStoreEnabled, upsertChunksToQdrant } from "./qdrantVectorStore.js";
+
 export function chunkText(text: string, chunkSize = 700, overlap = 350): string[] {
   const chunks: string[] = [];
   let start = 0;
@@ -83,6 +85,17 @@ export async function upsertEmbeddings(
 
   if (!embeddings) {
     embeddings = await embedTexts(normalizedChunks.map((chunk) => chunk.text));
+  }
+
+  if (isQdrantVectorStoreEnabled()) {
+    await upsertChunksToQdrant({
+      orgId,
+      sourceType,
+      sourceId,
+      chunks: normalizedChunks.map((c) => ({ text: c.text, metadata: c.metadata ?? {} })),
+      embeddings: embeddings ?? []
+    });
+    return;
   }
 
   if (typeof dbClient.query === 'function') {

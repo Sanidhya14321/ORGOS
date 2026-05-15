@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,10 @@ type OrgDocumentRow = {
   uploaded_at: string;
 };
 
-type DocumentListResponse = { documents: OrgDocumentRow[] };
+type DocumentListResponse = {
+  documents: OrgDocumentRow[];
+  embedding_ingest_available: boolean;
+};
 
 type UploadResponse = {
   id: string;
@@ -53,6 +56,14 @@ export default function KnowledgePage() {
     queryFn: () => apiFetch<DocumentListResponse>(`/api/documents/org/${orgId}`),
     enabled: Boolean(orgId) && allowed
   });
+
+  const embeddingIngestAvailable = documentsQuery.data?.embedding_ingest_available;
+
+  useEffect(() => {
+    if (embeddingIngestAvailable === false) {
+      setRetrievalMode("vectorless");
+    }
+  }, [embeddingIngestAvailable]);
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
@@ -113,6 +124,12 @@ export default function KnowledgePage() {
       <div className="min-w-0 grid gap-6 lg:grid-cols-2">
         <Card className="space-y-4 p-5">
           <h2 className="text-lg font-semibold text-text-primary">Upload</h2>
+          {embeddingIngestAvailable === false ? (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+              Vector and hybrid are turned off here because the API has no <code className="rounded bg-bg-subtle px-1">OPENAI_API_KEY</code>{" "}
+              (embeddings path). Uploads use <strong>vectorless</strong> only until that is set. Groq alone does not supply embeddings.
+            </div>
+          ) : null}
           <div className="space-y-2">
             <label className="text-sm text-text-secondary">Retrieval mode</label>
             <Select value={retrievalMode} onValueChange={(v) => setRetrievalMode(v as typeof retrievalMode)}>
@@ -121,8 +138,12 @@ export default function KnowledgePage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="vectorless">Vectorless (sections only)</SelectItem>
-                <SelectItem value="vector">Vector (embeddings)</SelectItem>
-                <SelectItem value="hybrid">Hybrid</SelectItem>
+                <SelectItem value="vector" disabled={embeddingIngestAvailable === false}>
+                  Vector (embeddings)
+                </SelectItem>
+                <SelectItem value="hybrid" disabled={embeddingIngestAvailable === false}>
+                  Hybrid
+                </SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-text-muted">
@@ -185,6 +206,12 @@ export default function KnowledgePage() {
           </ul>
           {(documentsQuery.data?.documents ?? []).length === 0 && !documentsQuery.isLoading ? (
             <p className="text-sm text-text-secondary">No documents yet.</p>
+          ) : null}
+          {(documentsQuery.data?.documents ?? []).length > 1 ? (
+            <p className="text-xs text-text-muted">
+              Multiple rows with the same file name mean separate uploads; each is its own document. Use vectorless unless the API has{" "}
+              <code className="rounded bg-bg-subtle px-1">OPENAI_API_KEY</code> for embeddings.
+            </p>
           ) : null}
         </Card>
       </div>

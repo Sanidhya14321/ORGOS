@@ -14,7 +14,7 @@ import {
   createSupabaseServiceClient
 } from "./lib/clients.js";
 import { sendApiError } from "./lib/errors.js";
-import { initializeSentry, captureException } from "./lib/sentry.js";
+import { initializeSentry } from "./lib/sentry.js";
 import { initializePrometheus, initializeHttpMetrics, exportMetricsText, recordHttpRequest } from "./lib/prometheus.js";
 import authPlugin from "./plugins/auth.js";
 import authRoutes from "./routes/auth.js";
@@ -31,6 +31,7 @@ import tasksRoutes from "./routes/tasks.js";
 import onboardingRoutes from "./routes/onboarding.js";
 import documentsRoutes from "./routes/documents.js";
 import helpRoutes from "./routes/help.js";
+import goalProposalsRoutes from "./routes/goalProposals.js";
 import { initializeQueueForwarding } from "./queue/index.js";
 import { startCsuiteDecomposeWorker } from "./queue/workers/decompose.csuite.worker.js";
 import { startManagerDecomposeWorker } from "./queue/workers/decompose.manager.worker.js";
@@ -40,6 +41,7 @@ import { startIngestWorker } from "./queue/workers/ingest.worker.js";
 import { ensureSlaSchedule, startSlaWorker } from "./queue/workers/sla.worker.js";
 import { startSynthesizeWorker } from "./queue/workers/synthesize.worker.js";
 import { initializeNotifier } from "./services/notifier.js";
+import { registerApiErrorHandler } from "./plugins/errorHandler.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -53,6 +55,8 @@ declare module "fastify" {
     requestId: string;
     user: User | null;
     userRole: string | null;
+    userOrgId: string | null;
+    assertOrgAccess?: (targetOrgId: string | null | undefined) => Promise<unknown>;
   }
 }
 
@@ -81,6 +85,7 @@ export async function buildServer() {
     request.requestId = crypto.randomUUID();
     request.user = null;
     request.userRole = null;
+    request.userOrgId = null;
   });
 
   fastify.addHook("onSend", async (request, reply) => {
@@ -92,18 +97,7 @@ export async function buildServer() {
     recordHttpRequest(request.method, requestPath, reply.statusCode || 500, durationMs);
   });
 
-  fastify.setErrorHandler(async (error, request, reply) => {
-    request.log.error({ err: error }, "Unhandled API error");
-    // Capture exception in Sentry
-    captureException(error, {
-      requestId: request.requestId,
-      path: request.url,
-      method: request.method,
-      userId: request.user?.id,
-    });
-    return sendApiError(reply, request, 500, "INTERNAL_ERROR", "Internal server error");
-  });
-
+  registerApiErrorHandler(fastify);
   await fastify.register(cors, {
     origin: env.WEB_ORIGIN,
     credentials: true
@@ -190,6 +184,7 @@ export async function buildServer() {
     await api.register(onboardingRoutes);
     await api.register(documentsRoutes);
     await api.register(helpRoutes);
+    await api.register(goalProposalsRoutes);
   }, { prefix: "/api" });
 
   return fastify;

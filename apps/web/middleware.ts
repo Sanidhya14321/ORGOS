@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ACCESS_TOKEN_COOKIE } from "./lib/auth";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/complete-profile", "/pending", "/setup-mfa", "/settings"];
+const PROTECTED_PREFIXES = ["/dashboard", "/complete-profile", "/pending", "/setup-mfa", "/settings", "/org-setup", "/onboarding"];
 
 function hasProtectedPrefix(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -9,11 +9,6 @@ function hasProtectedPrefix(pathname: string): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const localDevelopment = request.nextUrl.hostname === "localhost" || request.nextUrl.hostname === "127.0.0.1";
-
-  if (localDevelopment) {
-    return NextResponse.next();
-  }
 
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const authEntryPages = new Set(["/login", "/register", "/verify"]);
@@ -42,6 +37,10 @@ export const config = {
     "/setup-mfa",
     "/setup-mfa/:path*",
     "/settings",
-    "/settings/:path*"
+    "/settings/:path*",
+    "/org-setup",
+    "/org-setup/:path*",
+    "/onboarding",
+    "/onboarding/:path*"
   ]
 };

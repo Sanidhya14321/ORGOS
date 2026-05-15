@@ -28,20 +28,21 @@ const tips = [
   },
 ]
 
-function FirstTimeUserTour() {
+function FirstTimeUserTour({ userId }: { userId?: string }) {
   const [currentTip, setCurrentTip] = useState(0)
   const [open, setOpen] = useState(false)
+  const storageKey = userId ? `orgos_tour_seen_${userId}` : "orgos_ceo_tour_seen"
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return
     }
 
-    const hasSeenTour = window.localStorage.getItem("orgos_ceo_tour_seen")
+    const hasSeenTour = window.localStorage.getItem(storageKey)
     if (!hasSeenTour) {
       setOpen(true)
     }
-  }, [])
+  }, [storageKey])
 
   const handleNext = () => {
     if (currentTip < tips.length - 1) {
@@ -51,7 +52,7 @@ function FirstTimeUserTour() {
 
   const handleFinish = () => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("orgos_ceo_tour_seen", "true")
+      window.localStorage.setItem(storageKey, "true")
     }
     setOpen(false)
     setCurrentTip(0)

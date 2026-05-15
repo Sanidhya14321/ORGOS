@@ -20,8 +20,6 @@ const PUBLIC_ROUTES = new Set([
 ]);
 
 const ACCESS_TOKEN_COOKIE = "orgos_access_token";
-const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
 function extractCookieValue(cookieHeader: string | undefined, name: string): string | null {
   if (!cookieHeader) {
     return null;
@@ -95,12 +93,29 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("onRequest", async (request, reply) => {
     request.user = null;
     request.userRole = null;
+    request.userOrgId = null;
+    delete (request as { assertOrgAccess?: unknown }).assertOrgAccess;
     const relaxedLocalSecurity = shouldRelaxSecurityForLocalTesting(fastify.env);
 
     const path = normalizePath(request.url);
     const isPublicRoute = PUBLIC_ROUTES.has(path) || isDynamicPublicRoute(path);
 
+    if (request.method === "OPTIONS") {
+      return;
+    }
+
     const headers = request.headers as unknown as Record<string, unknown>;
+    const authHeader = readFirstHeaderValue(headers.authorization);
+    const isBearerAuth = typeof authHeader === "string" && authHeader.trim().toLowerCase().startsWith("bearer ");
+    const safeMethod = request.method === "GET" || request.method === "HEAD";
+
+    if (!relaxedLocalSecurity && !isPublicRoute && !safeMethod && !isBearerAuth) {
+      const originHeader = request.headers.origin;
+      if (!originMatchesWebOrigin(originHeader, fastify.env.WEB_ORIGIN)) {
+        return sendApiError(reply, request, 403, "FORBIDDEN", "Invalid request origin");
+      }
+    }
+
     const token = extractToken(headers);
     if (!token && isPublicRoute) {
       return;
@@ -108,16 +123,6 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
     if (!token) {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing bearer token");
-    }
-
-    const authHeader = readFirstHeaderValue(headers.authorization);
-    const cookieHeader = readFirstHeaderValue(headers.cookie);
-    const usingCookieAuth = !authHeader && !!extractCookieValue(cookieHeader, ACCESS_TOKEN_COOKIE);
-    if (!relaxedLocalSecurity && usingCookieAuth && MUTATING_METHODS.has(request.method) && !isPublicRoute) {
-      const originHeader = request.headers.origin;
-      if (!originMatchesWebOrigin(originHeader, fastify.env.WEB_ORIGIN)) {
-        return sendApiError(reply, request, 403, "FORBIDDEN", "Invalid request origin");
-      }
     }
 
     const { data, error } = await fastify.supabaseAnon.auth.getUser(token);
@@ -132,7 +137,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
     const profile = await fastify.supabaseService
       .from("users")
-      .select("role, mfa_enabled")
+      .select("role, mfa_enabled, org_id")
       .eq("id", data.user.id)
       .maybeSingle();
 
@@ -149,12 +154,14 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       );
     }
     request.userRole = profileRole;
+    request.userOrgId = (profile.data?.org_id as string | null | undefined) ?? null;
 
     if (!request.userRole && !isPublicRoute) {
       return sendApiError(reply, request, 403, "FORBIDDEN", "User role is not configured");
     }
 
     const mfaEnabled = profile.data?.mfa_enabled === true;
+    const cookieHeader = readFirstHeaderValue(headers.cookie);
     if (!relaxedLocalSecurity && (request.userRole === "ceo" || request.userRole === "cfo") && mfaEnabled && !isMfaBypassPath(path)) {
       const mfaCookieValue = extractCookieValue(cookieHeader, MFA_VERIFIED_COOKIE);
       const mfaVerified = isMfaCookieValid(mfaCookieValue, token, getAuthCookieSigningSecret(fastify.env));
@@ -172,7 +179,14 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       .eq("session_token_hash", sessionTokenHash)
       .maybeSingle();
 
-    if (!sessionResult.error && sessionResult.data) {
+    if (!relaxedLocalSecurity && !isPublicRoute) {
+      if (sessionResult.error) {
+        request.log.warn({ err: sessionResult.error }, "Session lookup failed");
+        return sendApiError(reply, request, 401, "UNAUTHORIZED", "Session not found");
+      }
+      if (!sessionResult.data) {
+        return sendApiError(reply, request, 401, "UNAUTHORIZED", "Session not found");
+      }
       const timeoutMs = getRoleSessionTimeoutMs(request.userRole);
       const lastActive = sessionResult.data.last_active ? new Date(String(sessionResult.data.last_active)) : null;
       const createdAt = sessionResult.data.created_at ? new Date(String(sessionResult.data.created_at)) : null;
@@ -186,6 +200,34 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         .from("sessions")
         .update({ last_active: new Date().toISOString() })
         .eq("id", sessionResult.data.id);
+    } else if (!sessionResult.error && sessionResult.data) {
+      const timeoutMs = getRoleSessionTimeoutMs(request.userRole);
+      const lastActive = sessionResult.data.last_active ? new Date(String(sessionResult.data.last_active)) : null;
+      const createdAt = sessionResult.data.created_at ? new Date(String(sessionResult.data.created_at)) : null;
+      const sessionAgeMs = Date.now() - (lastActive?.getTime() ?? createdAt?.getTime() ?? Date.now());
+
+      if (sessionResult.data.revoked || sessionAgeMs > timeoutMs) {
+        return sendApiError(reply, request, 401, "SESSION_EXPIRED", "Session expired");
+      }
+
+      await fastify.supabaseService
+        .from("sessions")
+        .update({ last_active: new Date().toISOString() })
+        .eq("id", sessionResult.data.id);
+    }
+
+    if (!isPublicRoute && request.user) {
+      request.assertOrgAccess = async (targetOrgId: string | null | undefined) => {
+        if (!targetOrgId || typeof targetOrgId !== "string") {
+          return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Organization context required");
+        }
+        if (!request.userOrgId) {
+          return sendApiError(reply, request, 403, "FORBIDDEN", "User is not assigned to an organization");
+        }
+        if (request.userOrgId !== targetOrgId) {
+          return sendApiError(reply, request, 403, "FORBIDDEN", "Cannot access other organization data");
+        }
+      };
     }
   });
 };

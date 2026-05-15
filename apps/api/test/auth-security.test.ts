@@ -7,15 +7,26 @@ import authRoutes from "../src/routes/auth.js";
 import { requireRole } from "../src/plugins/rbac.js";
 import { buildRouteTestApp, createSupabaseMock, type QueryOperation } from "./helpers/mockBackend.js";
 
-function createAuthResolver(role: string | null, mfaEnabled: boolean) {
+function createAuthResolver(role: string | null, mfaEnabled: boolean, orgId: string | null = "00000000-0000-0000-0000-000000009001") {
   return (operation: QueryOperation) => {
     if (operation.table === "users" && operation.action === "select") {
       return {
-        data: role ? { role, mfa_enabled: mfaEnabled } : { role: null, mfa_enabled: mfaEnabled }
+        data: role ? { role, mfa_enabled: mfaEnabled, org_id: orgId } : { role: null, mfa_enabled: mfaEnabled, org_id: null }
       };
     }
 
     if (operation.table === "sessions" && operation.action === "select") {
+      if (operation.mode === "maybeSingle") {
+        const now = new Date().toISOString();
+        return {
+          data: {
+            id: "00000000-0000-0000-0000-00000000ab01",
+            revoked: false,
+            last_active: now,
+            created_at: now
+          }
+        };
+      }
       return { data: null };
     }
 

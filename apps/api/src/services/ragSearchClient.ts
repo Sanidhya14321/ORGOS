@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrgDocumentSection } from "@orgos/shared-types";
 import embeddingService from "./embeddingService.js";
+import { isQdrantVectorStoreEnabled, searchQdrantVectors } from "./qdrantVectorStore.js";
 import { retrieveRelevantSections } from "./ragRetrieval.js";
 import {
   mergeSearchResultsScoreSum,
@@ -113,7 +114,39 @@ export function createSupabaseRagSearchClient(
 
       let vectorResults: RagSearchResult[] = [];
       if (queryEmbedding && Array.isArray(queryEmbedding)) {
-        const rpcResult = await supabase.rpc("match_embeddings", {
+        if (isQdrantVectorStoreEnabled()) {
+          try {
+            const qdrantParams: Parameters<typeof searchQdrantVectors>[0] = {
+              orgId,
+              queryVector: queryEmbedding,
+              topK
+            };
+            if (branchId !== undefined) {
+              qdrantParams.branchId = branchId;
+            }
+            if (department !== undefined) {
+              qdrantParams.department = department;
+            }
+            if (docTypes !== undefined) {
+              qdrantParams.docTypes = docTypes;
+            }
+            if (knowledgeScopes !== undefined) {
+              qdrantParams.knowledgeScopes = knowledgeScopes;
+            }
+            if (sourceFormats !== undefined) {
+              qdrantParams.sourceFormats = sourceFormats;
+            }
+            if (sourceTypes !== undefined) {
+              qdrantParams.sourceTypes = sourceTypes;
+            }
+            vectorResults = await searchQdrantVectors(qdrantParams);
+          } catch (err) {
+            console.warn("[ragSearchClient] Qdrant search failed; falling back to Postgres", err);
+          }
+        }
+
+        if (vectorResults.length === 0) {
+          const rpcResult = await supabase.rpc("match_embeddings", {
           p_org_id: orgId,
           p_query_embedding: toVectorLiteral(queryEmbedding),
           p_match_count: topK,
@@ -190,6 +223,7 @@ export function createSupabaseRagSearchClient(
             const sorted = inMemoryResults.slice().sort((left, right) => right.score - left.score);
             vectorResults = sorted.slice(0, topK);
           }
+        }
         }
       }
 

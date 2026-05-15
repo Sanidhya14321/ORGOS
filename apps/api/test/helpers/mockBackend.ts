@@ -281,7 +281,8 @@ function createTestEnvBase() {
     GEMINI_API_KEY: undefined,
     SENTRY_DSN: undefined,
     DATADOG_API_KEY: undefined,
-    DATADOG_ENABLED: false
+    DATADOG_ENABLED: false,
+    ORGOS_CEO_DECOMPOSE_SINGLE_CALL: false
   };
 }
 

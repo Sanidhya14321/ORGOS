@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { connectSocket, disconnectSocket, useSocket } from "@/lib/socket";
+import { useSocket } from "@/lib/socket";
 import type { Goal, Role, Task, TaskStatus, User } from "@/lib/models";
 
 type TaskListResponse = { items: Task[]; total: number; page: number; limit: number };
@@ -115,10 +115,7 @@ export function TaskBoard() {
   }
 
   useEffect(() => {
-    connectSocket();
     void loadBoard();
-
-    return () => disconnectSocket();
   }, []);
 
   useEffect(() => {

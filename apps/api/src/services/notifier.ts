@@ -218,6 +218,14 @@ export function emitGoalDecomposed(orgId: string | null, payload: unknown): void
   emitToRole("cfo", "goal:decomposed", payload, orgId);
 }
 
+/** Realtime decomposition progress for org subscribers */
+export function emitGoalProgress(orgId: string | null, payload: unknown): void {
+  if (!orgId) {
+    return;
+  }
+  emitToOrg(orgId, "goal:progress", payload);
+}
+
 export function emitAgentExecuting(taskManagerId: string | null, payload: unknown): void {
   if (taskManagerId) {
     emitToUser(taskManagerId, "agent:executing", payload);

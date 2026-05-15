@@ -28,6 +28,8 @@ type ManagerJobData =
   | ({ mode: "decompose" } & ManagerDecomposeJobData)
   | ({ mode: "routing_suggest" } & ManagerRoutingSuggestJobData);
 
+export type { ManagerJobData };
+
 type ManagerWorkerDependencies = {
   supabase?: SupabaseClient;
   assignTaskFn?: typeof assignTask;

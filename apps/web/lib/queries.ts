@@ -2,12 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { Goal, PendingMember, Role, Task, User } from "@/lib/models";
+import type { Goal, MeResponse, PendingMember, Role, Task, User } from "@/lib/models";
 
 export function useMeQuery() {
   return useQuery({
     queryKey: ["me"],
-    queryFn: () => apiFetch<User>("/api/me")
+    queryFn: () => apiFetch<MeResponse>("/api/me")
   });
 }
 

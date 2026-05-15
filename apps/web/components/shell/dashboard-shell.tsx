@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
-import { usePathname } from "next/navigation";
-import { useRealtimeQueryInvalidation, useSocket } from "@/lib/socket";
+import { useEffect, useMemo } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useRealtimeQueryInvalidation, useSocket, connectSocket, disconnectSocket } from "@/lib/socket";
 import { Topbar } from "@/components/shell/topbar";
 import { HelpChatDock } from "@/components/help-chat-dock";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FirstTimeUserTour } from "@/components/ui/first-time-tour";
 import { useGoalsQuery, useMeQuery, useOrgAccountsQuery, usePendingMembersQuery, useTasksQuery } from "@/lib/queries";
 import { isExecutiveRole } from "@/lib/access";
 import type { Applicant } from "@/lib/models";
@@ -31,6 +32,7 @@ function titleFromPath(pathname: string): string {
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/dashboard";
+  const router = useRouter();
   const socket = useSocket();
   useRealtimeQueryInvalidation(true);
   const pageTitle = titleFromPath(pathname);
@@ -44,6 +46,23 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const applicants: Applicant[] = useMemo(() => [], []);
 
   const isLoading = meQuery.isLoading;
+
+  useEffect(() => {
+    connectSocket();
+    return () => {
+      disconnectSocket();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!meQuery.data || meQuery.isLoading) {
+      return;
+    }
+    const setup = meQuery.data.org_setup;
+    if (meQuery.data.role === "ceo" && setup?.required && !pathname.startsWith("/org-setup")) {
+      router.replace("/org-setup");
+    }
+  }, [meQuery.data, meQuery.isLoading, pathname, router]);
 
   return (
     <div className="min-h-screen min-w-0 bg-bg-base">
@@ -65,7 +84,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <Skeleton className="h-32 w-full" />
           </div>
         ) : (
-          children
+          <>
+            {meQuery.data?.role === "ceo" || meQuery.data?.role === "cfo" || meQuery.data?.role === "manager" ? (
+              <div className="mb-4 flex justify-end">
+                <FirstTimeUserTour userId={meQuery.data?.id} />
+              </div>
+            ) : null}
+            {children}
+          </>
         )}
       </main>
       <HelpChatDock />
