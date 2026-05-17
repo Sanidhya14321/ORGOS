@@ -65,8 +65,67 @@ function inferLevelFromTitle(title: string): number {
   return 5;
 }
 
+const VALID_VISIBILITY_SCOPES = ["org", "branch", "department", "subtree", "self"] as const;
+type VisibilityScope = (typeof VALID_VISIBILITY_SCOPES)[number];
+
+const VISIBILITY_SCOPE_ALIASES: Record<string, VisibilityScope> = {
+  org: "org",
+  organization: "org",
+  organisation: "org",
+  company: "org",
+  entire_org: "org",
+  branch: "branch",
+  office: "branch",
+  location: "branch",
+  department: "department",
+  dept: "department",
+  team: "department",
+  subtree: "subtree",
+  tree: "subtree",
+  default: "subtree",
+  self: "self",
+  individual: "self",
+  personal: "self"
+};
+
 function boolFromValue(value: string): boolean {
   return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
+}
+
+function normalizeVisibilityScope(raw: string | undefined, warnings: string[], title: string): VisibilityScope {
+  if (!raw) {
+    return "subtree";
+  }
+
+  const key = normalizeKey(raw);
+  const mapped = VISIBILITY_SCOPE_ALIASES[key];
+  if (mapped) {
+    if (key !== mapped && !VALID_VISIBILITY_SCOPES.includes(key as VisibilityScope)) {
+      warnings.push(`Mapped visibility "${raw}" to "${mapped}" for "${title}"`);
+    }
+    return mapped;
+  }
+
+  if (VALID_VISIBILITY_SCOPES.includes(key as VisibilityScope)) {
+    return key as VisibilityScope;
+  }
+
+  warnings.push(`Unknown visibility "${raw}" for "${title}"; using subtree`);
+  return "subtree";
+}
+
+function parsePositiveInt(raw: string | undefined, warnings: string[], title: string, field: string): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number(raw);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.floor(parsed);
+  }
+
+  warnings.push(`Ignored invalid ${field} "${raw}" for "${title}"`);
+  return undefined;
 }
 
 function lookupValue(row: Record<string, string>, aliases: readonly string[]): string | undefined {
@@ -137,14 +196,17 @@ function parsePositionRow(row: Record<string, string>, warnings: string[]): Pars
     level: parsedLevel,
     power_level: powerLevel,
     reports_to_title: lookupValue(row, HEADER_ALIASES.reports_to_title),
-    visibility_scope: (lookupValue(row, HEADER_ALIASES.visibility_scope) as ParsedPosition["visibility_scope"]) ?? "subtree",
+    visibility_scope: normalizeVisibilityScope(lookupValue(row, HEADER_ALIASES.visibility_scope), warnings, title),
     email_prefix: emailPrefix,
     invite_email: lookupValue(row, HEADER_ALIASES.invite_email),
     issue_mode: "hybrid",
     seat_label: lookupValue(row, HEADER_ALIASES.seat_label),
-    max_concurrent_tasks: lookupValue(row, HEADER_ALIASES.max_concurrent_tasks)
-      ? Number(lookupValue(row, HEADER_ALIASES.max_concurrent_tasks))
-      : undefined
+    max_concurrent_tasks: parsePositiveInt(
+      lookupValue(row, HEADER_ALIASES.max_concurrent_tasks),
+      warnings,
+      title,
+      "max_concurrent_tasks"
+    )
   };
 }
 

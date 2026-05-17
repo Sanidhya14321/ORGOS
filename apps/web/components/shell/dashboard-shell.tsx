@@ -5,8 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useRealtimeQueryInvalidation, useSocket, connectSocket, disconnectSocket } from "@/lib/socket";
 import { Topbar } from "@/components/shell/topbar";
 import { HelpChatDock } from "@/components/help-chat-dock";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FirstTimeUserTour } from "@/components/ui/first-time-tour";
+import { ApiError } from "@/lib/api";
 import { useGoalsQuery, useMeQuery, useOrgAccountsQuery, usePendingMembersQuery, useTasksQuery } from "@/lib/queries";
 import { isExecutiveRole } from "@/lib/access";
 import type { Applicant } from "@/lib/models";
@@ -27,6 +30,7 @@ function titleFromPath(pathname: string): string {
   if (pathname.startsWith("/dashboard/positions-import")) return "Import positions";
   if (pathname.startsWith("/dashboard/recruit")) return "Recruitment";
   if (pathname.startsWith("/dashboard/shortcuts")) return "Shortcuts";
+  if (/^\/dashboard\/(ceo|cfo|manager|worker)$/.test(pathname)) return "Overview";
   return "Dashboard";
 }
 
@@ -46,6 +50,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const applicants: Applicant[] = useMemo(() => [], []);
 
   const isLoading = meQuery.isLoading;
+  const sessionUnavailable =
+    meQuery.isError &&
+    meQuery.error instanceof ApiError &&
+    (meQuery.error.code === "SERVICE_UNAVAILABLE" || meQuery.error.status === 503);
 
   useEffect(() => {
     connectSocket();
@@ -83,6 +91,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <Skeleton className="h-32 w-full" />
             <Skeleton className="h-32 w-full" />
           </div>
+        ) : sessionUnavailable ? (
+          <Card className="space-y-4 p-6">
+            <h2 className="text-lg font-semibold text-text-primary">Session check failed</h2>
+            <p className="text-sm text-text-secondary">
+              Could not reach Supabase to verify your session (network timeout). You are still signed in — retry when your connection is stable.
+            </p>
+            <Button type="button" variant="outline" onClick={() => void meQuery.refetch()}>
+              Retry
+            </Button>
+          </Card>
         ) : (
           <>
             {meQuery.data?.role === "ceo" || meQuery.data?.role === "cfo" || meQuery.data?.role === "manager" ? (

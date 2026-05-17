@@ -1,5 +1,30 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const monorepoRoot = path.resolve(__dirname, "../..");
+
+// Next.js only auto-loads env from apps/web; ORGOS keeps secrets at repo root (same as API).
+dotenv.config({ path: path.join(monorepoRoot, ".env") });
+dotenv.config({ path: path.join(monorepoRoot, ".env.local"), override: true });
+
+function readEnv(name) {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
+}
+
+const publicSupabaseUrl = readEnv("NEXT_PUBLIC_SUPABASE_URL") || readEnv("SUPABASE_URL");
+const publicSupabaseAnon = readEnv("NEXT_PUBLIC_SUPABASE_ANON") || readEnv("SUPABASE_ANON_KEY");
+const publicApiUrl = readEnv("NEXT_PUBLIC_API_URL") || readEnv("NEXT_PUBLIC_API_BASE_URL");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    ...(publicSupabaseUrl ? { NEXT_PUBLIC_SUPABASE_URL: publicSupabaseUrl } : {}),
+    ...(publicSupabaseAnon ? { NEXT_PUBLIC_SUPABASE_ANON: publicSupabaseAnon } : {}),
+    ...(publicApiUrl ? { NEXT_PUBLIC_API_URL: publicApiUrl } : {})
+  },
   eslint: {
     ignoreDuringBuilds: true
   },

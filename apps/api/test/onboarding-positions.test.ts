@@ -19,7 +19,7 @@ function createOnboardingResolver() {
       };
     }
 
-    if (operation.table === "positions" && operation.action === "insert") {
+    if (operation.table === "positions" && (operation.action === "insert" || operation.action === "upsert")) {
       return { data: { id: positionId } };
     }
 
@@ -76,7 +76,7 @@ test("onboarding position import writes the foundation position schema", async (
   assert.equal(response.statusCode, 200);
 
   const positionInsert = supabase.operations.find(
-    (operation) => operation.table === "positions" && operation.action === "insert"
+    (operation) => operation.table === "positions" && operation.action === "upsert"
   );
   assert.ok(positionInsert);
   assert.deepEqual(positionInsert.values, {
@@ -91,7 +91,6 @@ test("onboarding position import writes the foundation position schema", async (
     compensation_band: {},
     is_custom: true,
     confirmed: true,
-    created_at: (positionInsert.values as { created_at: string }).created_at,
     updated_at: (positionInsert.values as { updated_at: string }).updated_at
   });
 

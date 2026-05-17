@@ -118,9 +118,91 @@ export default function KnowledgePage() {
     <AppShell
       eyebrow="Knowledge"
       title="Knowledge base"
-      description="Upload handbooks and policies for vectorless or embedding-backed retrieval."
+      description="Upload handbooks and policies for agent retrieval (vectorless sections or embedding-backed search)."
       role={meQuery.data?.role}
     >
+      <div className="space-y-6">
+        <Card className="space-y-4 p-5">
+        <h2 className="text-lg font-semibold text-text-primary">Preferred file format</h2>
+        <p className="text-sm text-text-secondary">
+          <strong className="font-medium text-text-primary">PDF, DOCX, MD, or TXT</strong> with clear headings work best.
+          CSV/XLSX upload too — each sheet becomes searchable text. Not for org rosters (use{" "}
+          <strong className="font-medium text-text-primary">Import positions</strong>).
+        </p>
+
+        <div className="space-y-3 text-sm text-text-secondary">
+          <div>
+            <p className="font-medium text-text-primary">Accepted types</p>
+            <ul className="mt-2 list-inside list-disc space-y-1">
+              <li>
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">.pdf</code> — text-based PDF (not scanned
+                images only); split by page when possible
+              </li>
+              <li>
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">.docx</code> — employee handbook, policies,
+                SOPs
+              </li>
+              <li>
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">.md</code> /{" "}
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">.txt</code> — use markdown headings for
+                sections
+              </li>
+              <li>
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">.csv</code> /{" "}
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">.xlsx</code> — tabular reference data
+                (exported as text)
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-medium text-text-primary">Structure tips (better sections)</p>
+            <ul className="mt-2 list-inside list-disc space-y-1">
+              <li>Blank line between paragraphs</li>
+              <li>
+                Headings: markdown <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs"># Title</code>,{" "}
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">## Section</code>, or ALL CAPS short lines
+              </li>
+              <li>One topic per section — avoids huge chunks agents cannot cite</li>
+              <li>
+                Max extracted text ~1M characters per file (~500 pages); spreadsheets cap at 8,000 rows per sheet — split larger files
+              </li>
+              <li>Uploads default to <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">handbook</code> doc type</li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-medium text-text-primary">Retrieval mode</p>
+            <ul className="mt-2 list-inside list-disc space-y-1">
+              <li>
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">vectorless</code> — keyword/section search
+                (no API key required)
+              </li>
+              <li>
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">vector</code> /{" "}
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">hybrid</code> — needs{" "}
+                <code className="rounded bg-bg-elevated px-1 py-0.5 text-xs">OPENAI_API_KEY</code> on API for embeddings
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="font-medium text-text-primary">Example markdown</p>
+            <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-bg-elevated p-3 text-xs text-text-primary">
+{`# Employee handbook
+
+## Time off
+Full-time employees receive 20 PTO days per calendar year.
+Requests require manager approval at least 5 business days in advance.
+
+## Remote work
+Hybrid employees may work remotely up to 3 days per week.
+Core hours are 10:00–16:00 in the employee's local timezone.`}
+            </pre>
+          </div>
+        </div>
+      </Card>
+
       <div className="min-w-0 grid gap-6 lg:grid-cols-2">
         <Card className="space-y-4 p-5">
           <h2 className="text-lg font-semibold text-text-primary">Upload</h2>
@@ -214,6 +296,7 @@ export default function KnowledgePage() {
             </p>
           ) : null}
         </Card>
+      </div>
       </div>
     </AppShell>
   );

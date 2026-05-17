@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { ReportSchema, type Report, type Task } from "@orgos/shared-types";
 import { readInternalData } from "../tools/readInternalData.js";
 import { webSearch, type WebSearchResponse } from "../tools/webSearch.js";
-import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
+import { buildRagAugmentedMessages, DEFAULT_RAG_SNIPPET_CHARS, type RagSearchClient } from "../rag.js";
 import type { LLMMessage } from "../llm/provider.js";
 
 export interface WorkerAgentInput {
@@ -106,7 +106,7 @@ export async function workerAgent(input: WorkerAgentInput): Promise<Report> {
           orgId: input.rag.orgId,
           query: ragQuery,
           topK: input.rag.topK ?? 4,
-          maxSnippetChars: input.rag.maxSnippetChars ?? 400,
+          maxSnippetChars: input.rag.maxSnippetChars ?? DEFAULT_RAG_SNIPPET_CHARS,
           branchId: input.rag.branchId,
           department: input.rag.department,
           docTypes: input.rag.docTypes,

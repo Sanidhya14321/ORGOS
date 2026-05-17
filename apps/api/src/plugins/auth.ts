@@ -6,6 +6,7 @@ import { shouldRelaxSecurityForLocalTesting } from "../config/env.js";
 
 const PUBLIC_ROUTES = new Set([
   "/api/auth/login",
+  "/api/auth/oauth/callback",
   "/api/auth/register",
   "/api/auth/signup-ceo",
   "/api/auth/verify",
@@ -89,6 +90,25 @@ function isDynamicPublicRoute(path: string): boolean {
   return false;
 }
 
+function isSupabaseAuthTransportFailure(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  if (/fetch failed|connect timeout|network|econnrefused|etimedout/i.test(message)) {
+    return true;
+  }
+
+  const cause = "cause" in error ? error.cause : undefined;
+  if (cause && typeof cause === "object" && "code" in cause) {
+    const code = cause.code;
+    return code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT" || code === "ECONNREFUSED";
+  }
+
+  return false;
+}
+
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.addHook("onRequest", async (request, reply) => {
     request.user = null;
@@ -125,8 +145,38 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 401, "UNAUTHORIZED", "Missing bearer token");
     }
 
-    const { data, error } = await fastify.supabaseAnon.auth.getUser(token);
+    let data: Awaited<ReturnType<typeof fastify.supabaseAnon.auth.getUser>>["data"];
+    let error: Awaited<ReturnType<typeof fastify.supabaseAnon.auth.getUser>>["error"];
+    try {
+      ({ data, error } = await fastify.supabaseAnon.auth.getUser(token));
+    } catch (err) {
+      request.log.error({ err }, "Supabase auth request failed");
+      if (isPublicRoute) {
+        return;
+      }
+      return sendApiError(
+        reply,
+        request,
+        503,
+        "SERVICE_UNAVAILABLE",
+        "Authentication service is temporarily unreachable. Check your network and try again."
+      );
+    }
+
     if (error || !data.user) {
+      if (isSupabaseAuthTransportFailure(error)) {
+        request.log.warn({ err: error }, "Supabase auth transport error");
+        if (isPublicRoute) {
+          return;
+        }
+        return sendApiError(
+          reply,
+          request,
+          503,
+          "SERVICE_UNAVAILABLE",
+          "Authentication service is temporarily unreachable. Check your network and try again."
+        );
+      }
       if (isPublicRoute) {
         return;
       }

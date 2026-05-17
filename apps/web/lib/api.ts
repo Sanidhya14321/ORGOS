@@ -28,25 +28,24 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     credentials: "include"
   });
 
-  if (response.status === 401 && typeof window !== "undefined") {
-    await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
-      method: "POST",
-      credentials: "include"
-    }).catch(() => undefined);
-    clearAuthCookies();
-    window.location.href = "/login";
-    throw new ApiError("Unauthorized", 401, "UNAUTHORIZED");
-  }
-
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as
       | { error?: { code?: string; message?: string } }
       | null;
-    throw new ApiError(
-      body?.error?.message ?? `Request failed with status ${response.status}`,
-      response.status,
-      body?.error?.code ?? "REQUEST_FAILED"
-    );
+    const code = body?.error?.code ?? "REQUEST_FAILED";
+    const message = body?.error?.message ?? `Request failed with status ${response.status}`;
+
+    if (response.status === 401 && typeof window !== "undefined") {
+      await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include"
+      }).catch(() => undefined);
+      clearAuthCookies();
+      window.location.href = "/login";
+      throw new ApiError("Unauthorized", 401, "UNAUTHORIZED");
+    }
+
+    throw new ApiError(message, response.status, code);
   }
 
   if (response.status === 204) {
@@ -64,25 +63,24 @@ export async function apiUploadFormData<T>(path: string, formData: FormData): Pr
     credentials: "include"
   });
 
-  if (response.status === 401 && typeof window !== "undefined") {
-    await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
-      method: "POST",
-      credentials: "include"
-    }).catch(() => undefined);
-    clearAuthCookies();
-    window.location.href = "/login";
-    throw new ApiError("Unauthorized", 401, "UNAUTHORIZED");
-  }
-
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as
       | { error?: { code?: string; message?: string } }
       | null;
-    throw new ApiError(
-      body?.error?.message ?? `Request failed with status ${response.status}`,
-      response.status,
-      body?.error?.code ?? "REQUEST_FAILED"
-    );
+    const code = body?.error?.code ?? "REQUEST_FAILED";
+    const message = body?.error?.message ?? `Request failed with status ${response.status}`;
+
+    if (response.status === 401 && typeof window !== "undefined") {
+      await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include"
+      }).catch(() => undefined);
+      clearAuthCookies();
+      window.location.href = "/login";
+      throw new ApiError("Unauthorized", 401, "UNAUTHORIZED");
+    }
+
+    throw new ApiError(message, response.status, code);
   }
 
   return (await response.json()) as T;

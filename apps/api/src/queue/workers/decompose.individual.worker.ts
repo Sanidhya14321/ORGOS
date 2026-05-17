@@ -69,7 +69,6 @@ export async function processIndividualAckJob(
       orgId: String(task.org_id),
       searchClient: ragSearchClient,
       topK: 4,
-      maxSnippetChars: 400,
       ...ragOptions
     };
   }

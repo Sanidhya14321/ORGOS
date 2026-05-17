@@ -3,7 +3,7 @@ import type { Task } from "@orgos/shared-types";
 import { type Position, type OrgStructureKind } from "@orgos/shared-types";
 import { callLLM } from "../llm/router.js";
 import type { LLMMessage } from "../llm/provider.js";
-import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
+import { buildRagAugmentedMessages, DEFAULT_RAG_SNIPPET_CHARS, type RagSearchClient } from "../rag.js";
 import type { UserCapacity } from "../types/hierarchical-agent.types.js";
 
 function positionPolicy(position: Position): {
@@ -229,7 +229,7 @@ export async function hierarchicalAgent(
       orgId: input.rag.orgId,
       query: ragQuery,
       topK: input.rag.topK ?? 4,
-      maxSnippetChars: input.rag.maxSnippetChars ?? 400,
+      maxSnippetChars: input.rag.maxSnippetChars ?? DEFAULT_RAG_SNIPPET_CHARS,
       branchId: input.rag.branchId,
       department: input.rag.department,
       docTypes: input.rag.docTypes,

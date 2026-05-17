@@ -108,9 +108,15 @@ export async function upsertEmbeddings(
       const vector = embeddings?.[i];
       if (!vector || !Array.isArray(vector)) continue;
 
+      const metadata = normalizedChunks[i]?.metadata ?? {};
+      const chunkIndex =
+        typeof metadata.sectionIndex === "number" && Number.isFinite(metadata.sectionIndex)
+          ? metadata.sectionIndex
+          : i;
+
       const vecLiteral = '[' + vector.join(',') + ']';
       placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`);
-      values.push(orgId, sourceType, sourceId, i, snippet, vecLiteral, JSON.stringify(normalizedChunks[i]?.metadata ?? {}));
+      values.push(orgId, sourceType, sourceId, chunkIndex, snippet, vecLiteral, JSON.stringify(metadata));
     }
 
     if (placeholders.length > 0) {
@@ -122,16 +128,21 @@ export async function upsertEmbeddings(
         console.warn('bulk upsertEmbeddings error', err);
         for (let i = 0; i < normalizedChunks.length; i++) {
           try {
+            const metadata = normalizedChunks[i]?.metadata ?? {};
+            const chunkIndex =
+              typeof metadata.sectionIndex === "number" && Number.isFinite(metadata.sectionIndex)
+                ? metadata.sectionIndex
+                : i;
             await dbClient.query(
               `INSERT INTO embeddings (org_id, source_type, source_id, chunk_index, text_snippet, embedding, metadata) VALUES ($1,$2,$3,$4,$5,$6::vector,$7)`,
               [
                 orgId,
                 sourceType,
                 sourceId,
-                i,
+                chunkIndex,
                 normalizedChunks[i]?.text,
                 '[' + (embeddings?.[i] || []).join(',') + ']',
-                JSON.stringify(normalizedChunks[i]?.metadata ?? {})
+                JSON.stringify(metadata)
               ]
             );
           } catch (err2) {
@@ -146,15 +157,22 @@ export async function upsertEmbeddings(
 
   if (typeof dbClient.from === 'function') {
     try {
-      const rows = normalizedChunks.map((chunk, i) => ({
-        org_id: orgId,
-        source_type: sourceType,
-        source_id: sourceId,
-        chunk_index: i,
-        text_snippet: chunk.text,
-        embedding: embeddings?.[i],
-        metadata: chunk.metadata ?? {},
-      }));
+      const rows = normalizedChunks.map((chunk, i) => {
+        const metadata = chunk.metadata ?? {};
+        const chunkIndex =
+          typeof metadata.sectionIndex === "number" && Number.isFinite(metadata.sectionIndex)
+            ? metadata.sectionIndex
+            : i;
+        return {
+          org_id: orgId,
+          source_type: sourceType,
+          source_id: sourceId,
+          chunk_index: chunkIndex,
+          text_snippet: chunk.text,
+          embedding: embeddings?.[i],
+          metadata
+        };
+      });
       await dbClient.from('embeddings').insert(rows);
     } catch (err) {
       console.warn('upsertEmbeddings(supabase) error', err);

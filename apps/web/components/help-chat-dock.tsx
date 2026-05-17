@@ -17,7 +17,7 @@ export function HelpChatDock() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      text: "Ask how ORGOS fits together — onboarding, tasks, goals, CEO imports, knowledge base, or where to click next."
+      text: "Ask about ORGOS features or your company handbooks in the knowledge base (e.g. policies, RERE handbook topics)."
     }
   ]);
   const [pending, setPending] = useState(false);

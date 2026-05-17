@@ -30,10 +30,23 @@ Then fill in the following required credentials:
 | `SUPABASE_URL` | Supabase project settings → API section | ✅ YES |
 | `SUPABASE_ANON_KEY` | Supabase project settings → API section (public key) | ✅ YES |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings → API section (secret key) | ✅ YES |
-| `NEXT_PUBLIC_SUPABASE_URL` | Same as `SUPABASE_URL` | ✅ YES |
-| `NEXT_PUBLIC_SUPABASE_ANON` | Same as `SUPABASE_ANON_KEY` | ✅ YES |
+| `NEXT_PUBLIC_SUPABASE_URL` | Same as `SUPABASE_URL` (web reads root `.env.local` via `next.config.js`) | ✅ YES |
+| `NEXT_PUBLIC_SUPABASE_ANON` | Same as `SUPABASE_ANON_KEY` (alias OK — only anon key, never service role) | ✅ YES |
+
+**Note:** Keep these in **repo root** `.env.local`, not only `apps/web/`. If you only set `SUPABASE_URL` + `SUPABASE_ANON_KEY`, the web app maps them automatically. Restart `npm run dev` after env changes.
 
 **Get these from**: https://app.supabase.com → Select project → Settings → API
+
+### Google OAuth (Supabase Auth)
+
+Enable **Google** under Authentication → Providers, then set URL configuration:
+
+| Setting | Local | Production |
+|---------|-------|------------|
+| Site URL | `http://localhost:3000` | your deployed web origin (`WEB_ORIGIN`) |
+| Redirect URLs | `http://localhost:3000/auth/callback` | `https://<your-domain>/auth/callback` |
+
+Login uses **Continue with Google** on `/login`; the callback page exchanges the OAuth code and calls `POST /api/auth/oauth/callback` to set the `orgos_access_token` cookie (same as email/password login).
 
 ### Caching & Job Queue (Upstash Redis)
 

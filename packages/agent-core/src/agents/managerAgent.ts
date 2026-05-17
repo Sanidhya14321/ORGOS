@@ -5,7 +5,7 @@ import { managerPrompt } from "../prompts/managerPrompt.js";
 import { ValidationError } from "../llm/errors.js";
 import { callLLM } from "../llm/router.js";
 import type { LLMMessage } from "../llm/provider.js";
-import { buildRagAugmentedMessages, type RagSearchClient } from "../rag.js";
+import { buildRagAugmentedMessages, DEFAULT_RAG_SNIPPET_CHARS, type RagSearchClient } from "../rag.js";
 
 export interface ManagerAgentInput {
   directive: string;
@@ -115,7 +115,7 @@ export async function managerAgent(input: ManagerAgentInput): Promise<Task[]> {
       orgId: input.rag.orgId,
       query,
       topK: input.rag.topK ?? 4,
-      maxSnippetChars: input.rag.maxSnippetChars ?? 400,
+      maxSnippetChars: input.rag.maxSnippetChars ?? DEFAULT_RAG_SNIPPET_CHARS,
       branchId: input.rag.branchId,
       department: input.rag.department,
       docTypes: input.rag.docTypes,

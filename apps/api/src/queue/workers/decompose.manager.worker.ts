@@ -226,7 +226,6 @@ export async function processManagerDecomposeJob(job: Job<ManagerJobData>, depen
       orgId: String(goalResult.data.org_id),
       searchClient: ragSearchClient,
       topK: 4,
-      maxSnippetChars: 400,
       ...ragOptions
     };
   }

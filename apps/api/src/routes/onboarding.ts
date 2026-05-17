@@ -204,6 +204,53 @@ function derivePowerLevel(level: number): number {
   return 20;
 }
 
+function isMissingTableSchemaCache(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "PGRST205" || error?.code === "PGRST204";
+}
+
+function mapPositionImportDbError(
+  error: { code?: string; message?: string } | null,
+  title: string
+): {
+  status: number;
+  code: "CONFLICT" | "SERVICE_UNAVAILABLE" | "VALIDATION_ERROR" | "INTERNAL_ERROR";
+  message: string;
+} {
+  if (!error) {
+    return { status: 500, code: "INTERNAL_ERROR", message: `Failed to create position ${title}` };
+  }
+
+  if (isMissingTableSchemaCache(error)) {
+    return {
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      message: "Position tables are not available yet; apply DB migrations first"
+    };
+  }
+
+  if (error.code === "23505") {
+    return {
+      status: 409,
+      code: "CONFLICT",
+      message: `Position already exists in this organization: ${title}`
+    };
+  }
+
+  if (error.code === "23503") {
+    return {
+      status: 422,
+      code: "VALIDATION_ERROR",
+      message: `Invalid branch reference for position ${title}. Import branches first or fix branch_code values.`
+    };
+  }
+
+  return {
+    status: 500,
+    code: "INTERNAL_ERROR",
+    message: `Failed to create position ${title}: ${error.message}`
+  };
+}
+
 const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
   async function ensureOwnedOrg(orgId: string, ownerId: string): Promise<boolean> {
     const { data: org, error } = await fastify.supabaseService
@@ -365,8 +412,14 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const validated = OnboardingPositionParsePreviewResponseSchema.parse(preview);
-    return reply.send(validated);
+    const validated = OnboardingPositionParsePreviewResponseSchema.safeParse(preview);
+    if (!validated.success) {
+      return sendApiError(reply, request, 422, "VALIDATION_ERROR", "Parsed file has invalid position data", {
+        details: validated.error.flatten()
+      });
+    }
+
+    return reply.send(validated.data);
   });
 
   /**
@@ -432,28 +485,45 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
 
     for (const pos of positions) {
       const branchId = pos.branch_code ? branchIdByCode.get(pos.branch_code) ?? null : null;
+      if (pos.branch_code && !branchId && branches.length > 0) {
+        return sendApiError(
+          reply,
+          request,
+          422,
+          "VALIDATION_ERROR",
+          `Unknown branch_code "${pos.branch_code}" for position "${pos.title}". Add the branch to the file or remove branch_code.`
+        );
+      }
+
+      const now = new Date().toISOString();
       const { data: position, error: posError } = await fastify.supabaseService
         .from("positions")
-        .insert({
-          org_id,
-          branch_id: branchId,
-          title: pos.title,
-          department: pos.department ?? null,
-          level: pos.level,
-          power_level: pos.power_level ?? derivePowerLevel(pos.level),
-          visibility_scope: pos.visibility_scope,
-          max_concurrent_tasks: pos.max_concurrent_tasks ?? 10,
-          compensation_band: pos.compensation_band ?? {},
-          is_custom: true,
-          confirmed: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .upsert(
+          {
+            org_id,
+            branch_id: branchId,
+            title: pos.title,
+            department: pos.department ?? null,
+            level: pos.level,
+            power_level: pos.power_level ?? derivePowerLevel(pos.level),
+            visibility_scope: pos.visibility_scope,
+            max_concurrent_tasks: pos.max_concurrent_tasks ?? 10,
+            compensation_band: pos.compensation_band ?? {},
+            is_custom: true,
+            confirmed: true,
+            updated_at: now
+          },
+          { onConflict: "org_id,title" }
+        )
         .select("id")
         .single();
 
       if (posError || !position) {
-        return sendApiError(reply, request, 500, "INTERNAL_ERROR", `Failed to create position ${pos.title}`);
+        const mapped = mapPositionImportDbError(posError, pos.title);
+        request.log.warn({ err: posError, org_id, title: pos.title }, "Position import upsert failed");
+        return sendApiError(reply, request, mapped.status, mapped.code, mapped.message, {
+          details: posError?.message
+        });
       }
 
       createdPositions.push(position.id);

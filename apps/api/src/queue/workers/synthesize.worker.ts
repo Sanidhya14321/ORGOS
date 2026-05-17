@@ -121,7 +121,6 @@ export async function processSynthesizeJob(job: Job<SynthesizeJobData>): Promise
             orgId: String(parentTask.org_id),
             searchClient: ragSearchClient,
             topK: 4,
-            maxSnippetChars: 400,
             ...ragOptions
           }
         }

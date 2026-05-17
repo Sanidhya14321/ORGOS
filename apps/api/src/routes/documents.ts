@@ -18,7 +18,11 @@ import {
 } from "../services/documentRetrieval.js";
 import { deleteQdrantPointsBySource, isQdrantVectorStoreEnabled } from "../services/qdrantVectorStore.js";
 
-const MAX_DOCUMENT_CHARS = 200_000;
+/** Max extracted text length stored/indexed per upload (override via DOCUMENT_MAX_CHARS). */
+const MAX_DOCUMENT_CHARS = Math.max(
+  50_000,
+  Number.parseInt(process.env.DOCUMENT_MAX_CHARS ?? "1000000", 10) || 1_000_000
+);
 const MAX_FILENAME_LENGTH = 255;
 
 function sanitizeFileName(input: string): string {
@@ -174,7 +178,14 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (extractedText.length > MAX_DOCUMENT_CHARS) {
-      return sendApiError(reply, request, 413, "VALIDATION_ERROR", "Document content exceeds the supported size limit");
+      return sendApiError(
+        reply,
+        request,
+        413,
+        "VALIDATION_ERROR",
+        `Document content is ${extractedText.length.toLocaleString()} characters; maximum is ${MAX_DOCUMENT_CHARS.toLocaleString()}. Split into smaller files or remove unused spreadsheet sheets.`,
+        { charCount: extractedText.length, maxChars: MAX_DOCUMENT_CHARS }
+      );
     }
 
     // Verify ownership
@@ -252,6 +263,7 @@ const documentsRoutes: FastifyPluginAsync = async (fastify) => {
           chunks: indexedSections.map((section) => ({
             text: section.content,
             metadata: {
+              sectionIndex: section.section_index,
               heading: section.heading,
               sectionPath: section.section_path,
               pageStart: section.page_start,

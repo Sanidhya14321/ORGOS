@@ -72,7 +72,9 @@ function truncateSnippet(value: string, limit: number): string {
   return `${value.slice(0, limit - 1).trimEnd()}…`;
 }
 
-export function formatRagContext(documents: RagDocument[], maxSnippetChars = 500): string {
+export const DEFAULT_RAG_SNIPPET_CHARS = 1200;
+
+export function formatRagContext(documents: RagDocument[], maxSnippetChars = DEFAULT_RAG_SNIPPET_CHARS): string {
   if (documents.length === 0) {
     return "No retrieval context was found.";
   }
@@ -150,7 +152,7 @@ export async function buildRagAugmentedMessages(
       ? rerankRagDocumentsByQueryOverlap(documentsRaw, options.query)
       : documentsRaw;
 
-  const contextBlock = formatRagContext(documents, options.maxSnippetChars ?? 500);
+  const contextBlock = formatRagContext(documents, options.maxSnippetChars ?? DEFAULT_RAG_SNIPPET_CHARS);
   return {
     messages: injectRagContext(messages, contextBlock),
     documents

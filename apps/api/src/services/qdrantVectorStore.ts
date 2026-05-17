@@ -146,18 +146,22 @@ export async function upsertChunksToQdrant(params: {
     const points = slice.map((chunk, j) => {
       const i = offset + j;
       const flat = flattenMetadata(chunk.metadata);
+      const chunkIndex =
+        typeof chunk.metadata?.sectionIndex === "number" && Number.isFinite(chunk.metadata.sectionIndex)
+          ? chunk.metadata.sectionIndex
+          : i;
       const vec = embSlice[j];
       if (!vec || vec.length !== dim) {
         return null;
       }
       return {
-        id: qdrantPointUuid(orgId, sourceType, sourceId, i),
+        id: qdrantPointUuid(orgId, sourceType, sourceId, chunkIndex),
         vector: vec,
         payload: {
           org_id: orgId,
           source_type: sourceType,
           source_id: sourceId,
-          chunk_index: i,
+          chunk_index: chunkIndex,
           text_snippet: chunk.text.slice(0, 12_000),
           doc_type: flat.doc_type ?? null,
           department: flat.department ?? null,

@@ -7,6 +7,11 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { OrgDocument, type OrgDocumentSection, RAGContextSchema } from "@orgos/shared-types";
 import { decryptText } from "../lib/encryption.js";
+import {
+  RAG_CONTEXT_EXCERPT_CHARS,
+  RAG_LEXICAL_THRESHOLD,
+  ragCandidateLimit
+} from "./ragConfig.js";
 
 export interface RagFilterOptions {
   branchId?: string | null;
@@ -194,6 +199,18 @@ function calculateSimilarity(inputKeywords: Set<string>, docKeywords: Set<string
   return intersection.size / union.size;
 }
 
+function sectionMatchesAnyQueryToken(section: OrgDocumentSection, inputKeywords: Set<string>): boolean {
+  if (inputKeywords.size === 0) {
+    return false;
+  }
+  const haystacks = [section.content, section.heading ?? "", section.section_path ?? ""];
+  const terms = Array.from(inputKeywords);
+  return haystacks.some((haystack) => {
+    const lower = haystack.toLowerCase();
+    return terms.some((term) => lower.includes(term));
+  });
+}
+
 /**
  * Retrieve relevant documents for a goal/task
  * Returns top-N documents matching input keywords
@@ -266,7 +283,8 @@ async function retrieveRelevantSectionsLexical(
   }
 ): Promise<OrgDocumentSection[]> {
   const topN = params.topN ?? 5;
-  const similarityThreshold = params.similarityThreshold ?? 0.12;
+  const candidateLimit = ragCandidateLimit(topN);
+  const similarityThreshold = params.similarityThreshold ?? RAG_LEXICAL_THRESHOLD;
   const inputKeywords = extractKeywords(params.goalInput);
 
   let query = supabase
@@ -303,17 +321,24 @@ async function retrieveRelevantSectionsLexical(
   }
 
   const scored = (data as OrgDocumentSection[])
-    .map((section) => ({
-      section,
-      score: calculateSimilarity(inputKeywords, new Set(section.keyword_terms ?? []))
-        + (
-          params.knowledgeScopes && params.knowledgeScopes.length > 0
-            ? params.knowledgeScopes.some((scope) => (section.knowledge_scope ?? []).map(String).includes(scope))
-              ? 0.08
-              : 0
+    .map((section) => {
+      const termScore = calculateSimilarity(inputKeywords, new Set(section.keyword_terms ?? []));
+      const contentScore = calculateSimilarity(inputKeywords, extractKeywords(section.content));
+      const headingScore = section.heading
+        ? calculateSimilarity(inputKeywords, extractKeywords(section.heading))
+        : 0;
+      const scopeBoost =
+        params.knowledgeScopes && params.knowledgeScopes.length > 0
+          ? params.knowledgeScopes.some((scope) => (section.knowledge_scope ?? []).map(String).includes(scope))
+            ? 0.08
             : 0
-        )
-    }))
+          : 0;
+      const tokenMatch = sectionMatchesAnyQueryToken(section, inputKeywords);
+      return {
+        section,
+        score: Math.max(termScore, contentScore, headingScore) + scopeBoost + (tokenMatch ? 0.35 : 0)
+      };
+    })
     .filter(({ section }) => {
       if (!params.knowledgeScopes || params.knowledgeScopes.length === 0) {
         return true;
@@ -321,7 +346,10 @@ async function retrieveRelevantSectionsLexical(
       const scopes = section.knowledge_scope ?? [];
       return scopes.length === 0 || scopes.some((scope) => params.knowledgeScopes?.includes(scope));
     })
-    .filter(({ score }) => score >= similarityThreshold)
+    .filter(
+      ({ section, score }) =>
+        score >= similarityThreshold || sectionMatchesAnyQueryToken(section, inputKeywords)
+    )
     .sort((left, right) => right.score - left.score);
 
   if (process.env.ORGOS_RAG_RETRIEVAL_LOG === "1") {
@@ -336,7 +364,7 @@ async function retrieveRelevantSectionsLexical(
     });
   }
 
-  return scored.slice(0, topN).map(({ section }) => section);
+  return scored.slice(0, candidateLimit).map(({ section }) => section);
 }
 
 export async function retrieveRelevantSections(
@@ -354,6 +382,7 @@ export async function retrieveRelevantSections(
   }
 ): Promise<OrgDocumentSection[]> {
   const topN = params.topN ?? 5;
+  const candidateLimit = ragCandidateLimit(topN);
 
   if (process.env.ORGOS_SECTION_TSVECTOR === "1") {
     try {
@@ -379,14 +408,91 @@ export async function retrieveRelevantSections(
             rowCount: sections.length
           });
         }
-        return sections.slice(0, topN);
+        return sections.slice(0, candidateLimit);
       }
     } catch (err) {
       console.warn("match_org_document_sections_tsvector failed; falling back to lexical", err);
     }
   }
 
-  return retrieveRelevantSectionsLexical(supabase, params);
+  return retrieveRelevantSectionsLexical(supabase, {
+    ...params,
+    topN: candidateLimit
+  });
+}
+
+/**
+ * Help chat retrieval: lexical match, then filename token fallback, then newest handbook intro.
+ */
+export async function retrieveHelpKnowledgeSections(
+  supabase: SupabaseClient,
+  orgId: string,
+  query: string,
+  topN = 8
+): Promise<OrgDocumentSection[]> {
+  const primary = await retrieveRelevantSections(supabase, {
+    orgId,
+    goalInput: query,
+    topN,
+    similarityThreshold: 0.04
+  });
+  if (primary.length > 0) {
+    return primary;
+  }
+
+  const tokens = Array.from(extractKeywords(query)).filter((token) => token.length >= 3);
+  for (const token of tokens) {
+    const { data: docs, error: docError } = await supabase
+      .from("org_documents")
+      .select("id, file_name")
+      .eq("org_id", orgId)
+      .is("archived_at", null)
+      .ilike("file_name", `%${token}%`)
+      .limit(5);
+
+    if (docError || !docs?.length) {
+      continue;
+    }
+
+    const { data: sections, error: sectionError } = await supabase
+      .from("org_document_sections")
+      .select("*")
+      .eq("org_id", orgId)
+      .in(
+        "document_id",
+        docs.map((doc) => doc.id)
+      )
+      .order("section_index", { ascending: true })
+      .limit(topN);
+
+    if (!sectionError && sections?.length) {
+      return sections as OrgDocumentSection[];
+    }
+  }
+
+  const { data: handbook } = await supabase
+    .from("org_documents")
+    .select("id")
+    .eq("org_id", orgId)
+    .is("archived_at", null)
+    .eq("doc_type", "handbook")
+    .order("uploaded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!handbook?.id) {
+    return [];
+  }
+
+  const { data: introSections } = await supabase
+    .from("org_document_sections")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("document_id", handbook.id)
+    .order("section_index", { ascending: true })
+    .limit(topN);
+
+  return (introSections ?? []) as OrgDocumentSection[];
 }
 
 /**
@@ -404,14 +510,14 @@ export function buildRAGContext(
   let contextInstruction = "";
 
   if (relevantDocs.length > 0) {
-    contextInstruction = `Use the following company information to inform your decomposition:\n`;
+    contextInstruction = `Use the following company knowledge base excerpts to answer the user:\n`;
 
     for (const doc of relevantDocs) {
       if ("file_content" in doc) {
-        const excerpt = doc.file_content.substring(0, 1500);
+        const excerpt = doc.file_content.substring(0, RAG_CONTEXT_EXCERPT_CHARS);
         docContexts.push(`[${doc.doc_type.toUpperCase()}: ${doc.file_name}]\n${excerpt}\n`);
       } else {
-        const excerpt = doc.content.substring(0, 1500);
+        const excerpt = doc.content.substring(0, RAG_CONTEXT_EXCERPT_CHARS);
         const pageHint =
           doc.page_start != null && doc.page_end != null
             ? ` pp.${doc.page_start}-${doc.page_end}`

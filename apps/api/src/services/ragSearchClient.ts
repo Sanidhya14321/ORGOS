@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrgDocumentSection } from "@orgos/shared-types";
 import embeddingService from "./embeddingService.js";
 import { isQdrantVectorStoreEnabled, searchQdrantVectors } from "./qdrantVectorStore.js";
+import { RAG_SNIPPET_MAX_CHARS, ragCandidateLimit } from "./ragConfig.js";
 import { retrieveRelevantSections } from "./ragRetrieval.js";
 import {
   mergeSearchResultsScoreSum,
@@ -41,14 +42,14 @@ function toVectorLiteral(values: number[]): string {
   return `[${values.join(",")}]`;
 }
 
-function mapFallbackSection(section: OrgDocumentSection, score: number): RagSearchResult {
+function mapFallbackSection(section: OrgDocumentSection, score: number, maxSnippetChars = RAG_SNIPPET_MAX_CHARS): RagSearchResult {
   return {
     id: section.id,
     sourceType: "document_section",
     sourceId: section.document_id,
     chunkIndex: section.section_index,
     score,
-    textSnippet: section.content.slice(0, 400),
+    textSnippet: section.content.slice(0, maxSnippetChars),
     metadata: {
       heading: section.heading,
       pageStart: section.page_start,
@@ -100,7 +101,7 @@ export function createSupabaseRagSearchClient(
       const fallbackSections = await retrieveRelevantSections(supabase, {
         orgId,
         goalInput: query,
-        topN: topK,
+        topN: ragCandidateLimit(topK),
         ...(branchId !== undefined ? { branchId } : {}),
         ...(department !== undefined ? { department } : {}),
         ...(docTypes !== undefined ? { docTypes } : {}),
@@ -228,10 +229,10 @@ export function createSupabaseRagSearchClient(
       }
 
       const merged = useRrfMerge
-        ? reciprocalRankFusionMerge([vectorResults, lexicalResults], topK)
-        : mergeSearchResultsScoreSum(vectorResults, lexicalResults, topK);
+        ? reciprocalRankFusionMerge([vectorResults, lexicalResults], ragCandidateLimit(topK))
+        : mergeSearchResultsScoreSum(vectorResults, lexicalResults, ragCandidateLimit(topK));
 
-      return merged;
+      return merged.slice(0, topK);
     }
   };
 }

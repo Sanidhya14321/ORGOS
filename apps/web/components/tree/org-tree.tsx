@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { Input } from "@/components/ui/input";
@@ -60,10 +60,20 @@ interface CircleNode {
 interface CircleLayout {
   nodes: Map<string, CircleNode>;
   edges: Array<{ fromId: string; toId: string }>;
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
+/** Card size in SVG (foreignObject); layout must reserve at least this per node. */
+const NODE_CARD_WIDTH = 168;
+const NODE_CARD_HEIGHT = 96;
+const SIBLING_GAP = 56;
+const LEVEL_GAP = 220;
+const ROOT_GAP = 96;
+
 function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<string, string>, positionsFilled?: Map<string, boolean>): CircleLayout {
-  if (!treeData || treeData.length === 0) return { nodes: new Map(), edges: [] };
+  if (!treeData || treeData.length === 0) {
+    return { nodes: new Map(), edges: [], bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 } };
+  }
   const nodes = new Map<string, CircleNode>();
   const edges: Array<{ fromId: string; toId: string }> = [];
   const childrenMap = new Map<string, string[]>();
@@ -100,9 +110,13 @@ function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<stri
 
   const getSubtreeWidth = (nodeId: string): number => {
     const node = nodes.get(nodeId);
-    if (!node || node.children.length === 0) return 160;
-    const childrenWidth = node.children.reduce((sum, childId) => sum + getSubtreeWidth(childId), 0);
-    return Math.max(childrenWidth + node.children.length * 30, 160);
+    if (!node || node.children.length === 0) {
+      return NODE_CARD_WIDTH;
+    }
+
+    const childWidths = node.children.map((childId) => getSubtreeWidth(childId));
+    const gaps = Math.max(node.children.length - 1, 0) * SIBLING_GAP;
+    return Math.max(childWidths.reduce((sum, width) => sum + width, 0) + gaps, NODE_CARD_WIDTH);
   };
 
   function positionNode(nodeId: string, x: number, y: number): void {
@@ -112,29 +126,56 @@ function buildCircleLayout(treeData: TreeNode[] | undefined, positions: Map<stri
     node.y = y;
     const children = node.children;
     if (children.length === 0) return;
-    const verticalGap = 200; 
-    const horizontalGap = 40;
-    const childY = y + verticalGap;
-    const totalChildWidth = children.reduce((sum, childId) => sum + getSubtreeWidth(childId) + horizontalGap, 0) - horizontalGap;
+
+    const childY = y + LEVEL_GAP;
+    const childWidths = children.map((childId) => getSubtreeWidth(childId));
+    const totalChildWidth =
+      childWidths.reduce((sum, width) => sum + width, 0) + Math.max(children.length - 1, 0) * SIBLING_GAP;
+
     let currentX = x - totalChildWidth / 2;
-    children.forEach((childId) => {
-      const subtreeWidth = getSubtreeWidth(childId);
+    children.forEach((childId, index) => {
+      const subtreeWidth = childWidths[index] ?? NODE_CARD_WIDTH;
       const childX = currentX + subtreeWidth / 2;
       positionNode(childId, childX, childY);
-      currentX += subtreeWidth + horizontalGap;
+      currentX += subtreeWidth + SIBLING_GAP;
     });
   }
 
   const roots = Array.from(nodes.values()).filter((n) => !n.parentId);
   if (roots.length > 0) {
-    const rootSpacing = 280;
-    const totalWidth = (roots.length - 1) * rootSpacing;
+    const rootWidths = roots.map((root) => getSubtreeWidth(root.id));
+    const totalRootWidth =
+      rootWidths.reduce((sum, width) => sum + width, 0) + Math.max(roots.length - 1, 0) * ROOT_GAP;
+    let cursorX = -totalRootWidth / 2;
+
     roots.forEach((root, index) => {
-      positionNode(root.id, 600 - totalWidth / 2 + index * rootSpacing, 100);
+      const width = rootWidths[index] ?? NODE_CARD_WIDTH;
+      positionNode(root.id, cursorX + width / 2, 80);
+      cursorX += width + ROOT_GAP;
     });
   }
 
-  return { nodes, edges };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  nodes.forEach((node) => {
+    minX = Math.min(minX, node.x - NODE_CARD_WIDTH / 2);
+    maxX = Math.max(maxX, node.x + NODE_CARD_WIDTH / 2);
+    minY = Math.min(minY, node.y - NODE_CARD_HEIGHT / 2);
+    maxY = Math.max(maxY, node.y + NODE_CARD_HEIGHT / 2);
+  });
+
+  return {
+    nodes,
+    edges,
+    bounds: {
+      minX: Number.isFinite(minX) ? minX : 0,
+      maxX: Number.isFinite(maxX) ? maxX : 0,
+      minY: Number.isFinite(minY) ? minY : 0,
+      maxY: Number.isFinite(maxY) ? maxY : 0
+    }
+  };
 }
 
 /** 
@@ -170,6 +211,30 @@ export function OrgTree() {
 
   const selectedNode = selectedNodeId ? layout.nodes.get(selectedNodeId) : null;
 
+  const cardOffsetX = NODE_CARD_WIDTH / 2;
+  const cardOffsetY = NODE_CARD_HEIGHT / 2;
+
+  const fitTreeToView = useCallback(() => {
+    if (!svgRef.current || layout.nodes.size === 0) return;
+
+    const { minX, maxX, minY, maxY } = layout.bounds;
+    const treeWidth = Math.max(maxX - minX, 1);
+    const treeHeight = Math.max(maxY - minY, 1);
+    const rect = svgRef.current.getBoundingClientRect();
+    const padding = 48;
+    const fitZoom = Math.min((rect.width - padding * 2) / treeWidth, (rect.height - padding * 2) / treeHeight, 1);
+
+    setZoom(fitZoom);
+    setOffset({
+      x: rect.width / 2 - ((minX + maxX) / 2) * fitZoom,
+      y: padding - minY * fitZoom
+    });
+  }, [layout.bounds, layout.nodes.size]);
+
+  useEffect(() => {
+    fitTreeToView();
+  }, [fitTreeToView, treeQuery.dataUpdatedAt]);
+
   // Interaction Handlers
   const handleWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey) {
@@ -188,8 +253,7 @@ export function OrgTree() {
   };
 
   const resetView = () => {
-    setZoom(1);
-    setOffset({ x: 0, y: 0 });
+    fitTreeToView();
   };
 
   if (treeQuery.isLoading) return <Skeleton className="h-[600px] w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)]" />;
@@ -272,18 +336,18 @@ export function OrgTree() {
               };
 
               return (
-                <g key={node.id} transform={`translate(${node.x - 80}, ${node.y - 45})`} 
+                <g key={node.id} transform={`translate(${node.x - cardOffsetX}, ${node.y - cardOffsetY})`} 
                    onClick={() => setSelectedNodeId(node.id)}
                    className="cursor-pointer transition-opacity duration-300"
                    style={{ opacity: isMatched ? 1 : 0.15 }}>
                   
                   {/* Visual Glow for Selected */}
                   {isSelected && (
-                    <rect x="-4" y="-4" width="168" height="98" rx="14" fill="var(--primary)" opacity="0.2" className="animate-pulse" />
+                    <rect x="-4" y="-4" width={NODE_CARD_WIDTH + 8} height={NODE_CARD_HEIGHT + 8} rx="14" fill="var(--primary)" opacity="0.2" className="animate-pulse" />
                   )}
 
                   {/* HTML Card inside SVG */}
-                  <foreignObject width="160" height="90">
+                  <foreignObject width={NODE_CARD_WIDTH} height={NODE_CARD_HEIGHT - 6}>
                     <div className={`
                       h-full w-full p-3 rounded-xl border-2 transition-all shadow-sm flex flex-col justify-between
                       ${isSelected ? 'border-[var(--accent)] bg-[var(--surface)] ring-4 ring-[var(--accent)]/10' : 'border-[var(--border)] bg-[var(--surface)]'}

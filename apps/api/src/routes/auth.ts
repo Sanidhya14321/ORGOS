@@ -34,6 +34,16 @@ const LoginBodySchema = z.object({
   password: z.string().min(1)
 });
 
+const OAuthCallbackBodySchema = z.object({
+  accessToken: z.string().min(1)
+});
+
+type SupabaseAuthUser = {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+};
+
 const RegisterBodySchema = z.object({
   fullName: z.string().trim().min(1).max(120),
   email: z.string().trim().email(),
@@ -230,6 +240,66 @@ async function markUserEmailVerified(
   }
 }
 
+async function completeAuthSession(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  accessToken: string,
+  authUser: SupabaseAuthUser
+): Promise<AuthSessionPayload | undefined> {
+  const userProfile = await loadUserProfile(fastify, authUser);
+  const isExecutive = userProfile.role === "ceo" || userProfile.role === "cfo";
+  const localBypass = shouldRelaxSecurityForLocalTesting(fastify.env);
+  const mfaEnabled = (userProfile as { mfa_enabled?: boolean }).mfa_enabled === true;
+  const secureCookie = fastify.env.NODE_ENV === "production";
+
+  const sessionQuery = await fastify.supabaseService
+    .from("sessions")
+    .select("id, last_active, revoked")
+    .eq("user_id", authUser.id)
+    .eq("revoked", false);
+
+  if (!localBypass && !sessionQuery.error && Array.isArray(sessionQuery.data)) {
+    const now = Date.now();
+    const recentCount = sessionQuery.data.filter((row) => {
+      const lastActiveValue = row.last_active ? new Date(String(row.last_active)).getTime() : now;
+      return now - lastActiveValue <= getRoleSessionTimeoutMs(userProfile.role);
+    }).length;
+
+    if (recentCount >= getRoleSessionLimit(userProfile.role)) {
+      await fastify.supabaseAnon.auth.signOut();
+      sendApiError(reply, request, 429, "SESSION_LIMITED", "Too many active sessions");
+      return undefined;
+    }
+  }
+
+  const currentSessionTokenHash = hashSessionToken(accessToken);
+  const metadata = buildSessionMetadata(request);
+  const sessionInsert = await fastify.supabaseService.from("sessions").upsert({
+    user_id: authUser.id,
+    session_token_hash: currentSessionTokenHash,
+    device: metadata.device,
+    browser: metadata.browser,
+    ip: metadata.ip,
+    country: metadata.country,
+    revoked: false,
+    last_active: new Date().toISOString()
+  }, { onConflict: "session_token_hash" });
+
+  if (sessionInsert.error && !isMissingTableSchemaCache(sessionInsert.error)) {
+    request.log.warn({ err: sessionInsert.error }, "Failed to persist session log entry");
+  }
+
+  const cookies = [buildCookie(accessToken, secureCookie), buildClearMfaCookie(secureCookie)];
+  reply.header("Set-Cookie", cookies);
+
+  return {
+    user: userProfile,
+    mfaRequired: !localBypass && isExecutive && mfaEnabled,
+    mfaSetupRequired: !localBypass && isExecutive && !mfaEnabled
+  };
+}
+
 async function establishSessionFromPassword(
   fastify: FastifyInstance,
   request: FastifyRequest,
@@ -250,57 +320,7 @@ async function establishSessionFromPassword(
     return undefined;
   }
 
-  const userProfile = await loadUserProfile(fastify, data.user);
-  const isExecutive = userProfile.role === "ceo" || userProfile.role === "cfo";
-  const localBypass = shouldRelaxSecurityForLocalTesting(fastify.env);
-  const mfaEnabled = (userProfile as { mfa_enabled?: boolean }).mfa_enabled === true;
-  const secureCookie = fastify.env.NODE_ENV === "production";
-
-  const sessionQuery = await fastify.supabaseService
-    .from("sessions")
-    .select("id, last_active, revoked")
-    .eq("user_id", data.user.id)
-    .eq("revoked", false);
-
-  if (!localBypass && !sessionQuery.error && Array.isArray(sessionQuery.data)) {
-    const now = Date.now();
-    const recentCount = sessionQuery.data.filter((row) => {
-      const lastActiveValue = row.last_active ? new Date(String(row.last_active)).getTime() : now;
-      return now - lastActiveValue <= getRoleSessionTimeoutMs(userProfile.role);
-    }).length;
-
-    if (recentCount >= getRoleSessionLimit(userProfile.role)) {
-      await fastify.supabaseAnon.auth.signOut();
-      sendApiError(reply, request, 429, "SESSION_LIMITED", "Too many active sessions");
-      return undefined;
-    }
-  }
-
-  const currentSessionTokenHash = hashSessionToken(data.session.access_token);
-  const metadata = buildSessionMetadata(request);
-  const sessionInsert = await fastify.supabaseService.from("sessions").upsert({
-    user_id: data.user.id,
-    session_token_hash: currentSessionTokenHash,
-    device: metadata.device,
-    browser: metadata.browser,
-    ip: metadata.ip,
-    country: metadata.country,
-    revoked: false,
-    last_active: new Date().toISOString()
-  }, { onConflict: "session_token_hash" });
-
-  if (sessionInsert.error && !isMissingTableSchemaCache(sessionInsert.error)) {
-    request.log.warn({ err: sessionInsert.error }, "Failed to persist session log entry");
-  }
-
-  const cookies = [buildCookie(data.session.access_token, secureCookie), buildClearMfaCookie(secureCookie)];
-  reply.header("Set-Cookie", cookies);
-
-  return {
-    user: userProfile,
-    mfaRequired: !localBypass && isExecutive && mfaEnabled,
-    mfaSetupRequired: !localBypass && isExecutive && !mfaEnabled
-  };
+  return completeAuthSession(fastify, request, reply, data.session.access_token, data.user);
 }
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
@@ -313,6 +333,27 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const session = await establishSessionFromPassword(fastify, request, reply, parsed.data);
+    if (!session) {
+      return;
+    }
+
+    return reply.send(session);
+  });
+
+  fastify.post("/auth/oauth/callback", async (request, reply) => {
+    const parsed = OAuthCallbackBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Invalid OAuth callback payload", {
+        details: parsed.error.flatten()
+      });
+    }
+
+    const { data, error } = await fastify.supabaseAnon.auth.getUser(parsed.data.accessToken);
+    if (error || !data.user) {
+      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Invalid or expired OAuth session");
+    }
+
+    const session = await completeAuthSession(fastify, request, reply, parsed.data.accessToken, data.user);
     if (!session) {
       return;
     }

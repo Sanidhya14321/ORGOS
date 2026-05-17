@@ -7,6 +7,12 @@ import { DocumentSourceFormatSchema } from "@orgos/shared-types";
 
 export type SupportedSourceFormat = z.infer<typeof DocumentSourceFormatSchema>;
 
+/** Cap tabular row expansion so XLSX/CSV do not explode past document char limits. */
+const MAX_TABULAR_ROWS_PER_SHEET = Math.max(
+  500,
+  Number.parseInt(process.env.DOCUMENT_MAX_TABULAR_ROWS_PER_SHEET ?? "8000", 10) || 8000
+);
+
 export interface ParsedTable {
   name: string;
   headers: string[];
@@ -183,14 +189,21 @@ function workbookToTables(buffer: Buffer): ParsedTable[] {
   });
 }
 
-function renderTablesToText(tables: ParsedTable[]): string {
+function renderTablesToText(tables: ParsedTable[], warnings: string[]): string {
   return tables
     .map((table) => {
       const lines = [`# Sheet: ${table.name}`];
       if (table.headers.length > 0) {
         lines.push(table.headers.join(" | "));
       }
-      for (const row of table.rows) {
+      let rows = table.rows;
+      if (rows.length > MAX_TABULAR_ROWS_PER_SHEET) {
+        warnings.push(
+          `Sheet "${table.name}" truncated to ${MAX_TABULAR_ROWS_PER_SHEET.toLocaleString()} rows (${rows.length.toLocaleString()} in file). Split large spreadsheets or upload a smaller export.`
+        );
+        rows = rows.slice(0, MAX_TABULAR_ROWS_PER_SHEET);
+      }
+      for (const row of rows) {
         lines.push(table.headers.map((header) => row[header] ?? "").join(" | "));
       }
       return lines.join("\n");
@@ -285,13 +298,13 @@ export async function parseLocalFile(params: {
     }
     case "xlsx": {
       tables = workbookToTables(params.buffer);
-      text = renderTablesToText(tables);
+      text = renderTablesToText(tables, warnings);
       break;
     }
     case "csv": {
       const csvText = params.buffer.toString("utf8");
       tables = [parseCsv(csvText)];
-      text = renderTablesToText(tables);
+      text = renderTablesToText(tables, warnings);
       break;
     }
     case "md":
