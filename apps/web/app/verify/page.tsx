@@ -1,105 +1,23 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
-
-function VerifyPageContent() {
-  const params = useSearchParams();
+export default function VerifyPage() {
   const router = useRouter();
-  const initialEmail = useMemo(() => params?.get("email") ?? "", [params]);
-  const tokenHash = useMemo(() => params?.get("token_hash") ?? "", [params]);
-  const verificationType = useMemo(() => params?.get("type") ?? "", [params]);
-
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!tokenHash || !verificationType) {
-      setError("This verification link is incomplete. Open the latest email from ORGOS and use the full link.");
-      return;
-    }
-
-    let mounted = true;
-
-    void (async () => {
-      setPending(true);
-      setError(null);
-      setMessage(null);
-
-      try {
-        const response = await fetch(`${API_BASE}/api/auth/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tokenHash, type: verificationType })
-        });
-
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-          throw new Error(body?.error?.message ?? "Verification failed");
-        }
-
-        if (!mounted) {
-          return;
-        }
-
-        setMessage("Email verified. Sign in to continue onboarding.");
-        const targetEmail = initialEmail ? `&email=${encodeURIComponent(initialEmail)}` : "";
-        window.setTimeout(() => {
-          router.push(`/login?verified=1${targetEmail}`);
-        }, 1200);
-      } catch (verifyError) {
-        if (!mounted) {
-          return;
-        }
-        setError(verifyError instanceof Error ? verifyError.message : "Unable to verify account");
-      } finally {
-        if (mounted) {
-          setPending(false);
-        }
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [initialEmail, router, tokenHash, verificationType]);
+    router.replace("/login");
+  }, [router]);
 
   return (
     <AuthPageShell
-      eyebrow="ORGOS onboarding"
-      title="Verify your account"
-      description="Confirm your email to continue onboarding and request organization approval."
-      footer={
-        <div className="text-center">
-          Need another try?{" "}
-          <Link href="/login" className="font-semibold text-[var(--accent)] underline-offset-4 hover:underline">
-            Return to sign in
-          </Link>
-        </div>
-      }
+      eyebrow="ORGOS access"
+      title="Sign in to continue"
+      description="Email verification is no longer required. Use your email and password to sign in."
     >
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-border bg-bg-elevated px-4 py-3 text-sm text-text-secondary">
-          {pending ? "Validating your secure verification link..." : "Verification links can only be completed from the email that ORGOS sent you."}
-        </div>
-
-        {error ? <p className="rounded-2xl border border-danger/20 bg-danger-subtle px-4 py-3 text-sm text-danger">{error}</p> : null}
-        {message ? <p className="rounded-2xl border border-success/20 bg-success-subtle px-4 py-3 text-sm text-success">{message}</p> : null}
-      </div>
+      <p className="text-sm text-text-secondary">Redirecting to sign in…</p>
     </AuthPageShell>
-  );
-}
-
-export default function VerifyPage() {
-  return (
-    <Suspense fallback={<p className="px-6 py-8 text-sm text-[var(--muted)]">Loading verification details...</p>}>
-      <VerifyPageContent />
-    </Suspense>
   );
 }

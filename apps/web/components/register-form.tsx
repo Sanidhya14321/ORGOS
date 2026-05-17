@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { navigateAfterAuth, type AuthSessionResponse } from "@/lib/post-auth-navigation";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -36,8 +37,8 @@ export function RegisterForm() {
         throw new Error(body?.error?.message ?? "Registration failed");
       }
 
-      router.push(`/verify?email=${encodeURIComponent(email)}`);
-      router.refresh();
+      const data = (await response.json()) as AuthSessionResponse;
+      navigateAfterAuth(router, data);
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : "Unable to create account");
     } finally {

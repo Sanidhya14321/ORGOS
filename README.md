@@ -2,6 +2,10 @@
 
 Full-stack AI system for decomposing organizational goals into actionable tasks, powered by multi-tier LLM agents (CEO → Manager → Worker).
 
+## Flows and architecture (diagrams)
+
+For **Mermaid diagrams** and narrative on **data flow**, **authentication**, **UX journeys**, **AI/RAG pipelines**, **realtime**, and **development workflow**, see **[docs/APPLICATION_FLOW.md](docs/APPLICATION_FLOW.md)**.
+
 ## Architecture
 
 - **Frontend**: Next.js 14 (React 18, Server Components, Zustand, Socket.io)
@@ -46,7 +50,7 @@ cd apps/web && npm run dev        # Terminal 2: Frontend on localhost:3000
 # Type checking (full monorepo)
 npm run typecheck
 
-# Integration tests (should show 3/3 passing)
+# Integration tests (API workspace)
 npm run test
 
 # Manual API test (after API starts)
@@ -71,7 +75,7 @@ ORGOS/
 │   │   │   ├── queue/            # BullMQ workers (decompose, execute, synthesize)
 │   │   │   ├── lib/              # Clients (Supabase, Groq, Redis)
 │   │   │   └── plugins/          # Fastify plugins (auth, RBAC)
-│   │   └── test/                 # 3/3 integration tests
+│   │   └── test/                 # API integration tests (Node test runner)
 │   └── web/                      # Next.js frontend
 │       ├── app/
 │       │   ├── page.tsx          # Home (redirects to /dashboard)
@@ -136,7 +140,7 @@ Events:
 ## Quality Metrics
 
 - **Type Safety**: 7/7 TypeScript checks passing (strict mode)
-- **Integration Tests**: 3/3 passing (notifier, reports-route, synthesize-worker)
+- **Integration Tests**: `npm run test` (API workspace + schema guard)
 - **Code Style**: Prettier + ESLint configured
 - **Dependencies**: 364 packages (7 vulnerabilities - non-critical)
 
@@ -226,4 +230,4 @@ vercel --prod   # Deploy to Vercel
 
 **Stack**: TypeScript, Turborepo, Fastify, Next.js, Supabase, Socket.io, BullMQ, Groq/Gemini LLM  
 **Status**: MVP complete (Chunks 1-7), ready for local testing & deployment  
-**Updated**: 2025-01
+**Updated**: 2026-05

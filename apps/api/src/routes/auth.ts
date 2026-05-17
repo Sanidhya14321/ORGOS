@@ -1,4 +1,5 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { User } from "@orgos/shared-types";
 import { z } from "zod";
 import { sendApiError } from "../lib/errors.js";
 import { buildUserProfileFromAuthUser, loadUserProfile, persistUserProfile } from "../lib/user-profile.js";
@@ -163,6 +164,145 @@ function normalizeIndustryValue(value: string | undefined): (typeof IndustryValu
     : "tech";
 }
 
+type AuthSessionPayload = {
+  user: User;
+  mfaRequired: boolean;
+  mfaSetupRequired: boolean;
+};
+
+function mapAuthAdminError(message: string): { status: number; code: "CONFLICT" | "VALIDATION_ERROR" | "INTERNAL_ERROR"; text: string } {
+  const lowered = message.toLowerCase();
+  const isConflict = lowered.includes("already") || lowered.includes("exists") || lowered.includes("registered");
+  const isValidation = lowered.includes("invalid") || lowered.includes("email") || lowered.includes("password");
+  if (isConflict) {
+    return { status: 409, code: "CONFLICT", text: message };
+  }
+  if (isValidation) {
+    return { status: 400, code: "VALIDATION_ERROR", text: message };
+  }
+  return { status: 500, code: "INTERNAL_ERROR", text: message };
+}
+
+async function createEmailConfirmedAuthUser(
+  fastify: FastifyInstance,
+  params: {
+    email: string;
+    password: string;
+    userMetadata: Record<string, unknown>;
+  }
+): Promise<
+  | { ok: true; user: { id: string; email: string | null; user_metadata: Record<string, unknown> | null } }
+  | { ok: false; message: string }
+> {
+  const createResult = await fastify.supabaseService.auth.admin.createUser({
+    email: params.email,
+    password: params.password,
+    email_confirm: true,
+    user_metadata: params.userMetadata
+  });
+
+  if (createResult.error || !createResult.data.user?.id) {
+    return { ok: false, message: createResult.error?.message ?? "Unable to create account" };
+  }
+
+  return {
+    ok: true,
+    user: {
+      id: createResult.data.user.id,
+      email: createResult.data.user.email ?? null,
+      user_metadata: (createResult.data.user.user_metadata as Record<string, unknown> | null) ?? null
+    }
+  };
+}
+
+async function markUserEmailVerified(
+  fastify: FastifyInstance,
+  userId: string,
+  status: "active" | "pending"
+): Promise<void> {
+  const { error } = await fastify.supabaseService
+    .from("users")
+    .update({ email_verified: true, status })
+    .eq("id", userId);
+
+  if (error) {
+    fastify.log.warn({ err: error, userId }, "Unable to mark user email as verified");
+  }
+}
+
+async function establishSessionFromPassword(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  credentials: { email: string; password: string },
+  options?: { invalidCredentialsMessage?: string }
+): Promise<AuthSessionPayload | undefined> {
+  const { data, error } = await fastify.supabaseAnon.auth.signInWithPassword(credentials);
+
+  if (error || !data.session || !data.user) {
+    sendApiError(
+      reply,
+      request,
+      401,
+      "UNAUTHORIZED",
+      options?.invalidCredentialsMessage ?? "Invalid email or password"
+    );
+    return undefined;
+  }
+
+  const userProfile = await loadUserProfile(fastify, data.user);
+  const isExecutive = userProfile.role === "ceo" || userProfile.role === "cfo";
+  const localBypass = shouldRelaxSecurityForLocalTesting(fastify.env);
+  const mfaEnabled = (userProfile as { mfa_enabled?: boolean }).mfa_enabled === true;
+  const secureCookie = fastify.env.NODE_ENV === "production";
+
+  const sessionQuery = await fastify.supabaseService
+    .from("sessions")
+    .select("id, last_active, revoked")
+    .eq("user_id", data.user.id)
+    .eq("revoked", false);
+
+  if (!localBypass && !sessionQuery.error && Array.isArray(sessionQuery.data)) {
+    const now = Date.now();
+    const recentCount = sessionQuery.data.filter((row) => {
+      const lastActiveValue = row.last_active ? new Date(String(row.last_active)).getTime() : now;
+      return now - lastActiveValue <= getRoleSessionTimeoutMs(userProfile.role);
+    }).length;
+
+    if (recentCount >= getRoleSessionLimit(userProfile.role)) {
+      await fastify.supabaseAnon.auth.signOut();
+      sendApiError(reply, request, 429, "SESSION_LIMITED", "Too many active sessions");
+      return undefined;
+    }
+  }
+
+  const currentSessionTokenHash = hashSessionToken(data.session.access_token);
+  const metadata = buildSessionMetadata(request);
+  const sessionInsert = await fastify.supabaseService.from("sessions").upsert({
+    user_id: data.user.id,
+    session_token_hash: currentSessionTokenHash,
+    device: metadata.device,
+    browser: metadata.browser,
+    ip: metadata.ip,
+    country: metadata.country,
+    revoked: false,
+    last_active: new Date().toISOString()
+  }, { onConflict: "session_token_hash" });
+
+  if (sessionInsert.error && !isMissingTableSchemaCache(sessionInsert.error)) {
+    request.log.warn({ err: sessionInsert.error }, "Failed to persist session log entry");
+  }
+
+  const cookies = [buildCookie(data.session.access_token, secureCookie), buildClearMfaCookie(secureCookie)];
+  reply.header("Set-Cookie", cookies);
+
+  return {
+    user: userProfile,
+    mfaRequired: !localBypass && isExecutive && mfaEnabled,
+    mfaSetupRequired: !localBypass && isExecutive && !mfaEnabled
+  };
+}
+
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post("/auth/login", async (request, reply) => {
     const parsed = LoginBodySchema.safeParse(request.body);
@@ -172,63 +312,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const { email, password } = parsed.data;
-    const { data, error } = await fastify.supabaseAnon.auth.signInWithPassword({ email, password });
-
-    if (error || !data.session || !data.user) {
-      return sendApiError(reply, request, 401, "UNAUTHORIZED", "Invalid email or password");
+    const session = await establishSessionFromPassword(fastify, request, reply, parsed.data);
+    if (!session) {
+      return;
     }
 
-    const userProfile = await loadUserProfile(fastify, data.user);
-    const isExecutive = userProfile.role === "ceo" || userProfile.role === "cfo";
-    const localBypass = shouldRelaxSecurityForLocalTesting(fastify.env);
-    const mfaEnabled = (userProfile as { mfa_enabled?: boolean }).mfa_enabled === true;
-    const secureCookie = fastify.env.NODE_ENV === "production";
-
-    const sessionQuery = await fastify.supabaseService
-      .from("sessions")
-      .select("id, last_active, revoked")
-      .eq("user_id", data.user.id)
-      .eq("revoked", false);
-
-    if (!localBypass && !sessionQuery.error && Array.isArray(sessionQuery.data)) {
-      const now = Date.now();
-      const recentCount = sessionQuery.data.filter((row) => {
-        const lastActiveValue = row.last_active ? new Date(String(row.last_active)).getTime() : now;
-        return now - lastActiveValue <= getRoleSessionTimeoutMs(userProfile.role);
-      }).length;
-
-      if (recentCount >= getRoleSessionLimit(userProfile.role)) {
-        await fastify.supabaseAnon.auth.signOut();
-        return sendApiError(reply, request, 429, "SESSION_LIMITED", "Too many active sessions");
-      }
-    }
-
-    const currentSessionTokenHash = hashSessionToken(data.session.access_token);
-    const metadata = buildSessionMetadata(request);
-    const sessionInsert = await fastify.supabaseService.from("sessions").upsert({
-      user_id: data.user.id,
-      session_token_hash: currentSessionTokenHash,
-      device: metadata.device,
-      browser: metadata.browser,
-      ip: metadata.ip,
-      country: metadata.country,
-      revoked: false,
-      last_active: new Date().toISOString()
-    }, { onConflict: "session_token_hash" });
-
-    if (sessionInsert.error && !isMissingTableSchemaCache(sessionInsert.error)) {
-      request.log.warn({ err: sessionInsert.error }, "Failed to persist session log entry");
-    }
-
-    const cookies = [buildCookie(data.session.access_token, secureCookie), buildClearMfaCookie(secureCookie)];
-    reply.header("Set-Cookie", cookies);
-
-    return reply.send({
-      user: userProfile,
-      mfaRequired: !localBypass && isExecutive && mfaEnabled,
-      mfaSetupRequired: !localBypass && isExecutive && !mfaEnabled
-    });
+    return reply.send(session);
   });
 
   fastify.post("/auth/register", async (request, reply) => {
@@ -246,42 +335,40 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return sendApiError(reply, request, 400, "VALIDATION_ERROR", "Only executive accounts can self-register");
     }
 
-    const createResult = await fastify.supabaseAnon.auth.signUp({
+    const createResult = await createEmailConfirmedAuthUser(fastify, {
       email,
       password,
-      options: {
-        emailRedirectTo: `${fastify.env.WEB_ORIGIN}/verify`,
-        data: {
-          full_name: fullName,
-          role,
-          department,
-          agent_enabled: true
-        }
+      userMetadata: {
+        full_name: fullName,
+        role,
+        department,
+        agent_enabled: true
       }
     });
 
-    if (createResult.error || !createResult.data.user) {
-      const message = createResult.error?.message ?? "Unable to create account";
-      const lowered = message.toLowerCase();
-      const isConflict = lowered.includes("already") || lowered.includes("exists");
-      const isValidation = lowered.includes("invalid") || lowered.includes("email") || lowered.includes("password");
-      const status = isConflict ? 409 : isValidation ? 400 : 500;
-      const code = status === 409 ? "CONFLICT" : status === 400 ? "VALIDATION_ERROR" : "INTERNAL_ERROR";
-      return sendApiError(reply, request, status, code, message);
+    if (!createResult.ok) {
+      const mapped = mapAuthAdminError(createResult.message);
+      return sendApiError(reply, request, mapped.status, mapped.code, mapped.text);
     }
 
-    const createdUser = createResult.data.user;
+    const createdUser = createResult.user;
     const profile = buildUserProfileFromAuthUser({
       id: createdUser.id,
       ...(createdUser.email ? { email: createdUser.email } : {}),
-      user_metadata: createdUser.user_metadata as Record<string, unknown> | null
+      user_metadata: createdUser.user_metadata
     });
 
     await persistUserProfile(fastify, profile);
+    await markUserEmailVerified(fastify, createdUser.id, "active");
+
+    const session = await establishSessionFromPassword(fastify, request, reply, { email, password });
+    if (!session) {
+      return;
+    }
 
     return reply.status(201).send({
-      requiresVerification: true,
-      message: "Verification email sent"
+      ...session,
+      message: "Account created"
     });
   });
 
@@ -297,32 +384,23 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const normalizedIndustry = normalizeIndustryValue(industry);
     const normalizedCompanySize = mapSignupCompanySize(companySize);
 
-    // 1. Create CEO user via Supabase Auth
-    const createAuthResult = await fastify.supabaseAnon.auth.signUp({
+    const createAuthResult = await createEmailConfirmedAuthUser(fastify, {
       email,
       password,
-      options: {
-        emailRedirectTo: `${fastify.env.WEB_ORIGIN}/verify`,
-        data: {
-          full_name: companyName,
-          role: "ceo",
-          department: "Executive",
-          agent_enabled: true
-        }
+      userMetadata: {
+        full_name: companyName,
+        role: "ceo",
+        department: "Executive",
+        agent_enabled: true
       }
     });
 
-    if (createAuthResult.error || !createAuthResult.data.user) {
-      const message = createAuthResult.error?.message ?? "Unable to create account";
-      const lowered = message.toLowerCase();
-      const isConflict = lowered.includes("already") || lowered.includes("exists");
-      const isValidation = lowered.includes("invalid") || lowered.includes("email") || lowered.includes("password");
-      const status = isConflict ? 409 : isValidation ? 400 : 500;
-      const code = status === 409 ? "CONFLICT" : status === 400 ? "VALIDATION_ERROR" : "INTERNAL_ERROR";
-      return sendApiError(reply, request, status, code, message);
+    if (!createAuthResult.ok) {
+      const mapped = mapAuthAdminError(createAuthResult.message);
+      return sendApiError(reply, request, mapped.status, mapped.code, mapped.text);
     }
 
-    const createdUser = createAuthResult.data.user;
+    const createdUser = createAuthResult.user;
 
     const bootstrapProfile = {
       ...buildUserProfileFromAuthUser({
@@ -423,6 +501,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       request.log.warn({ err: updateProfileResult.error }, "Failed to link org to user profile");
     }
 
+    await markUserEmailVerified(fastify, createdUser.id, "pending");
+
+    const session = await establishSessionFromPassword(fastify, request, reply, { email, password });
+    if (!session) {
+      return;
+    }
+
     return reply.status(201).send({
       org_id: orgId,
       company_name: companyName,
@@ -431,9 +516,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         company_size: normalizedCompanySize,
         branch_count: branchCount
       },
-      next_step: "/onboarding/company-setup",
-      requiresVerification: true,
-      message: "Verification email sent. Complete email verification before proceeding with onboarding."
+      next_step: "/onboarding",
+      ...session,
+      message: "Account created"
     });
   });
 

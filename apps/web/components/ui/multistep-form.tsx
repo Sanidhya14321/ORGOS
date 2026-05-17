@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError, apiFetch } from "@/lib/api";
+import { navigateAfterAuth, type AuthSessionResponse } from "@/lib/post-auth-navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,9 +37,8 @@ type FormData = {
   agreeToTerms: boolean;
 };
 
-type RegisterResponse = {
-  requiresVerification: boolean;
-  message: string;
+type RegisterResponse = AuthSessionResponse & {
+  message?: string;
 };
 
 const steps = [
@@ -150,7 +150,7 @@ function OnboardingForm() {
         body: JSON.stringify(payload)
       });
 
-      // Persist setup preferences for post-verification org bootstrap screens.
+      // Persist setup preferences for org bootstrap screens.
       if (typeof window !== "undefined") {
         window.localStorage.setItem(
           "orgos_onboarding_prefill",
@@ -167,9 +167,8 @@ function OnboardingForm() {
         );
       }
 
-      toast.success(response.message || "Account created. Check your email for verification.");
-      router.push(`/verify?email=${encodeURIComponent(formData.email.trim().toLowerCase())}`);
-      router.refresh();
+      toast.success(response.message || "Account created.");
+      navigateAfterAuth(router, response);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : error instanceof Error ? error.message : "Registration failed";
